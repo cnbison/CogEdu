@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# 环境变量与密钥（LLM API key、数据库凭证）
+.env
+.env.*
+*.pem
+
+# Node / 前端
+node_modules/
+dist/
+*.local
+
+# 测试与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 数据库与数据文件
+*.sqlite3
+*.db
+/data/
+
+# macOS / 编辑器
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 日志
+*.log
+logs/
