@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# CogEdu pre-commit hook: 静态防御检查 (秒级)
+#
+# 来源: ECOS v0.64.1 githooks 模式 (core.hooksPath = githooks/, hook 文件入仓 tracked)
+# 启用: bash scripts/install-hooks.sh
+#
+# 检查项:
+#   [1] 零 mutation AST 扫描 — 内核状态只能通过 Runtime (或其认可的事件驱动路径)
+#       变更, web/api 层不允许绕过 allowlist 直接 state.X = value
+#       (scripts/check_no_direct_state_mutation.py, v0.81 hard block 的延续)
+#
+# 注意: ECOS 的 check_defensive.sh 暂不接入 — 其内部硬编码扫描 ecos/ 目录,
+# CogEdu 包名已改为 cogedu/, 需要先做脚本适配 (见 docs/cogedu-整合技术方案.md 12.3).
+#
+# 紧急绕过 (不推荐): git commit --no-verify
+
+set -e
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "  CogEdu pre-commit: 静态防御检查"
+echo "═══════════════════════════════════════════════════════════════"
+
+echo "▶ [1/1] 零 mutation AST 扫描 (内核状态只经 Runtime 变更)"
+python scripts/check_no_direct_state_mutation.py
+
+echo ""
+echo "✅ pre-commit 静态检查通过"

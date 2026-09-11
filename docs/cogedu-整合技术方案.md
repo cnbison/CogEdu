@@ -358,13 +358,19 @@ Phase 0 是三件事合并施工：① 补齐状态入口的几处具体缺口�
 
 ### 12.3 0-B：补齐状态入口的具体缺口（范围已更正，比 v0.3 版本小得多）
 
-- [ ] **确认理解**：`submit_answer` 的核心 belief 更新（`_update_via_plugin_or_legacy`）在生产环境下已经通过事件总线正确路由到 `PluginRuntime._handle_response_submitted` → `Runtime.update_belief`，这部分**不需要改**，反而应该作为"事件驱动、解耦调用"的参考模式，在新仓库的 FastAPI 实现里原样保留这个设计思路
-- [ ] **逐一评估三处具体缺口**，决定要不要也纳入 Runtime 统一入口：
+- [x] **确认理解**：`submit_answer` 的核心 belief 更新（`_update_via_plugin_or_legacy`）在生产环境下已经通过事件总线正确路由到 `PluginRuntime._handle_response_submitted` → `Runtime.update_belief`，这部分**不需要改**，反而应该作为"事件驱动、解耦调用"的参考模式，在新仓库的 FastAPI 实现里原样保留这个设计思路
+  - ✅ 2026-09-11 完成：链路已验证——`web/api/belief.py:704` `_update_via_plugin_or_legacy` → `bus.publish("response_submitted")` → `web/api/plugin_runtime.py:190` 订阅者 → `Runtime.update_belief` → `engine.update`。结论成立，不改。
+- [x] **逐一评估三处具体缺口**，决定要不要也纳入 Runtime 统一入口：
   - `engine.l2.register_item(item_params)`（注册题目 MIRT 参数，直接改 engine 内部状态）
   - `_get_db().save_student_state(...)`（持久化，可以论证这属于 Runtime 之外合理的 I/O 操作，不一定需要改）
   - `reconcile_for_student(...)`（A2 误概念 reconcile，直接读写数据库）
-- [ ] 对每一处，判断标准是：这个操作是否构成"改变了学生的认知状态判断"（如果是，应该走 Runtime；如果只是纯粹的 I/O/记录性操作，维持直接调用也可以接受）——不要为了教条式地"全部走 Runtime"而把纯粹的持久化逻辑也强行包一层
-- [ ] **补一道长期防线**：仿照 ECOS 自己在 Plugin SDK 里"AST 扫描强制零 mutation site"和 POMDP 模块里"防御性自检 hard block"的做法，给"内核状态只能通过 Runtime（或其认可的事件驱动路径）变更"这条规则加一道静态检查，接入 pre-commit/pre-push hook——这一步价值不因为核心路径已经合规而减少，反而更重要：现在的架构是对的，这道检查是用来保证以后新功能开发时不会不小心破坏这个已经做对的设计
+- [x] 对每一处，判断标准是：这个操作是否构成"改变了学生的认知状态判断"（如果是，应该走 Runtime；如果只是纯粹的 I/O/记录性操作，维持直接调用也可以接受）——不要为了教条式地"全部走 Runtime"而把纯粹的持久化逻辑也强行包一层
+  - ✅ 2026-09-11 完成：**三处均维持直接调用，不改代码**。逐处结论：
+    - **`register_item` → 维持**。改的是 L2 引擎的题目参数缓存（`item_params[problem_id]`，从 Q 矩阵读的 MIRT 参数，按 problem_id 索引、全学生共享），不触碰任何 `BeliefState` 字段，语义等同于加载 Q 矩阵数据文件，属内容/配置装载。**迁移纪律注记**：它确实影响推断质量（v0.47.4 事故：不注册时 default `[0.8]*5` 等权放大信号，K 暴跌 0.91），0-C 迁 FastAPI 时 `belief.py` 两处调用（DB 恢复路径 + `submit_answer` 路径）绝不能漏——靠 `docs/belief-migration-map.md` 对照表 + HTTP 契约测试防，不靠强行包一层 Runtime 接口（会把"注册题目参数"伪装成"更新认知"，语义更模糊）。
+    - **`save_student_state` → 维持**。纯持久化 I/O，序列化已更新完的 state，不改变内存中的认知状态。风险（save 静默失败丢数据）已有正确防线：v0.47.5 后的 `persisted=false` + warning 前端告警，且 12.2 新增的 HTTP 契约测试第 ④ 项锁住了这条路径。
+    - **`reconcile_for_student` → 维持，但记录 A2 闭环 tripwire**。写的是 `misconception_evidence` 表的 success/failure 计数；全仓检索确认这些计数和 `quarantined` 状态**今天没有任何消费者进认知内核**——唯一消费方是 `web/api/teacher.py` 的教师展示视图（其 docstring 明确"A2 闭环前不挂 BeliefState，v0.97.2 拍板纪律"），属记录性/可观测性 I/O。**Tripwire**：将来若 A2 闭环——evidence 计数或 `quarantined` 开始参与 misconception 检测/信念更新——该操作即变为状态变更，**必须**改走 Runtime；届时先更新本节，防止后续 Phase 的开发者只看到"这里是直连"就照抄。
+- [x] **补一道长期防线**：仿照 ECOS 自己在 Plugin SDK 里"AST 扫描强制零 mutation site"和 POMDP 模块里"防御性自检 hard block"的做法，给"内核状态只能通过 Runtime（或其认可的事件驱动路径）变更"这条规则加一道静态检查，接入 pre-commit/pre-push hook——这一步价值不因为核心路径已经合规而减少，反而更重要：现在的架构是对的，这道检查是用来保证以后新功能开发时不会不小心破坏这个已经做对的设计
+  - ✅ 2026-09-11 完成：新建 `githooks/pre-commit`（零 mutation AST 扫描，~1s）+ `githooks/pre-push`（同一扫描 + pytest 全量 ~25s），沿用 ECOS `core.hooksPath` 模式（hook 文件入仓 tracked，克隆后跑 `bash scripts/install-hooks.sh` 启用）。两 hook 已实测通过（扫描 54 文件 + 1627 用例全绿）。**注**：ECOS 的 `check_defensive.sh` 暂未接入——其内部硬编码扫描 `ecos/` 目录（CogEdu 包名已改 `cogedu/`），需先做脚本适配，留待后续按需处理，不在本任务范围。
 
 ### 12.4 0-C：Flask → FastAPI
 

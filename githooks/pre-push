@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# CogEdu pre-push hook: 静态防御检查 + 全量测试
+#
+# 来源: ECOS v0.64.1 githooks 模式 (core.hooksPath = githooks/, hook 文件入仓 tracked)
+# 启用: bash scripts/install-hooks.sh
+#
+# 检查项:
+#   [1] 零 mutation AST 扫描 (同 pre-commit, 防止 --no-verify 绕过后漏网)
+#   [2] pytest 全量 (~20s, 1627+ 用例) — 推远端前最后一道"保持全绿"防线
+#
+# 为什么 push 也要再跑一次扫描: pre-commit 可被 --no-verify 绕过或分文件提交时
+# 产生疏漏; push 是进远端的最后一道闸, 成本 <1s, 值得重复.
+#
+# 紧急绕过 (不推荐): git push --no-verify
+
+set -e
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "  CogEdu pre-push: 静态检查 + 全量测试"
+echo "═══════════════════════════════════════════════════════════════"
+
+echo "▶ [1/2] 零 mutation AST 扫描 (内核状态只经 Runtime 变更)"
+python scripts/check_no_direct_state_mutation.py
+
+echo ""
+echo "▶ [2/2] pytest 全量测试"
+python -m pytest tests/ -q
+
+echo ""
+echo "✅ pre-push 全部检查通过"
