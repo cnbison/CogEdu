@@ -1,0 +1,1950 @@
+{
+  "metadata": {
+    "subject": "python_basics",
+    "description": "Q矩阵——Python 基础题目属性标注（LLM 充当领域专家）",
+    "instructions": "每个 problem_id 对应一道具体题目。请标注：1) 考察的知识点（skill_id）；2) Bloom 层；3) 是否触发 misconception；4) MIRT 参数（a_specialized[5D]）；5) 推荐干预类型。",
+    "subject_extensions": {
+      "_comment": "5 学科扩展 slot — ECOS 领域无关原则下, 5D 核心必须跨学科通用. v0.54.2-3 已落地 cross_subject 抽象题 (10 道 PC-C/PC-X), v0.56.0+ 计划扩展为 5 学科具象题 (数学/语文/英语/物理/化学 各 10 道 = 50 道).",
+      "schema": {
+        "math": "topic='math.*', 各 topic 对应数学知识点 (代数/几何/函数/概率/统计 等)",
+        "chinese": "topic='chinese.*', 各 topic 对应语文知识点 (字词/古诗/阅读/作文 等)",
+        "english": "topic='english.*', 各 topic 对应英语知识点 (语法/词汇/阅读/写作 等)",
+        "physics": "topic='physics.*', 各 topic 对应物理知识点 (力学/电磁/光学/热学 等)",
+        "chemistry": "topic='chemistry.*', 各 topic 对应化学知识点 (元素/反应/有机/实验 等)"
+      },
+      "question_count_target": {
+        "math": 10,
+        "chinese": 10,
+        "english": 10,
+        "physics": 10,
+        "chemistry": 10
+      },
+      "current_count": {
+        "math": 0,
+        "chinese": 0,
+        "english": 0,
+        "physics": 0,
+        "chemistry": 0
+      }
+    },
+    "references": [
+      "ecos/bloom/subject_libraries/python_basics.py",
+      "ecos/cta/content/python_basics_misconceptions.py",
+      "ecos/cta/l2_mirt.py"
+    ],
+    "bloom_goal_coverage": [
+      {
+        "topic": "python.variables",
+        "bloom_goals": [
+          "python.variables-L1",
+          "python.variables-L2",
+          "python.variables-L3",
+          "python.variables-L4",
+          "python.variables-L5",
+          "python.variables-L6"
+        ],
+        "skill_name": "变量与赋值"
+      },
+      {
+        "topic": "python.loops",
+        "bloom_goals": [
+          "python.loops-L1",
+          "python.loops-L2",
+          "python.loops-L3",
+          "python.loops-L4",
+          "python.loops-L5",
+          "python.loops-L6"
+        ],
+        "skill_name": "循环"
+      },
+      {
+        "topic": "python.functions",
+        "bloom_goals": [
+          "python.functions-L1",
+          "python.functions-L2",
+          "python.functions-L3",
+          "python.functions-L4",
+          "python.functions-L5",
+          "python.functions-L6"
+        ],
+        "skill_name": "函数"
+      },
+      {
+        "topic": "python.recursion",
+        "bloom_goals": [
+          "python.recursion-L1",
+          "python.recursion-L2",
+          "python.recursion-L3",
+          "python.recursion-L4",
+          "python.recursion-L5",
+          "python.recursion-L6"
+        ],
+        "skill_name": "递归"
+      },
+      {
+        "topic": "python.scope",
+        "bloom_goals": [
+          "python.scope-L1",
+          "python.scope-L2",
+          "python.scope-L3",
+          "python.scope-L4",
+          "python.scope-L5",
+          "python.scope-L6"
+        ],
+        "skill_name": "作用域"
+      }
+    ],
+    "a_specialized_design": {
+      "python.variables": {
+        "dimension": "K",
+        "vector": [
+          0.9,
+          0.2,
+          0.4,
+          0.1,
+          0.1
+        ],
+        "note": "K 主导：概念理解"
+      },
+      "python.loops": {
+        "dimension": "S",
+        "vector": [
+          0.2,
+          0.3,
+          0.9,
+          0.1,
+          0.1
+        ],
+        "note": "S 主导：策略性知识"
+      },
+      "python.functions": {
+        "dimension": "P",
+        "vector": [
+          0.3,
+          0.9,
+          0.2,
+          0.1,
+          0.1
+        ],
+        "note": "P 主导：程序性知识"
+      },
+      "python.recursion": {
+        "dimension": "S",
+        "vector": [
+          0.2,
+          0.3,
+          0.9,
+          0.1,
+          0.1
+        ],
+        "note": "S 主导：策略性知识"
+      },
+      "python.scope": {
+        "dimension": "P",
+        "vector": [
+          0.3,
+          0.9,
+          0.2,
+          0.1,
+          0.1
+        ],
+        "note": "P 主导：程序性知识"
+      }
+    },
+    "misconception_library": [
+      "M1",
+      "M2",
+      "M3",
+      "M4",
+      "M5",
+      "M6",
+      "M7",
+      "M8"
+    ],
+    "version": "v0.54.3",
+    "phase": 5,
+    "c_dominant_questions_count": 20,
+    "total_questions": 56,
+    "last_updated": "2026-07-23",
+    "c_confidence_questions_count": 5,
+    "c_programming_questions_count": 20,
+    "dual_layer_architecture": {
+      "core_5d": "K/P/S/C/X (领域无关)",
+      "programming_extension": "PB-C 20 道 (编程领域)",
+      "c_confidence_core": "PC-C 5 道 (领域无关)"
+    },
+    "x_external_support_questions_count": 5,
+    "dual_layer_architecture_5d_complete": true
+  },
+  "problems": [
+    {
+      "problem_id": "PB-Q01",
+      "bloom_goal_id": "python.variables-L1",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "以下代码的输出是什么？\n\nx = 5\nprint(x)",
+      "correct_answer": "5",
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.1,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ]
+    },
+    {
+      "problem_id": "PB-Q02",
+      "bloom_goal_id": "python.variables-L2",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "以下代码的输出是什么？\n\nx = 5\nx = x + 1\nprint(x)",
+      "correct_answer": "6",
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "misconceptions": [
+        "M2"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q03",
+      "bloom_goal_id": "python.variables-L3",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "写出代码实现：交换变量 a 和 b 的值（不许用第三变量）",
+      "correct_answer": "a, b = b, a",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "a, b = b, a 元组交换或等价写法，完全正确",
+        "0.6": "概念对（利用元组/算术交换），仅轻微语法瑕疵（如缺冒号、变量名笔误但结构可辨）",
+        "0.3": "思路方向对但实现有实质缺陷（如用了第三变量但其余正确，或交换逻辑部分成立）",
+        "0.0": "不理解变量交换或多元赋值概念"
+      }
+    },
+    {
+      "problem_id": "PB-Q04",
+      "bloom_goal_id": "python.variables-L4",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "以下代码的输出是什么？\n\na = [1, 2]\nb = a\nb.append(3)\nprint(a)",
+      "correct_answer": "[1, 2, 3]",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.6,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M6"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q05",
+      "bloom_goal_id": "python.loops-L1",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "以下代码的输出是什么？\n\nfor i in range(3):\n    print(i)",
+      "correct_answer": "0\n1\n2",
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.1,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ]
+    },
+    {
+      "problem_id": "PB-Q06",
+      "bloom_goal_id": "python.loops-L2",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "以下代码的输出是什么？\n\nfor i in range(1, 5):\n    print(i)",
+      "correct_answer": "1\n2\n3\n4",
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "misconceptions": [
+        "M3"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q07",
+      "bloom_goal_id": "python.loops-L3",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "用 for 循环写代码计算 1+2+...+100 的和",
+      "correct_answer": "total = 0\nfor i in range(1, 101):\n    total += i\nprint(total)",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "for + range + 累加器结构完整，求和正确",
+        "0.6": "循环累加概念正确（range 范围或累加结构可辨），仅轻微语法瑕疵",
+        "0.3": "有累加意图但 range 范围错（如漏 +1）或累加放错位置",
+        "0.0": "不理解循环累加"
+      }
+    },
+    {
+      "problem_id": "PB-Q08",
+      "bloom_goal_id": "python.loops-L4",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "以下代码为什么会卡住？如何修复？\n\nx = 5\nwhile x > 0:\n    print(x)\n    # 少了什么？",
+      "correct_answer": "缺少 x = x - 1（循环基准情形更新），应改为 while x > 0: print(x); x -= 1",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.6,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M7"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "正确指出缺少循环变量更新（x -= 1 / x = x - 1）+ 给出修复",
+        "0.6": "指出缺更新导致死循环，但修复写法有轻微瑕疵",
+        "0.3": "意识到是死循环但没定位到缺变量更新（如归因于条件写错）",
+        "0.0": "不理解 while 死循环成因"
+      }
+    },
+    {
+      "problem_id": "PB-Q09",
+      "bloom_goal_id": "python.functions-L1",
+      "topic": "python.functions",
+      "skill_name": "函数",
+      "problem_text": "以下代码的输出是什么？\n\ndef greet():\n    print('Hello')\n\ngreet()",
+      "correct_answer": "Hello",
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.1,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ]
+    },
+    {
+      "problem_id": "PB-Q10",
+      "bloom_goal_id": "python.functions-L2",
+      "topic": "python.functions",
+      "skill_name": "函数",
+      "problem_text": "以下代码的返回值是什么？\n\ndef f():\n    return\n\nresult = f()\nprint(result)",
+      "correct_answer": "None",
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M4"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q11",
+      "bloom_goal_id": "python.functions-L3",
+      "topic": "python.functions",
+      "skill_name": "函数",
+      "problem_text": "写一个函数 is_prime(n) 判断质数",
+      "correct_answer": "def is_prime(n):\n    if n <= 1: return False\n    for i in range(2, int(n**0.5)+1):\n        if n % i == 0: return False\n    return True",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "is_prime 结构完整：排除 n<=1、遍历候选因数、发现整除返回 False、否则 True",
+        "0.6": "质数判定概念正确（边界+循环+整除判断齐全），仅轻微语法瑕疵（缺冒号/缩进笔误，结构可辨）",
+        "0.3": "质数概念部分对（如漏 n<=1 边界，或循环范围错误但整除判断对）",
+        "0.0": "质数判定概念错误"
+      }
+    },
+    {
+      "problem_id": "PB-Q12",
+      "bloom_goal_id": "python.recursion-L1",
+      "topic": "python.recursion",
+      "skill_name": "递归",
+      "problem_text": "以下代码的输出是什么？\n\ndef f(n):\n    if n <= 0:\n        return\n    print(n)\n    f(n-1)\n\nf(3)",
+      "correct_answer": "3\n2\n1",
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ]
+    },
+    {
+      "problem_id": "PB-Q13",
+      "bloom_goal_id": "python.recursion-L2",
+      "topic": "python.recursion",
+      "skill_name": "递归",
+      "problem_text": "递归和循环有什么区别？请从执行机制和适用场景说明",
+      "correct_answer": "递归通过函数调用自身分解问题，需要 base case 终止；循环通过重复执行代码块。递归适合树结构，循环适合线性遍历。",
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M5"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q14",
+      "bloom_goal_id": "python.recursion-L3",
+      "topic": "python.recursion",
+      "skill_name": "递归",
+      "problem_text": "用递归实现阶乘函数 fact(n)",
+      "correct_answer": "def fact(n):\n    if n <= 1: return 1\n    return n * fact(n-1)",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "递归结构完整：基准情形 n<=1 返回 1 + 递归调用 n * fact(n-1)",
+        "0.6": "递归概念正确（有基准+自调用相乘），仅轻微语法瑕疵（缺冒号/缩进笔误，结构可辨）",
+        "0.3": "有递归意图但基准或递推关系有误（如漏基准情形，或递归方向错）",
+        "0.0": "不理解递归结构"
+      }
+    },
+    {
+      "problem_id": "PB-Q15",
+      "bloom_goal_id": "python.scope-L2",
+      "topic": "python.scope",
+      "skill_name": "作用域",
+      "problem_text": "以下代码的输出是什么？\n\nx = 10\ndef foo():\n    x = 20\n    print(x)\n\nfoo()\nprint(x)",
+      "correct_answer": "20\n10",
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M8"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q16",
+      "bloom_goal_id": "python.scope-L3",
+      "topic": "python.scope",
+      "skill_name": "作用域",
+      "problem_text": "如何在函数内修改全局变量 x？请写出代码",
+      "correct_answer": "x = 10\ndef foo():\n    global x\n    x = 20\nfoo()\nprint(x)  # 输出 20",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "global x 声明 + 函数内赋值 + 调用验证，结构完整（函数名不必与答案一致）",
+        "0.6": "global 概念正确（声明+赋值结构可辨），仅轻微语法瑕疵（如 def 行缺冒号，但 global 用法无误）",
+        "0.3": "知道需要在函数内操作 x 但 global 声明缺失或有误",
+        "0.0": "不理解全局/局部作用域"
+      }
+    },
+    {
+      "problem_id": "PB-Q17",
+      "bloom_goal_id": "python.variables-L5",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "以下两段代码都能实现交换 a 和 b 的值，哪种更好？为什么？\n\n# 方案一\na, b = b, a\n\n# 方案二\ntmp = a\na = b\nb = tmp",
+      "correct_answer": "方案一更好。方案一更简洁（1行 vs 3行）、更 Pythonic、不需要额外变量。方案二在某些语言中是唯一方式，但 Python 中不推荐。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q18",
+      "bloom_goal_id": "python.variables-L6",
+      "topic": "python.variables",
+      "skill_name": "变量与赋值",
+      "problem_text": "设计一个程序：用户输入一个三位数，程序输出它的逆序数（例如 123 → 321）。要求使用变量和算术运算。",
+      "correct_answer": "n = int(input())\na = n // 100\nb = (n // 10) % 10\nc = n % 10\nprint(a + b*10 + c*100)  # 或 print(c*100 + b*10 + a)",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.4,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "提取三位（// 与 % 用法对）+ 逆序拼接正确",
+        "0.6": "数位拆分概念正确（// % 结构可辨），仅拼接权重错或轻微语法瑕疵",
+        "0.3": "有拆分数位意图但 // % 用法有实质错误",
+        "0.0": "不理解数位拆分"
+      }
+    },
+    {
+      "problem_id": "PB-Q19",
+      "bloom_goal_id": "python.loops-L5",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "以下代码想计算 1+2+...+100 的和，但输出结果是 505000 而不是 5050。找出问题所在并说明原因。\n\ntotal = 0\nfor i in range(1, 101):\n    total = i + total\nprint('Result:', total * 100)",
+      "correct_answer": "最后一行多乘了 100。for 循环里 total 累加的是 1+2+...+100=5050，但 print 时又乘以 100 导致结果变成 505000。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M7"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q20",
+      "bloom_goal_id": "python.loops-L6",
+      "topic": "python.loops",
+      "skill_name": "循环",
+      "problem_text": "设计代码：输出 1-100 之间的所有质数，每行一个。",
+      "correct_answer": "for n in range(2, 101):\n    is_prime = True\n    for i in range(2, int(n**0.5)+1):\n        if n % i == 0:\n            is_prime = False\n            break\n    if is_prime:\n        print(n)",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "外层遍历 2-100 + 内层质数判定 + is_prime 标志重置，结构完整",
+        "0.6": "嵌套循环+质数判定概念正确（结构可辨），仅标志重置位置或边界等轻微瑕疵",
+        "0.3": "质数判定对但嵌套结构有实质错误（如标志不重置导致只输出第一个质数）",
+        "0.0": "不理解嵌套循环筛选"
+      }
+    },
+    {
+      "problem_id": "PB-Q21",
+      "bloom_goal_id": "python.functions-L5",
+      "topic": "python.functions",
+      "skill_name": "函数",
+      "problem_text": "以下两个函数都能判断质数，哪个效率更高？为什么？\n\n# 函数A\ndef is_prime_a(n):\n    for i in range(2, n):\n        if n % i == 0: return False\n    return True\n\n# 函数B\ndef is_prime_b(n):\n    for i in range(2, int(n**0.5)+1):\n        if n % i == 0: return False\n    return True",
+      "correct_answer": "函数B效率更高。函数A需要检查到 n-1，而函数B只需检查到 sqrt(n)。对于 n=100，函数A检查99次，函数B只检查9次。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q22",
+      "bloom_goal_id": "python.functions-L6",
+      "topic": "python.functions",
+      "skill_name": "函数",
+      "problem_text": "设计一个高阶函数 filter_primes(nums)，接收一个整数列表，返回其中的所有质数。必须使用 filter() 和 lambda。",
+      "correct_answer": "def is_prime(n):\n    return n > 1 and all(n % i != 0 for i in range(2, int(n**0.5)+1))\n\ndef filter_primes(nums):\n    return list(filter(lambda x: is_prime(x), nums))",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "filter() + lambda（或等价 lambda 传参）+ 质数判定，三者齐全",
+        "0.6": "高阶函数概念正确（filter+lambda 结构可辨、质数判定思路对），仅轻微语法瑕疵",
+        "0.3": "质数判定对但未用 filter/lambda，或 filter/lambda 对但质数判定有实质错误",
+        "0.0": "不理解高阶函数或质数判定"
+      }
+    },
+    {
+      "problem_id": "PB-Q23",
+      "bloom_goal_id": "python.recursion-L5",
+      "topic": "python.recursion",
+      "skill_name": "递归",
+      "problem_text": "以下递归函数计算斐波那契数列，运行 fib(10) 会发生什么问题？如何优化？\n\ndef fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)",
+      "correct_answer": "问题：重复计算导致指数级时间复杂度。fib(10)会重复计算 fib(8)、fib(7) 等多次。优化方案：1）记忆化递归（@lru_cache）；2）迭代改写。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M5"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ]
+    },
+    {
+      "problem_id": "PB-Q24",
+      "bloom_goal_id": "python.recursion-L6",
+      "topic": "python.recursion",
+      "skill_name": "递归",
+      "problem_text": "设计递归函数 reverse_list(s)，接受一个字符串，返回逆序字符串。不能使用切片 s[::-1]，必须用递归。",
+      "correct_answer": "def reverse_list(s):\n    if len(s) <= 1: return s\n    return s[-1] + reverse_list(s[:-1])",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.3,
+        0.9,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "递归结构完整：基准 len<=1 + s[-1] + 递归子串（未用切片逆序 [::-1]）",
+        "0.6": "递归逆序概念正确（基准+末字符+自调用），仅轻微语法瑕疵或用了 s[::-1] 以外可接受的写法",
+        "0.3": "有递归意图但基准缺失或拼接方向错",
+        "0.0": "不理解递归或直接用 [::-1]"
+      }
+    },
+    {
+      "problem_id": "PB-Q25",
+      "bloom_goal_id": "python.scope-L5",
+      "topic": "python.scope",
+      "skill_name": "作用域",
+      "problem_text": "以下代码为什么无法把 x 改成 20？修改它使函数能真正改变全局变量。\n\nx = 10\ndef foo():\n    x = 20\n    print(x)\nfoo()\nprint(x)",
+      "correct_answer": "因为函数内的 x=20 创建了一个局部变量，覆盖了全局变量。需要用 global x 声明：\ndef foo():\n    global x\n    x = 20",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M8"
+      ],
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "正确解释局部变量遮蔽全局 + global x 修复，两点齐全",
+        "0.6": "解释或修复只对一半：能指出局部遮蔽但修复写错，或修复正确但解释含糊",
+        "0.3": "意识到问题出在函数内外 x 的关系，但解释和修复都不完整",
+        "0.0": "不理解作用域遮蔽"
+      }
+    },
+    {
+      "problem_id": "PB-Q26",
+      "bloom_goal_id": "python.scope-L6",
+      "topic": "python.scope",
+      "skill_name": "作用域",
+      "problem_text": "设计一个闭包函数 make_counter(start=0)，返回一个计数器函数，每次调用返回并递增计数器的值。",
+      "correct_answer": "def make_counter(start=0):\n    count = [start]\n    def counter():\n        count[0] += 1\n        return count[0]\n    return counter",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "1.0": "闭包结构完整：外层持状态 + 内层递增并返回 + 返回内层函数",
+        "0.6": "闭包概念正确（外层持状态+内层函数返回，结构可辨），仅轻微语法瑕疵",
+        "0.3": "有计数器意图但闭包状态保持有误（如每次调用重置）",
+        "0.0": "不理解闭包"
+      }
+    },
+    {
+      "problem_id": "PB-C01",
+      "topic": "python.loops",
+      "skill_name": "循环边界",
+      "bloom_goal_id": "python.loops-L3",
+      "problem_text": "以下代码期望输出 1, 2, 3, 4, 5，但实际输出 1, 2, 3, 4\n错在哪？怎么修？\n\nfor i in range(1, 5):\n    print(i)",
+      "correct_answer": "Bug 在 range(1, 5) 不包含 5，应改为 range(1, 6)。\n原因: range(a, b) 是左闭右开区间 [a, b)，不包含 b。",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.4,
+        0.3,
+        1.2,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M3"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试题",
+      "partial_credit_rubric": {
+        "0.0": "未识别或答错",
+        "0.3": "识别 range(1,5) 但说 '5 应该在'",
+        "0.6": "识别 + 修复为 range(1,6) 但没说原因",
+        "1.0": "完整: 位置 + 原因 + 修复"
+      }
+    },
+    {
+      "problem_id": "PB-C02",
+      "topic": "python.loops",
+      "skill_name": "循环 continue 行为",
+      "bloom_goal_id": "python.loops-L4",
+      "problem_text": "以下代码期望输出 1, 2, 3 (需求规约), 但实际输出 1, 3 (skip 2)。\n代码需要修改以满足需求吗？\n\n```python\nfor i in range(1, 4):\n    if i == 2:\n        continue\n    print(i)\n```\n\nA. 不需要, 代码是对的 (符合实际行为)\nB. 需要, 去掉 if i == 2: continue (改后输出 1, 2, 3 满足需求)\nC. 需要, 改成 pass 跳过判断\nD. 题目描述有误",
+      "correct_answer": "B (需要, 去掉 if i == 2: continue). 原题'期望 1, 2, 3'是需求规约, 实际输出 1, 3 不满足需求. 原答案'代码是对的'忽略了需求规约, v0.57.0-b 改题. 正确识别: 实际输出 ≠ 期望输出, 需要改 `if i == 2: continue` → 删掉 (输出 1, 2, 3 满足需求).",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.4,
+        0.3,
+        1.3,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "调试题(诱饵)",
+      "partial_credit_rubric": {
+        "0.0": "选 A (不需要改) — 没识别需求规约, 跟原错误答案一致",
+        "0.3": "选 C (改 pass) — 知道要改但改错, pass 跟 continue 效果一样",
+        "0.6": "选 B (去掉 if/continue) — 识别需求 + 给出正确修改",
+        "1.0": "选 B + 解释'实际输出 1, 3 ≠ 期望 1, 2, 3, 改完输出满足需求'"
+      }
+    },
+    {
+      "problem_id": "PB-C03",
+      "topic": "python.functions",
+      "skill_name": "类型错误分析",
+      "bloom_goal_id": "python.functions-L5",
+      "problem_text": "运行以下代码会报错:\nTypeError: unsupported operand type(s) for +: 'int' and 'str'\n错在哪？怎么修？\n\ndef add(a, b):\n    return a + b\n\nx = add(1, '2')\nprint(x)",
+      "correct_answer": "错误原因: add(1, '2') 中 1 是 int，'2' 是 str，不能直接相加。\n修复: 转类型 add(1, int('2')) 或 add(str(1), '2') (按需)。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.4,
+        0.6,
+        0.4,
+        1.0,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.2,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "PRACTICE"
+      ],
+      "c_dimension_type": "错误分析",
+      "partial_credit_rubric": {
+        "0.0": "未识别类型问题",
+        "0.3": "识别 int+str 但没说怎么修",
+        "0.6": "识别 + 给出 int() 转换",
+        "1.0": "完整: 错误原因 + 多种修复方案 + 适用场景"
+      }
+    },
+    {
+      "problem_id": "PB-C04",
+      "topic": "python.scope",
+      "skill_name": "局部 vs 全局",
+      "bloom_goal_id": "python.scope-L5",
+      "problem_text": "以下代码输出什么？为什么？\n\nx = 10\n\ndef foo():\n    x = 20\n    print(x)\n\nfoo()\nprint(x)",
+      "correct_answer": "输出: 20 然后 10。\n原因: foo() 内的 x = 20 是局部变量，不影响外部 x = 10。",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.3,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.3,
+        "discrimination": 1.1,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-scope-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "WORKED_EXAMPLE"
+      ],
+      "c_dimension_type": "代码阅读",
+      "partial_credit_rubric": {
+        "0.0": "说'输出 20'（部分对）",
+        "0.3": "说'输出 20, 20'（不理解 scope）",
+        "0.6": "说'输出 20, 10' 但没说原因",
+        "1.0": "完整: 输出 + 原因（局部 vs 全局）"
+      }
+    },
+    {
+      "problem_id": "PB-C05",
+      "topic": "python.recursion",
+      "skill_name": "递归调试方法",
+      "bloom_goal_id": "python.recursion-L4",
+      "problem_text": "运行 fib(5) 卡死很长时间\n不用看代码，你打算用什么方法快速定位问题？\n\ndef fib(n):\n    if n <= 1:\n        return n\n    return fib(n-1) + fib(n-2)",
+      "correct_answer": "调试方法列表:\n1. 加 print 跟踪: 在函数入口 print n 看调用次数\n2. 画递归树: 手算 fib(5) 的递归树，识别重复计算\n3. 测小输入: 先 fib(3) 看是否也慢\n4. 用 lru_cache / memoization: 直接验证是重复计算问题",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.2,
+        0.5,
+        0.8,
+        0.6,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 0.9,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-recursion-no-memo"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试策略",
+      "partial_credit_rubric": {
+        "0.0": "未给方法",
+        "0.3": "单一方法（加 print）但不系统",
+        "0.6": "多方法（print + 测小输入）但没排序",
+        "1.0": "系统化方法（先 print 跟踪 → 识别重复 → memoization 验证）"
+      }
+    },
+    {
+      "problem_id": "PB-C06",
+      "topic": "python.variables",
+      "skill_name": "变量赋值",
+      "bloom_goal_id": "python.variables-L3",
+      "problem_text": "以下代码输出什么？为什么？\n\nx = 5\ny = x\nx = 10\nprint(y)",
+      "correct_answer": "5，因为 y = x 时 y 指向 5 这个 int 对象，x 重新赋值不改变 y。",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.4,
+        0.3,
+        0.2,
+        1.0,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.3,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "代码阅读",
+      "partial_credit_rubric": {
+        "0.0": "答 10（不理解变量赋值）",
+        "0.3": "答 5 但没说原因",
+        "0.6": "答 5 + 简单解释（'y 不变'）",
+        "1.0": "完整: 答 5 + 解释变量指向 + 引用 vs 复制"
+      }
+    },
+    {
+      "problem_id": "PB-C07",
+      "topic": "python.variables",
+      "skill_name": "可变对象引用",
+      "bloom_goal_id": "python.variables-L4",
+      "problem_text": "以下代码输出什么？为什么？\n\na = [1, 2]\nb = a\nb.append(3)\nprint(a)",
+      "correct_answer": "[1, 2, 3]，因为 b = a 让 b 指向 a 同一 list 对象，append 改了 list。",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.2,
+        0.4,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.1,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-mutable-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "WORKED_EXAMPLE"
+      ],
+      "c_dimension_type": "调试题",
+      "partial_credit_rubric": {
+        "0.0": "答 [1, 2]（不理解 mutable）",
+        "0.3": "答 [1, 2, 3] 但没说原因",
+        "0.6": "答 [1, 2, 3] + 解释 b = a 共享对象",
+        "1.0": "完整: mutable vs immutable 区分 + 修法（b = a.copy()）"
+      }
+    },
+    {
+      "problem_id": "PB-C08",
+      "topic": "python.variables",
+      "skill_name": "dict 键错误",
+      "bloom_goal_id": "python.variables-L5",
+      "problem_text": "运行以下代码报错:\nKeyError: 'age'\n错在哪？至少给出 2 种修法。\n\nuser = {'name': 'Bisen'}\nprint(user['age'])",
+      "correct_answer": "原因: dict 没 'age' 键。\n修法 1: user.get('age', default_value)\n修法 2: try/except KeyError\n修法 3: if 'age' in user: ...",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.5,
+        0.3,
+        1.2,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.2,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "PRACTICE"
+      ],
+      "c_dimension_type": "错误分析",
+      "partial_credit_rubric": {
+        "0.0": "未识别 KeyError 原因",
+        "0.3": "识别 + 单一修法（if 'age' in user）",
+        "0.6": "识别 + 2 种修法",
+        "1.0": "识别 + 3 种修法 + 适用场景对比"
+      }
+    },
+    {
+      "problem_id": "PB-C09",
+      "topic": "python.variables",
+      "skill_name": "系统化调试方法",
+      "bloom_goal_id": "python.variables-L6",
+      "problem_text": "以下代码期望 x=5 时输出 'matched', 否则 'unmatched'\n但实际无论 x 等于什么, 都输出 'unmatched'\n不用看代码, 你打算用什么方法快速定位问题？\n\nx = 5\nif x == 5:\n    print('matched')\nprint('unmatched')",
+      "correct_answer": "调试方法列表:\n1. print 跟踪: 在 if x == 5: 前 print x 看实际值\n2. 断点调试: 用 pdb / IDE 断点停在 if 处\n3. 单元测试: 写 assert x == 5 测试 if 条件\n4. 删代码法: 先注掉 print('unmatched') 看 if 是否进入",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.6,
+        0.9,
+        0.5,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 0.9,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试策略",
+      "partial_credit_rubric": {
+        "0.0": "未给方法",
+        "0.3": "单方法（加 print）",
+        "0.6": "多方法（print + 注释）但没排序",
+        "1.0": "系统化方法（print 跟踪 → 验证 if 条件 → 单元测试）"
+      }
+    },
+    {
+      "problem_id": "PB-C10",
+      "topic": "python.loops",
+      "skill_name": "IndexError 越界",
+      "bloom_goal_id": "python.loops-L5",
+      "problem_text": "运行以下代码报错:\nIndexError: list index out of range\n错在哪？怎么修？\n\nnums = [1, 2, 3]\nfor i in range(5):\n    print(nums[i])",
+      "correct_answer": "原因: range(5) 包含 0-4，但 nums 只有 0-2。\n修法 1: range(len(nums)) 或 range(3)\n修法 2: try/except IndexError\n修法 3: if i < len(nums):",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.5,
+        0.3,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.1,
+        "discrimination": 1.1,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M3"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "PRACTICE"
+      ],
+      "c_dimension_type": "错误分析",
+      "partial_credit_rubric": {
+        "0.0": "未识别越界",
+        "0.3": "识别 + 单一修法（if i < len(nums)）",
+        "0.6": "识别 + 2 种修法",
+        "1.0": "识别 + 3 种修法 + 适用场景对比"
+      }
+    },
+    {
+      "problem_id": "PB-C11",
+      "topic": "python.loops",
+      "skill_name": "嵌套循环 break 行为",
+      "bloom_goal_id": "python.loops-L6",
+      "problem_text": "以下代码卡死（题目描述）\n找出哪一行错？怎么修？\n\nfor i in range(3):\n    for j in range(3):\n        print(i, j)\n        if j == 1:\n            break",
+      "correct_answer": "这段代码其实是对的（外层 i 仍循环 0-2，内层 j 到 1 时 break）。\n题目说'卡死'是诱饵。\n真正卡死: 内层 j 写 while True: 或 for j in range(i, 3): 当 i=0。",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.3,
+        0.5,
+        0.6,
+        1.0,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 0.9,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-nested-loop-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "调试题(诱饵)",
+      "partial_credit_rubric": {
+        "0.0": "说'内层 j 错'",
+        "0.3": "说'break 错'",
+        "0.6": "识别代码其实是对的，但没给出真正卡死的例子",
+        "1.0": "完整: 识别陷阱 + 解释 break 行为 + 真正卡死例子"
+      }
+    },
+    {
+      "problem_id": "PB-C12",
+      "topic": "python.functions",
+      "skill_name": "return 位置",
+      "bloom_goal_id": "python.functions-L3",
+      "problem_text": "以下代码输出什么？\n\ndef foo(x):\n    if x > 0:\n        return x\n    print('negative')\n    return 0\n\nprint(foo(5))\nprint(foo(-3))",
+      "correct_answer": "foo(5): x=5 > 0, return 5 → 打印 5。\nfoo(-3): x=-3, 跳过 if, print 'negative', return 0 → 打印 negative 然后 0。",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.2,
+        1.0,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.5,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "代码阅读",
+      "partial_credit_rubric": {
+        "0.0": "答错",
+        "0.3": "答对 foo(5) 部分",
+        "0.6": "两个都答对",
+        "1.0": "两个都答对 + 解释 return 提前退出"
+      }
+    },
+    {
+      "problem_id": "PB-C13",
+      "topic": "python.functions",
+      "skill_name": "lambda 三元表达式",
+      "bloom_goal_id": "python.functions-L4",
+      "problem_text": "以下代码报错（题目描述）:\nSyntaxError: cannot assign to conditional expression\n错在哪？怎么修？\n\nsquare = lambda x: x if x > 0 else -x\nprint(square(-5))",
+      "correct_answer": "实际这段代码也是对的——Python 三元表达式 x if cond else -x 是合法 lambda。\n题目说'报错'是诱饵。\n真正会报错的是 lambda x: if x > 0: x else -x (lambda 体不能是 statement)。",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.4,
+        0.3,
+        1.2,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "调试题(诱饵)",
+      "partial_credit_rubric": {
+        "0.0": "说'语法错'",
+        "0.3": "识别三元表达式",
+        "0.6": "识别代码其实是对的",
+        "1.0": "完整: 识别陷阱 + lambda vs def 对比 + 解释 Python ternary"
+      }
+    },
+    {
+      "problem_id": "PB-C14",
+      "topic": "python.functions",
+      "skill_name": "装饰器调试",
+      "bloom_goal_id": "python.functions-L6",
+      "problem_text": "以下装饰器使用后函数行为异常\n不用看代码细节, 你打算用什么方法定位问题？\n\ndef my_decorator(func):\n    def wrapper(*args):\n        print('calling', func.__name__)\n        return func(*args)\n    return wrapper\n\n@my_decorator\ndef add(a, b):\n    return a + b\n\nprint(add(2, 3))",
+      "correct_answer": "调试方法列表:\n1. print 跟踪: 在 wrapper 内 print args 看参数\n2. 单元测试: 单独测 add 函数 vs 装饰后 add\n3. 断点: 在 wrapper 内断点\n4. 简化: 先去掉装饰器，看 add 本身是否对",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.7,
+        0.8,
+        0.6,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 0.9,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试策略",
+      "partial_credit_rubric": {
+        "0.0": "未给方法",
+        "0.3": "单方法（加 print）",
+        "0.6": "多方法（print + 单测）但没排序",
+        "1.0": "系统化方法（先简化 → 单独测试 → 加 print → 断点）"
+      }
+    },
+    {
+      "problem_id": "PB-C15",
+      "topic": "python.recursion",
+      "skill_name": "缺 base case",
+      "bloom_goal_id": "python.recursion-L3",
+      "problem_text": "运行以下代码会发生什么？\n\ndef foo(n):\n    return foo(n-1) + 1\n\nprint(foo(5))",
+      "correct_answer": "RecursionError: maximum recursion depth exceeded。\n因为没有 base case，递归无限。",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.2,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.2,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION"
+      ],
+      "c_dimension_type": "错误分析",
+      "partial_credit_rubric": {
+        "0.0": "说'输出 5'（不理解递归）",
+        "0.3": "说'卡住'",
+        "0.6": "说'RecursionError'",
+        "1.0": "RecursionError + 解释栈帧爆栈 + 修法（加 base case）"
+      }
+    },
+    {
+      "problem_id": "PB-C16",
+      "topic": "python.recursion",
+      "skill_name": "stack overflow 修复方法",
+      "bloom_goal_id": "python.recursion-L5",
+      "problem_text": "fib(50) 报 RecursionError\n不用改代码, 你有哪些方法让 fib(50) 能跑通？",
+      "correct_answer": "方法:\n1. 加 sys.setrecursionlimit(10000) — 提高栈深度\n2. 改迭代版 fib — 用循环代替递归\n3. 加 @lru_cache — memoization\n4. trampoline 函数 — 尾递归优化",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.6,
+        0.7,
+        0.8,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "PRACTICE"
+      ],
+      "c_dimension_type": "调试策略",
+      "partial_credit_rubric": {
+        "0.0": "未给方法",
+        "0.3": "单方法（加 sys.setrecursionlimit）",
+        "0.6": "2 种方法（递归深度 + memoization）",
+        "1.0": "4 种方法 + 适用场景对比（哪个适合生产）"
+      }
+    },
+    {
+      "problem_id": "PB-C17",
+      "topic": "python.recursion",
+      "skill_name": "可变默认值陷阱",
+      "bloom_goal_id": "python.recursion-L4",
+      "problem_text": "以下函数多次调用时, 列表会累积\n错在哪？怎么修？\n\ndef add_item(item, lst=[]):\n    lst.append(item)\n    return lst\n\nprint(add_item(1))  # [1]\nprint(add_item(2))  # 期望 [2], 实际 [1, 2]",
+      "correct_answer": "原因: 默认参数 lst=[] 在函数定义时创建一次，多次调用共享。\n修法: 用 None 哨兵\ndef add_item(item, lst=None):\n    if lst is None:\n        lst = []\n    lst.append(item)\n    return lst",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.5,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.1,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-mutable-default"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "WORKED_EXAMPLE"
+      ],
+      "c_dimension_type": "调试题",
+      "partial_credit_rubric": {
+        "0.0": "未识别共享",
+        "0.3": "识别共享但说'每次 new list'",
+        "0.6": "用 None 哨兵修",
+        "1.0": "完整: 识别陷阱 + None 哨兵 + 解释 Python 默认参数求值时机"
+      }
+    },
+    {
+      "problem_id": "PB-C18",
+      "topic": "python.scope",
+      "skill_name": "UnboundLocalError",
+      "bloom_goal_id": "python.scope-L3",
+      "problem_text": "运行以下代码报错:\nUnboundLocalError: local variable 'x' referenced before assignment\n错在哪？怎么修？\n\nx = 10\ndef foo():\n    x = x + 1\n    print(x)\n\nfoo()",
+      "correct_answer": "原因: foo() 内的 x = x + 1 让 x 变成局部变量，但 x + 1 时 x 还未定义。\n修法: 加 global x 或 nonlocal x。\n或传参数: def foo(x): return x + 1。",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.2,
+        1.0,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": -0.1,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-scope-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试题",
+      "partial_credit_rubric": {
+        "0.0": "未识别 UnboundLocalError",
+        "0.3": "识别 + 加 global x",
+        "0.6": "加 global + 测试",
+        "1.0": "完整: global / nonlocal / 参数传递 3 种方案对比"
+      }
+    },
+    {
+      "problem_id": "PB-C19",
+      "topic": "python.scope",
+      "skill_name": "nonlocal 缺失",
+      "bloom_goal_id": "python.scope-L4",
+      "problem_text": "以下代码期望 outer_var 累加\n实际每次调用都重置为 0\n错在哪？怎么修？\n\ndef make_counter():\n    outer_var = 0\n    def inner():\n        outer_var = outer_var + 1\n        return outer_var\n    return inner\n\ncounter = make_counter()\nprint(counter())  # 期望 1\nprint(counter())  # 期望 2, 实际 1",
+      "correct_answer": "原因: inner() 内的 outer_var = outer_var + 1 让 outer_var 变局部变量。\n修法: 加 nonlocal outer_var。",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.4,
+        1.1,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.1,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-scope-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "WORKED_EXAMPLE"
+      ],
+      "c_dimension_type": "调试题",
+      "partial_credit_rubric": {
+        "0.0": "未识别",
+        "0.3": "识别 + 加 nonlocal",
+        "0.6": "加 nonlocal + 测试",
+        "1.0": "完整: global / nonlocal / 闭包变量绑定陷阱 + 对比"
+      }
+    },
+    {
+      "problem_id": "PB-C20",
+      "topic": "python.scope",
+      "skill_name": "闭包变量绑定陷阱",
+      "bloom_goal_id": "python.scope-L6",
+      "problem_text": "以下代码创建 5 个 lambda, 每个都返回 i\n但调用时全部返回 4\n不用看代码细节, 你打算用什么方法修复？\n\nfuncs = [lambda: i for i in range(5)]\nfor f in funcs:\n    print(f())",
+      "correct_answer": "原因: 闭包变量绑定陷阱，所有 lambda 共享同一个 i，最终 i=4。\n修法 1: 默认参数 lambda i=i: i\n修法 2: functools.partial\n修法 3: 函数包装 def make_f(i): return lambda: i",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.6,
+        0.7,
+        0.9,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 0.9,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-candidate-closure-binding"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "调试策略",
+      "partial_credit_rubric": {
+        "0.0": "未给方法",
+        "0.3": "单方法（默认参数 i=i）",
+        "0.6": "2 种方法",
+        "1.0": "3 种方法 + 适用场景对比 + 解释 Python late binding"
+      }
+    },
+    {
+      "problem_id": "PC-C01",
+      "topic": "cross_subject",
+      "skill_name": "自我评估",
+      "bloom_goal_id": "cross_subject-L3",
+      "problem_text": "这道题你能答对的可能性有多大？\nA. 90% (非常确定)\nB. 70% (比较确定)\nC. 50% (一半一半)\nD. 30% (不太确定)\nE. 10% (完全不会)\nF. 无法判断 (题目信息不足)",
+      "correct_answer": "B (70% 比较确定) 或 F (无法判断). 基于 lbc001 实际 K/P 维度评估, L3 题目答对可能性约 70-80%; 选 F (无法判断) 也是健康的元认知——识别题目信息不足比瞎猜更诚实.",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        1.1,
+        0.2
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "self_evaluation",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 E (10%) — 自我评估严重不准",
+        "0.3": "选 D (30%) — 低估",
+        "0.6": "选 C (50%) — 模糊",
+        "1.0": "选 B (70% 比较确定) 或 F (无法判断) — 准确自我评估 / 健康的元认知"
+      }
+    },
+    {
+      "problem_id": "PC-C02",
+      "topic": "cross_subject",
+      "skill_name": "求助决策",
+      "bloom_goal_id": "cross_subject-L4",
+      "problem_text": "遇到难题你打算怎么办？\nA. 直接放弃\nB. 猜一个答案\nC. 看笔记/教材\nD. 问老师/同学\nE. 独立思考 + 查资料",
+      "correct_answer": "E (独立思考 + 查资料). 元认知最优策略.",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        1.2,
+        0.2
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-illinois-confidence-avoid-help"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "help_seeking_strategy",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A (直接放弃)",
+        "0.3": "选 B (猜答案) — 元认知差",
+        "0.6": "选 C/D (单策略) — 单一求助",
+        "1.0": "选 E (综合策略) — 元认知优"
+      }
+    },
+    {
+      "problem_id": "PC-C03",
+      "topic": "cross_subject",
+      "skill_name": "检查行为",
+      "bloom_goal_id": "cross_subject-L5",
+      "problem_text": "答完代码后，你会检查吗？\nA. 不会检查\nB. 简单看一遍\nC. 跑几个测试用例\nD. 完整边界测试 + 异常处理",
+      "correct_answer": "C/D (检查行为). 元认知行为.",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        1.0,
+        0.3
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "self_checking_behavior",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A (不检查)",
+        "0.3": "选 B (简单看)",
+        "0.6": "选 C (跑测试)",
+        "1.0": "选 D (完整测试) — 元认知优"
+      }
+    },
+    {
+      "problem_id": "PC-C04",
+      "topic": "cross_subject",
+      "skill_name": "misconception 检测",
+      "bloom_goal_id": "cross_subject-L5",
+      "problem_text": "概念检测：以下说法哪些是常见误解？\nA. range(1, 5) 包括 5\nB. Python 中变量赋值是复制值\nC. 函数内修改全局变量无需声明\nD. 以上都是误解",
+      "correct_answer": "D (以上都是误解). A: range(1,5) 不包含 5. B: 变量赋值是引用, 不是复制. C: 函数内修改全局变量需 global 声明.",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.3,
+        0.2,
+        0.2,
+        1.3,
+        0.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.2,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M3",
+        "M-candidate-mutable-confusion",
+        "M-candidate-scope-confusion"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "PRACTICE"
+      ],
+      "c_dimension_type": "misconception_detection",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A/B/C (单一误解识别, 漏掉其他)",
+        "0.3": "识别了多个误解但未选 D (如只选 B+C), 识别不完整",
+        "0.6": "选 D (但没说明每个误解)",
+        "1.0": "选 D + 详细解释每个误解"
+      }
+    },
+    {
+      "problem_id": "PC-C05",
+      "topic": "cross_subject",
+      "skill_name": "综合元认知",
+      "bloom_goal_id": "cross_subject-L6",
+      "problem_text": "综合元认知评估：\n1. 答完题是否会检查？\n2. 遇到难题会求助还是独立思考？\n3. 自我评估准不准？\n4. 是否有常见误解？\n请综合评估你的元认知水平 (0-10 分).",
+      "correct_answer": "综合元认知评估. 高分 (8-10): 检查 + 独立思考 + 自我评估准 + 无误解. 中分 (5-7): 部分行为. 低分 (0-4): 元认知弱.",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        1.2,
+        0.2
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "c_dimension_type": "metacognition_synthesis",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "低分 (0-4) — 元认知弱",
+        "0.3": "中低分 (4-5)",
+        "0.6": "中分 (6-7)",
+        "1.0": "高分 (8-10) — 元认知优"
+      }
+    },
+    {
+      "problem_id": "PC-X01",
+      "topic": "cross_subject",
+      "skill_name": "工具选择",
+      "bloom_goal_id": "cross_subject-L3",
+      "problem_text": "遇到难题你用什么工具？\nA. 不查工具\nB. 查字典/计算器/实验仪器\nC. 查笔记\nD. 查 AI 助手\nE. 综合（B + C + D）",
+      "correct_answer": "E (综合). 多工具组合是 X 维度最佳策略.",
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        1.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-illinois-tool-avoidance"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "x_dimension_type": "tool_selection",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A (不查工具) — 工具逃避",
+        "0.3": "选 D (单 AI 助手) — 过度依赖单一工具",
+        "0.6": "选 B 或 C (单类工具) — 单一策略",
+        "1.0": "选 E (综合工具) — X 维度最佳"
+      }
+    },
+    {
+      "problem_id": "PC-X02",
+      "topic": "cross_subject",
+      "skill_name": "笔记质量",
+      "bloom_goal_id": "cross_subject-L4",
+      "problem_text": "好的笔记应包含什么？\nA. 答案\nB. 答案 + 思路\nC. 答案 + 思路 + 易错点\nD. 全部（答案 + 思路 + 易错点 + 反思 + 跨学科联系）",
+      "correct_answer": "D (全部). 完整笔记是 X 维度高质量标志.",
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.4,
+        0.2,
+        1.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.0,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "x_dimension_type": "note_quality",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A (仅答案)",
+        "0.3": "选 B (答案+思路)",
+        "0.6": "选 C (答案+思路+易错点)",
+        "1.0": "选 D (全部) — X 维度高质量笔记"
+      }
+    },
+    {
+      "problem_id": "PC-X03",
+      "topic": "cross_subject",
+      "skill_name": "记忆使用策略",
+      "bloom_goal_id": "cross_subject-L5",
+      "problem_text": "你如何决定\"是否查之前类似题\"？\nA. 每次都查 (过度依赖)\nB. 偶尔查\nC. 不查 (过度自信)\nD. 综合（偶尔查 + 记在脑里 + 标注重点）",
+      "correct_answer": "D (综合). 平衡记忆使用是 X 维度元认知.",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        1.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-illinois-overconfidence",
+        "M-illinois-overdependence"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "x_dimension_type": "memory_use_strategy",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 C (不查) — 过度自信",
+        "0.3": "选 A (每次都查) — 过度依赖",
+        "0.6": "选 B (偶尔查) — 单策略",
+        "1.0": "选 D (综合策略) — X 维度平衡"
+      }
+    },
+    {
+      "problem_id": "PC-X04",
+      "topic": "cross_subject",
+      "skill_name": "支架依赖度",
+      "bloom_goal_id": "cross_subject-L5",
+      "problem_text": "遇到新概念你如何应对？\nA. 等老师讲 (被动)\nB. 看 worked example (高依赖)\nC. 直接尝试 (低依赖)\nD. 综合 (worked example + 直接尝试 + 讨论)",
+      "correct_answer": "D (综合). 平衡支架依赖是 X 维度元认知.",
+      "bloom_layer_observed": "L5",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        0.3,
+        1.0
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [
+        "M-illinois-scaffolding-overdependence"
+      ],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "x_dimension_type": "scaffolding_dependency",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "选 A (等老师讲) — 完全依赖",
+        "0.3": "选 C (直接尝试) — 不借力",
+        "0.6": "选 B (worked example) — 单一支架",
+        "1.0": "选 D (综合) — X 维度平衡"
+      }
+    },
+    {
+      "problem_id": "PC-X05",
+      "topic": "cross_subject",
+      "skill_name": "综合 External Support",
+      "bloom_goal_id": "cross_subject-L6",
+      "problem_text": "综合 External Support 评估：\n1. 工具使用频率（每天用几次字典/计算器/AI？）\n2. 笔记习惯（每次学习是否做笔记？质量如何？）\n3. 记忆使用（如何决定查/记脑里？）\n4. 求助策略（独立思考 + 查资料 + 问老师？）\n请综合评估你的 External Support 使用水平 (0-10 分).",
+      "correct_answer": "综合 External Support 评估. 高分 (8-10): 工具 + 笔记 + 记忆 + 求助 4 维度都平衡. 中分 (5-7): 部分维度平衡. 低分 (0-4): 4 维度都不平衡.",
+      "bloom_layer_observed": "L6",
+      "a_specialized": [
+        0.2,
+        0.2,
+        0.3,
+        0.3,
+        1.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.0,
+        "guessing": 0.0
+      },
+      "misconceptions": [],
+      "intervention_types": [
+        "EXPLANATION",
+        "SCAFFOLDING"
+      ],
+      "x_dimension_type": "external_support_synthesis",
+      "domain_agnostic": true,
+      "partial_credit_rubric": {
+        "0.0": "低分 (0-4) — 4 维度都不平衡",
+        "0.3": "中低分 (4-5)",
+        "0.6": "中分 (6-7)",
+        "1.0": "高分 (8-10) — X 维度平衡"
+      }
+    }
+  ]
+}

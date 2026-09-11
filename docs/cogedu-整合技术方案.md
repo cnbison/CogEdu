@@ -208,7 +208,7 @@ class Parser(Protocol):
 - **【已更正范围】补齐状态入口的具体缺口**：核心 belief 更新路径其实已经通过事件总线正确接入 Runtime（见第 2.2 节更正），真正需要处理的是三处更小的具体缺口——题目 MIRT 参数注册（`engine.l2.register_item`）、状态持久化（`save_student_state`）、误概念 reconcile（`reconcile_for_student`）——逐一评估是否也该纳入统一入口，而不是"重建整条主链路"
 - **Flask → FastAPI 迁移**：与上一条合并施工，按中等工作量排期（不是之前预估的"仅路由层"）。
 - **SQLite → PostgreSQL 迁移**：现有 9 张表结构可基本平移，随上面两项一起做。
-- 确认迁移后 1599 个现有测试用例全部通过，作为改动不破坏功能的基线。
+- 确认迁移后现有测试用例全部通过，作为改动不破坏功能的基线（v0.99.4 基线为 1623 用例 + 4 个 12.2 节新增安全网 = 1627，2026-09-11 已全绿）。
 - mypy/ruff 规则配置补齐（顺手做，低成本）。
 
 ### Phase 1：呈现引擎最小可用版本（已确认范围不变，工作量分布已明确）
@@ -349,9 +349,12 @@ Phase 0 是三件事合并施工：① 补齐状态入口的几处具体缺口�
 
 ### 12.2 0-A：建立安全网
 
-- [ ] 跑通现有全部测试，记录基线：通过数、耗时、是否有 flaky 用例（`python -m pytest tests/ -v --tb=short`）
-- [ ] 检查 `web/api/belief.py` 当前直连内核的调用路径是否有对应的集成测试覆盖（不只是单元测试内核本身，而是"走 HTTP 请求 → belief.py → 内核 → 返回响应"这条完整链路）。如果集成测试覆盖不足，**先补齐这部分测试**，作为后续两项改造的安全网——这是最容易在迁移中被破坏、又最难靠人工 review 发现的部分
-- [ ] `pyproject.toml` 补齐 mypy/ruff 规则配置（顺手做，成本低）
+- [x] 跑通现有全部测试，记录基线：通过数、耗时、是否有 flaky 用例（`python -m pytest tests/ -v --tb=short`）
+  - ✅ 2026-09-11 完成：ECOS v0.99.4（commit `9cdacab`）全量 **1623 用例通过，18.92s，零失败零跳过，无 flaky**。内核已复制进 CogEdu（包名 ecos→cogedu，仅 import 重命名），复制后全量测试与基线一致，另新增 4 个安全网测试，**CogEdu 当前 1627 用例全绿**。基线版本从原定的 v0.98.0 改为 v0.99.4（经确认取最新版，增量 7 文件/+159 行已补审，详见 `kernel-baseline-notes.md` 第 1 节）
+- [x] 检查 `web/api/belief.py` 当前直连内核的调用路径是否有对应的集成测试覆盖（不只是单元测试内核本身，而是"走 HTTP 请求 → belief.py → 内核 → 返回响应"这条完整链路）。如果集成测试覆盖不足，**先补齐这部分测试**，作为后续两项改造的安全网——这是最容易在迁移中被破坏、又最难靠人工 review 发现的部分
+  - ✅ 2026-09-11 完成：评估结论——业务逻辑层覆盖扎实（8 个测试文件直接调用 `submit_answer`，含 `persisted=False` 路径），HTTP 级仅 `test_v0990_signal_collection`（信号采集专项、部分用例 mock 掉了 `submit_answer`）。已补 `tests/test_answer_endpoint_contract.py`（4 用例）：①响应 9 字段契约（含路由层回显的 `reasoning`——函数级返回只有 8 字段，路由层补的第 9 个正是迁移时最容易漏的）②partial credit 派生口径 ③`persisted=true` 正向锚点 ④save 失败必须 `persisted=false` 返回前端 + warning 留痕（v0.47.5 "4 道题没存"事故防线）
+- [x] `pyproject.toml` 补齐 mypy/ruff 规则配置（顺手做，成本低）
+  - ✅ 2026-09-11 完成：ruff（E/F/W/I/B/UP，line-length 100）+ mypy（lenient 起步，新代码目录后续收紧），见 `pyproject.toml`
 
 ### 12.3 0-B：补齐状态入口的具体缺口（范围已更正，比 v0.3 版本小得多）
 

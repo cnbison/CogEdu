@@ -4,9 +4,9 @@
 
 ## 1. 内核代码的来源与信任基础
 
-> 状态说明（2026-09-11）：本节描述的是**复制完成后的基线状态**。截至本文档更新时，内核复制尚未发生——`cogedu/` 包会在 Phase 0 的 12.2 节"建立安全网"完成之后，才从 ECOS v0.98.0（2026-09-06 快照）实际复制进来。复制完成后请更新此说明并补记精确来源 commit。
+> 状态说明（2026-09-11 更新）：**复制已完成**。来源为 **ECOS v0.99.4（commit `9cdacab`）**，比本方案最初审定的 v0.98.0（2026-09-06 快照）更新——经维护者确认取最新版，理由：v0.98.0→v0.99.4 之间包含真实生产修复（Plugin 路径 log_event 落库恢复、LCA 重复决策去重、ECOS_DB_PATH 测试/生产库隔离）。复制时包名 `ecos` 改为 `cogedu`（仅 import 重命名，逻辑零改动），复制后全量测试与 ECOS 基线一致（1623 用例全绿）。**v0.98.0→v0.99.4 的内核增量共 7 个文件、+159 行，已逐文件补审**：版本号 bump、evidence 懒加载单例化、`Intervention.created_at` 加性字段、LCA 决策指纹去重、`judge_audit_log` 表 + `save_judge_audit`、三处 `get_*` 单例的 `ECOS_DB_PATH` 支持——无新增 mutation site、无绕过 Runtime 的新路径，v0.98.0 的审查结论全部仍成立。
 
-CogEdu 的 `cogedu/cta/`、`cogedu/lca/`、`cogedu/evidence/`、`cogedu/event/`、`cogedu/goal/`、`cogedu/bloom/`、`cogedu/domain/`、`cogedu/plugins/`、`cogedu/runtime/` 这几个包，是**从 ECOS v0.98.0（2026-09-06 快照）原样复制过来的**，规模约 27,600 行 Python 代码、121 个文件，配有 1599 个测试用例。
+CogEdu 的 `cogedu/cta/`、`cogedu/lca/`、`cogedu/evidence/`、`cogedu/event/`、`cogedu/goal/`、`cogedu/bloom/`、`cogedu/domain/`、`cogedu/plugins/`、`cogedu/runtime/` 这几个包，是**从 ECOS 原样复制过来的**（v0.99.4），规模约 27,600 行 Python 代码、121 个文件，配有 1623 个测试用例（v0.98.0 时为 1599，v0.99.4 新增 24 个）。
 
 **为什么可以放心复制而不重写**：
 - CTA 的 `belief_engine.py` 内部有清晰的读写分离设计：`InferenceEngine.run()` 只产出推断结果、不做状态变更；`BeliefUpdator.apply()` 是唯一的状态变更点。这是一个经过刻意设计、执行得比较彻底的 CQRS 式架构。

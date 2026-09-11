@@ -1,0 +1,96 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cogedu"
+version = "0.1.0"
+description = "CogEdu - 面向 K12 数理化的教育认知系统（内核复制自 ECOS v0.99.4, commit 9cdacab）"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Bisen", email = "cnbison@example.com"},
+]
+keywords = [
+    "education",
+    "cognitive-architecture",
+    "k12",
+    "ai-tutor",
+    "student-modeling",
+    "bloom-taxonomy",
+    "dual-agent",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# 依赖清单随 ECOS v0.99.4 平移（flask 为过渡依赖：web/api 仍是 Flask，Phase 0-C 迁 FastAPI 后移除）
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",   # MIRT MAP 估计的 L-BFGS-B + Hessian 逆
+    "openai>=1.0",  # OpenAI-Compatible Protocol：MiniMax-M3 / Moonshot Kimi 共用
+    "flask>=2.0",   # 过渡依赖: web/api 仍是 Flask (自 ECOS 复制), 0-C 迁移 FastAPI 后移除
+    "scikit-learn>=1.3",  # ECE 计算 + Isotonic Regression 校准 (metrics/ece.py + dual_agent/calibration.py 用)
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/cnbison/CogEdu"
+"Kernel Origin" = "https://github.com/cnbison/ecos"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cogedu*", "web*"]
+exclude = ["tests*", "docs*", "frontend*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "regression: 黄金回归基线测试 (tests/test_golden_regression.py, v0.97.0 起自 ECOS 继承)",
+]
+
+# ─── 12.2 节: mypy/ruff 起步配置（Phase 0 顺手补齐项）───────────────────────
+# 原则：起步从严进缓，先覆盖新代码目录（web/api 下一阶段重写时再收敛），
+# 内核 (cogedu/) 当前带大量类型注解但未做全量校验，先 lenient 跑通再逐步收紧。
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", "node_modules", "frontend"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort (import 排序)
+    "B",   # flake8-bugbear (常见 bug 模式)
+    "UP",  # pyupgrade (过时语法)
+]
+ignore = [
+    "E501",  # 行宽由 line-length 控制, 长注释/长字符串放行
+]
+
+[tool.mypy]
+python_version = "3.11"
+# 内核自 ECOS 复制而来，未做全量类型校验——起步阶段只报告，不阻断
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_base_classes = false
+# 后续 Phase 0-C 重写 web/api (FastAPI + Pydantic) 时对新代码启用严格模式：
+#   [tool.mypy.overrides] module = "web.api.*" strict = true

@@ -1,0 +1,806 @@
+"""BeliefEngine Web 封装--会话状态管理 + API 集成。
+
+每个学生 ID 对应一个 BeliefEngine 实例 + 当前 BeliefState(内存中)。
+
+v0.47.5: silent failure 治理
+  - 所有 except: pass 改为 logger.warning(..., exc_info=True)
+  - DB 恢复 / 持久化 失败不再静默
+  - Bisen 反馈 7-19 17:14 答的题 response_history/trajectory_summary 都没存,
+    怀疑就是 submit_answer 内某处 except: pass 吞了异常
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from datetime import datetime as _dt
+from typing import Any
+
+import numpy as np
+
+from cogedu.cta.belief_engine import BeliefEngine, BeliefEngineConfig, Observation
+from cogedu.cta.belief_state import BloomLevel, BeliefState
+from cogedu.cta.event_log import EventLog, EventLogConfig
+from cogedu.cta.misconception_reconcile import reconcile_for_student
+from cogedu.evidence import EvidenceConfig, EvidenceEngine
+
+_log = logging.getLogger(__name__)
+from cogedu.cta.content import PYTHON_BASICS_MISCONCEPTION_LIBRARY_STR
+from cogedu.cta.l1_evolution import EvolutionConfig
+from cogedu.cta.l2_mirt import MIRTConfig, MIRTItemParams
+from cogedu.llm_client import ECOSLLMClient
+from cogedu.persistence.db import Database
+
+# 数据库实例(全局单例)
+_db: Database | None = None
+
+# v0.98.0 (b-b): 生产 DB 路径单一来源 (_get_db 与 _get_web_event_log 共用;
+#   测试 monkeypatch 此常量 + 重置下方两个单例缓存实现隔离)
+_WEB_DB_PATH = "web/ecos.db"
+
+
+def _get_db() -> Database:
+    global _db
+    if _db is None:
+        # v0.98.5 修: 调用时读 env (ECOS_DB_PATH), 保留 _WEB_DB_PATH
+        # monkeypatch 约定 (测试隔离), 两者取先
+        _db = Database(os.environ.get("ECOS_DB_PATH", _WEB_DB_PATH))
+        _db.init_schema()
+    return _db
+
+
+# ──────────────────────────────────────────────────────────────────────
+# v0.98.0 (b-b): EvidenceEngine + EventLog 共享单例 (接线审计实例 ③ web 侧)
+#   构造期注入 BeliefEngine (kernel-mapping §1.4 预留点):
+#     - evidence_engine -> BeliefUpdator._register_evidence (RESPONSE_HISTORY
+#       落 evidence_log, per-dim 5 行 + dim 标记)
+#     - event_log -> FeatureExtractor emit (response_submitted)
+#       + BeliefUpdator.apply (observation), 每 submit 2 行 (设计内)
+#   retention: event_log 显式配置 (默认 EventLogConfig 无 retention 会无限膨胀);
+#     evidence_engine max_per_student=0 (unlimited) -> add 零 count 扫描
+#     (gate 修复后 0 = 关闭), evidence_log retention 标 H1 方案开放项。
+#   测试隔离: monkeypatch 重置这两个全局 None + monkeypatch _get_db。
+# ──────────────────────────────────────────────────────────────────────
+_web_event_log: EventLog | None = None
+_evidence_engine: EvidenceEngine | None = None
+
+# v0.98.0 (b-b): event_log retention 先验值 (H1 方案文档同批标注, 试点可调)
+_EVENT_LOG_MAX_PER_STUDENT = 5000
+_EVENT_LOG_RETENTION_DAYS = 90
+
+
+def _get_web_event_log() -> EventLog:
+    global _web_event_log
+    if _web_event_log is None:
+        _web_event_log = EventLog.from_sqlite(
+            os.environ.get("ECOS_DB_PATH", _WEB_DB_PATH),
+            config=EventLogConfig(
+                max_per_student=_EVENT_LOG_MAX_PER_STUDENT,
+                retention_days=_EVENT_LOG_RETENTION_DAYS,
+                auto_prune_on_log=True,
+            ),
+        )
+    return _web_event_log
+
+
+def _get_evidence_engine() -> EvidenceEngine:
+    global _evidence_engine
+    if _evidence_engine is None:
+        _evidence_engine = EvidenceEngine(
+            config=EvidenceConfig(max_per_student=0),
+            db=_get_db(),
+            event_log=_get_web_event_log(),
+        )
+    return _evidence_engine
+
+
+# 全局状态映射(student_id → {engine, state})
+_STUDENT_STATES: dict[str, dict] = {}
+
+
+def _get_or_create_student(student_id: str) -> dict:
+    if student_id not in _STUDENT_STATES:
+        db = _get_db()
+        # 尝试从 DB 恢复
+        db_row = db.load_student_state(student_id)
+        # v0.99.1 (F-08 二层诊断): 恢复分支行车记录仪。
+        #   F-08 两次实测: 线上 worker 间歇性走 fresh 分支 (warmup=0), 但同一
+        #   代码 + 同一 DB 副本隔离复现 4 次全部正确恢复 — 代码对、环境/时序
+        #   错。加日志让下次复现时直接暴露分支选择与 db_row 内容。
+        _log.info(
+            "_get_or_create_student 分支选择 (sid=%s): db_row=%s, "
+            "db_path=%s, rh_len=%s, warmup=%s",
+            student_id,
+            "有行" if db_row is not None else "None!",
+            getattr(db, "config", None) and getattr(db.config, "db_path", "?"),
+            len(db_row.get("response_history") or "") if db_row else None,
+            db_row.get("warmup_count") if db_row else None,
+        )
+        if db_row is not None:
+            # DB 中有记录--创建 engine + state(MVP:部分字段从 DB 恢复)
+            mirt_config = MIRTConfig(
+                prior_mean=np.zeros(5),
+                prior_cov=np.eye(5),
+                default_a_specialized=np.ones(5) * 0.8,
+                default_a_general=0.5,
+                default_difficulty=0.0,
+            )
+            config = BeliefEngineConfig(
+                evolution_config=EvolutionConfig(),
+                mirt_config=mirt_config,
+            )
+            # v0.49.3: 传 llm_client 给 BeliefEngine, 避免 misc_detector / perception_critic
+            #   在 self.llm is None 时崩 (NoneType has no attribute chat_json)
+            # v0.52.0: 传 misconception_library_str (BUG 2.1 修复)
+            # v0.98.0 (b-b): 注入 evidence_engine + event_log (实例 ③, DB 恢复路径)
+            from web.api.app import get_llm
+            engine = BeliefEngine(
+                config=config,
+                llm_client=get_llm(),
+                misconception_library_str=PYTHON_BASICS_MISCONCEPTION_LIBRARY_STR,
+                event_log=_get_web_event_log(),
+                evidence_engine=_get_evidence_engine(),
+            )
+            state = engine.create_initial_state(student_id)
+
+            # v0.77.1: DB 恢复走 apply_snapshot 单一入口 (替代 6 处直接 state.X = value mutation)
+            # 评估文档 §6.2 方案 B, 详见 discussions/2026-08-05-v077-p2-state-engine-evaluation.md
+            # 接管: theta_mean / theta_cov / bloom_profile / learning_dna / overall_confidence / C.tc_states
+            # 不接管: trajectory (snap.bloom_profile 共享当前 state) + dim 派生字段 (后续重算)
+            import json as _json
+            snapshot: dict[str, Any] = {}
+
+            # 部分恢复:theta_mean / bloom_profile / learning_dna
+            theta_str = db_row.get("current_state_5d")
+            if theta_str:
+                try:
+                    snapshot["theta_mean"] = _json.loads(theta_str)
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 theta_mean 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+            # v0.47.9: 恢复 theta_cov (5x5 后验协方差矩阵)
+            #   之前不存 → 重启后 theta_se 全是 1.0
+            #   存上后,dim.se = sqrt(cov[i,i]) 才是真实估算值
+            # 老数据(0.47.9 之前)没这个字段 → 走 default np.eye(5)
+            theta_cov_str = db_row.get("theta_cov")
+            if theta_cov_str:
+                try:
+                    cov_list = _json.loads(theta_cov_str)
+                    if isinstance(cov_list, list) and len(cov_list) == 5 and all(len(row) == 5 for row in cov_list):
+                        snapshot["theta_cov"] = cov_list
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student 恢复 theta_cov 失败(student=%s), 走 np.eye(5) 默认",
+                        student_id, exc_info=True,
+                    )
+            bloom_str = db_row.get("current_bloom_profile")
+            if bloom_str:
+                try:
+                    snapshot["bloom_profile"] = _json.loads(bloom_str)
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 bloom_profile 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+            dna_str = db_row.get("current_learning_dna")
+            if dna_str:
+                try:
+                    snapshot["learning_dna"] = _json.loads(dna_str)
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 learning_dna 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+            # W5+ (2026-07-18): 恢复 TC states（Bisen 反馈"TC 状态重启后没了"）
+            tc_states_str = db_row.get("tc_states")
+            if tc_states_str:
+                try:
+                    tc_dict = _json.loads(tc_states_str)
+                    snapshot["C"] = {"tc_states": tc_dict}
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 tc_states 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+            # W5 (2026-07-18): 恢复整体置信度(从 DB confidence 字段) -> snapshot
+            db_conf = db_row.get("confidence")
+            if db_conf is not None:
+                try:
+                    snapshot["overall_confidence"] = float(db_conf)
+                except (TypeError, ValueError):
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 overall_confidence 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+            # 应用快照 (单一入口, 替代 6 处直接 state.X = value mutation, v0.77.1)
+            # 接管: theta_mean / theta_cov / bloom_profile / learning_dna / overall_confidence / C.tc_states
+            state.apply_snapshot(snapshot)
+
+            # W5+ (2026-07-18): 恢复 trajectory 最近 N 个 snapshot（Bisen 反馈"成长轨迹重启后没了"）
+            # v0.77.1: apply_snapshot 不接管 trajectory (snap.bloom_profile 共享当前 state, from_dict 会用 default 退化 dominant_layer)
+            trajectory_str = db_row.get("trajectory_summary")
+            if trajectory_str:
+                try:
+                    from cogedu.cta.belief_state import StateSnapshot as _Snapshot
+                    snap_list = _json.loads(trajectory_str)
+                    for snap_data in snap_list:
+                        try:
+                            ts_str = snap_data.get("timestamp")
+                            ts = _dt.fromisoformat(ts_str) if ts_str else _dt.now()
+                        except Exception:
+                            ts = _dt.now()
+                        snap = _Snapshot(
+                            timestamp=ts,
+                            theta_5d=np.array(snap_data.get("theta_5d", [0, 0, 0, 0, 0]), dtype=float),
+                            bloom_profile=state.bloom_profile,  # 共享当前 bloom profile
+                            confidence=snap_data.get("confidence", 0.0),
+                        )
+                        if "misc_history" in snap_data:
+                            snap.misc_history = list(snap_data["misc_history"])
+                        # v0.81.0-d: route through BeliefState.append_trajectory_snapshot
+                        # (was direct state.trajectory.snapshots.append, in LINE_ALLOWLIST)
+                        state.append_trajectory_snapshot(snap)
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复 trajectory 失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+            _STUDENT_STATES[student_id] = {"engine": engine, "state": state}
+
+            # W5 (2026-07-18): 恢复状态机字段(从 DB 读)
+            warmup_count = int(db_row.get("warmup_count") or 0)
+            probe_due_in = int(db_row.get("probe_due_in") or engine.config.probe_interval)
+            probe_count = int(db_row.get("probe_count") or 0)
+            response_history_json = db_row.get("response_history")
+            engine._warmup_count[student_id] = warmup_count
+            engine._probe_due_in[student_id] = probe_due_in
+            engine._probe_count[student_id] = probe_count
+            if response_history_json:
+                try:
+                    history_serializable = json.loads(response_history_json)
+                    # v0.49.2: response_history 改 dict 格式, 兼容老 3-list 格式
+                    #   老: [pid, correct, bloom_name]
+                    #   新: {"problem_id": ..., "correct": ..., "bloom_level": ..., "user_answer": ..., "correct_answer": ..., "timestamp": ...}
+                    from cogedu.cta.belief_state import BloomLevel as _BloomLevel
+                    history = []
+                    for item in history_serializable:
+                        if isinstance(item, dict):
+                            # 新格式: 直接存, 把 bloom_level str 转 BloomLevel enum 供 belief_engine 内部用
+                            try:
+                                item["_bloom_level_enum"] = _BloomLevel[item["bloom_level"]]
+                            except KeyError:
+                                item["_bloom_level_enum"] = _BloomLevel.APPLY
+                            history.append(item)
+                        else:
+                            # 老 3-list 格式: 迁移到 dict
+                            pid, correct, bl_name = item[0], item[1], item[2]
+                            try:
+                                bl = _BloomLevel[bl_name]
+                            except KeyError:
+                                bl = _BloomLevel.APPLY
+                            history.append({
+                                "problem_id": pid,
+                                "correct": int(correct),
+                                "bloom_level": str(bl.name),
+                                "_bloom_level_enum": bl,  # 内部用, 不存 DB
+                                "user_answer": None,
+                                "correct_answer": None,
+                                "timestamp": None,
+                            })
+                    engine._response_history[student_id] = history
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+                # v0.47.4: 重新注册 history 中所有题目的 MIRT 参数（避免 default fallback 放大信号）
+                # Bisen 反馈: 重启后错一题 K 暴跌 0.86 → -0.05（掉了 0.91）
+                # 根因: default_a_specialized = [0.8]*5, 所有维度都被等权放大,signal 暴增
+                # 修复: 从 Q 矩阵按 problem_id 加载真实 a_specialized,再 register 到 engine.l2
+                try:
+                    from web.api.qmatrix import get_question_detail
+                    seen_pids: set[str] = set()
+                    # v0.49.2: response_history 改 dict 格式, 同时兼容老 3-tuple
+                    for h in engine._response_history.get(student_id, []):
+                        pid = h["problem_id"] if isinstance(h, dict) else h[0]
+                        if pid in seen_pids:
+                            continue
+                        seen_pids.add(pid)
+                        prob = get_question_detail(pid)
+                        if not prob or "a_specialized" not in prob:
+                            continue
+                        item_params = MIRTItemParams(
+                            problem_id=pid,
+                            a_specialized=np.array(prob["a_specialized"]),
+                            a_general=prob.get("mirt_params", {}).get("discrimination", 1.0) * 0.5,
+                            difficulty=prob.get("mirt_params", {}).get("difficulty", 0.0),
+                        )
+                        engine.l2.register_item(item_params)
+                except Exception:
+                    _log.warning(
+                        "_get_or_create_student DB 恢复失败(student=%s)",
+                        student_id, exc_info=True,
+                    )
+
+            # v0.47.8: 同步重算每维度的 theta/confidence/se/mastery_prob
+            # Bisen 反馈: 重启后 5D 区域显示 theta 正确(0.89/0.34/0.36/0.25/0.25)
+            #   但每维度单独置信度都是 0% (与总置信度 0.400 不一致)
+            # 根因: DB 只存 state.theta_mean 和 bloom_profile,不存 dim.{K,P,S,C,X}.{theta,confidence,se}
+            #   get_student_state 读 dim_state.confidence,DB 恢复后是 dataclass 默认 0.0
+            # 修复: 复用 update() Step 3 同样的公式,按 theta_mean + theta_cov 重建每维度状态
+            #   dim.confidence = min(1.0, len(history) / 30.0)  ← 和 overall_confidence 公式一致
+            #   dim.theta = state.theta_mean[i]
+            #   dim.se = sqrt(max(theta_cov[i, i], 1e-6))
+            #   dim.mastery_prob = sigmoid(theta)
+            #   dim.mastered = mastery_prob >= 0.5
+            try:
+                import numpy as _np
+                for i, dim_char in enumerate(["K", "P", "S", "C", "X"]):
+                    dim_state = getattr(state, dim_char)
+                    dim_state.theta = float(state.theta_mean[i])
+                    # v0.47.9: 用恢复的 theta_cov 算真实 SE(不再走 np.eye(5) 默认 1.0)
+                    # 老数据(0.47.9 之前)没存 theta_cov → state.theta_cov 是 default I
+                    #   se = sqrt(1.0) = 1.0 (与之前行为一致,平滑过渡)
+                    if state.theta_cov is not None and state.theta_cov.shape == (5, 5):
+                        cov_i = float(state.theta_cov[i, i])
+                    else:
+                        cov_i = 1.0
+                    dim_state.se = float(_np.sqrt(max(cov_i, 1e-6)))
+                    dim_state.mastery_prob = float(1.0 / (1.0 + _np.exp(-dim_state.theta)))
+                    dim_state.mastered = dim_state.mastery_prob >= 0.5
+                    # v0.48.0: dim.confidence 反映该维度**自己**的 SE
+                    #   公式: 1 / (1 + SE) — 5 维度会按各自估算质量分化
+                    #   注意: 不能再用 len(history) / 30.0（5 维度共用会导致 5 维度 conf 全一样）
+                    dim_state.confidence = float(1.0 / (1.0 + dim_state.se))
+            except Exception:
+                _log.warning(
+                    "_get_or_create_student 重算 dim.{theta,confidence,se} 失败(student=%s)",
+                    student_id, exc_info=True,
+                )
+
+            # W5+: overall_confidence 重算（覆盖 DB 存的老值,避免老 0.4 与 5 维度 0.5+ 矛盾）
+            # v0.48.1: 改成 5 维度 confidence 均值(与 dim.confidence 同公式,数据一致)
+            #   Bisen 反馈: 5 维度 0.5+ 但 overall 0.4 不一致
+            #   旧公式 len(history)/30 → 0.4,新公式 mean(dim.confidence) → 0.5+
+            # 关键: 必须放在"重算每维度"**之后**,否则 mean 时 dim.confidence 还是 0
+            try:
+                import numpy as _np
+                # v0.81.0-d: route through apply_snapshot (StateEngine.commit)
+                # (was direct state.overall_confidence = ..., in LINE_ALLOWLIST)
+                state.apply_snapshot({
+                    "overall_confidence": float(_np.mean([
+                        state.K.confidence, state.P.confidence, state.S.confidence,
+                        state.C.confidence, state.X.confidence,
+                    ]))
+                })
+            except Exception:
+                _log.warning(
+                    "_get_or_create_student 重算 overall_confidence 失败(student=%s), 走 0.0 兜底",
+                    student_id, exc_info=True,
+                )
+                state.apply_snapshot({"overall_confidence": 0.0})
+        else:
+            # DB 中无记录--创建全新状态并写入 DB
+            # v0.99.1 (F-08 二层诊断): fresh 分支 = 潜在异常信号 (行存在却走到
+            # 这里 = load 返回 None 的瞬态), 升 warning 便于终端直接可见
+            _log.warning(
+                "_get_or_create_student 走 FRESH 分支 (sid=%s) — 若 DB 中该生"
+                "应有历史数据, 这是 F-08 二层异常复现, 请保留终端日志",
+                student_id,
+            )
+            mirt_config = MIRTConfig(
+                prior_mean=np.zeros(5),
+                prior_cov=np.eye(5),
+                default_a_specialized=np.ones(5) * 0.8,
+                default_a_general=0.5,
+                default_difficulty=0.0,
+            )
+            config = BeliefEngineConfig(
+                evolution_config=EvolutionConfig(),
+                mirt_config=mirt_config,
+            )
+            # v0.49.3: 传 llm_client 给 BeliefEngine, 避免 misc_detector / perception_critic
+            #   在 self.llm is None 时崩 (NoneType has no attribute chat_json)
+            # v0.52.0: 传 misconception_library_str (BUG 2.1 修复)
+            # v0.98.0 (b-b): 注入 evidence_engine + event_log (实例 ③, 全新路径)
+            from web.api.app import get_llm
+            engine = BeliefEngine(
+                config=config,
+                llm_client=get_llm(),
+                misconception_library_str=PYTHON_BASICS_MISCONCEPTION_LIBRARY_STR,
+                event_log=_get_web_event_log(),
+                evidence_engine=_get_evidence_engine(),
+            )
+            state = engine.create_initial_state(student_id)
+            _STUDENT_STATES[student_id] = {"engine": engine, "state": state}
+            db.upsert_student(student_id, subject="python")
+    return _STUDENT_STATES[student_id]
+
+
+def get_student_state(student_id: str) -> dict[str, Any]:
+    """获取学生当前完整信念状态(7 组件)。W1 升级:增加 warm-up + bloom Δ 字段。"""
+    student = _get_or_create_student(student_id)
+    state = student["state"]
+    engine = student["engine"]
+    theta = state.theta_mean
+    dims = ["K", "P", "S", "C", "X"]
+    bloom = state.bloom_profile
+
+    # 每维的 confidence 和 se(来自 DimensionState)
+    dim_conf = {}
+    dim_se = {}
+    for i, d in enumerate(dims):
+        dim_state = getattr(state, d)
+        dim_conf[d] = round(float(dim_state.confidence), 4)
+        dim_se[d] = round(float(dim_state.se), 4)
+
+    # TC states(挂在 C 维度上)
+    tc_list = []
+    for tc_id, tc_state in state.C.tc_states.items():
+        tc_list.append({
+            "id": tc_id,
+            "status": tc_state.status,
+            "progress": round(float(tc_state.progress), 3),
+            "confidence": round(float(tc_state.confidence), 3),
+            "irreversible": tc_state.irreversible,
+        })
+
+    # LearningDNA
+    ldn = state.learning_dna
+    learning_dna = {
+        "input_preference": ldn.input_preference or "示例驱动",
+        "feedback_preference": ldn.feedback_preference or "即时反馈",
+        "confidence": round(float(ldn.confidence), 4),
+    }
+
+    # Trajectory 全量（v0.47.5: 之前 last_n(10) 截断,Bisen 反馈"应该按实际数量显示"）
+    # 配合 in-memory cap (trajectory_maxlen=500) 和 DB persist last_n(500)
+    trajectory_snapshots = []
+    try:
+        snapshots = state.trajectory.last_n(500)
+        for snap in snapshots:
+            trajectory_snapshots.append({
+                "timestamp": snap.timestamp.isoformat() if hasattr(snap.timestamp, 'isoformat') else str(snap.timestamp),
+                "theta_5d": [round(float(v), 4) for v in snap.theta_5d],
+                "confidence": round(float(snap.confidence), 4),
+                "bloom_dominant": snap.bloom_profile.dominant_layer.name if snap.bloom_profile.dominant_layer else None,
+            })
+    except Exception as e:
+        # v0.47.5: 之前 except: pass 静默吞,Bisen 反馈"答了题没存"也看不到
+        import logging
+        logging.getLogger(__name__).warning(
+            "trajectory 序列化失败 (%d snapshots): %s", len(state.trajectory.snapshots), e,
+            exc_info=True,
+        )
+        trajectory_snapshots = []
+
+    # W1: warm-up 状态机字段
+    warmup = engine.warmup_progress(student_id)
+
+    # W1: Bloom 距下一层距离
+    bloom_distance = bloom.distance_to_next_layer() if hasattr(bloom, "distance_to_next_layer") else None
+
+    # W3: 探针题状态机字段
+    probe = engine.probe_progress(student_id)
+
+    # v0.96: Motivation Profile 3 维当前值 + 观测数 (v0.87 Kernel 侧, 前端首次呈现)
+    motivation = state.motivation
+    try:
+        motivation_payload = {
+            "frustration": round(float(motivation.frustration), 4),
+            "engagement": round(float(motivation.engagement), 4),
+            "confidence": round(float(motivation.confidence), 4),
+            "observation_count": len(motivation.recent_trajectory),
+        }
+    except Exception:
+        _log.warning(
+            "motivation 序列化失败 (sid=%s), fallback 中性值", student_id, exc_info=True
+        )
+        motivation_payload = {
+            "frustration": 0.0,
+            "engagement": 0.5,
+            "confidence": 0.5,
+            "observation_count": 0,
+        }
+
+    return {
+        "student_id": student_id,
+        # 组件1: 5D mean
+        "theta": {dims[i]: round(float(theta[i]), 4) for i in range(5)},
+        # 组件1补充: 每维方差(对角线)和置信度
+        "theta_cov_diag": {dims[i]: round(float(state.theta_cov[i, i]), 4) for i in range(5)},
+        "theta_confidence": dim_conf,
+        "theta_se": dim_se,
+        # 组件2: 6级 Bloom
+        "bloom_profile": {
+            "dominant": bloom.dominant_layer.name if bloom.dominant_layer else None,
+            "confidence": round(float(bloom.confidence), 4),
+            "bloom_levels": {
+                "L1": round(float(bloom.remember), 3),
+                "L2": round(float(bloom.understand), 3),
+                "L3": round(float(bloom.apply), 3),
+                "L4": round(float(bloom.analyze), 3),
+                "L5": round(float(bloom.evaluate), 3),
+                "L6": round(float(bloom.create), 3),
+            },
+        },
+        # W1 新增: Bloom 距下一层距离
+        "bloom_layer_distance": bloom_distance,
+        # 组件3: TC states
+        "tc_states": tc_list,
+        # 组件4: LearningDNA
+        "learning_dna": learning_dna,
+        # 组件5: Trajectory
+        "trajectory": trajectory_snapshots,
+        # 组件6: Misconceptions(来自快照历史)
+        "misc_history": [],  # 在 trajectory snapshots 中
+        # 组件7: overall_confidence
+        "overall_confidence": round(state.overall_confidence, 4),
+        # v0.96: Motivation Profile (frustration/engagement/confidence)
+        "motivation": motivation_payload,
+        "c_discount_factor": round(
+            state.C.discount_factor if hasattr(state.C, "discount_factor") else 1.0, 3
+        ),
+        # W1 新增: warm-up 状态机
+        **warmup,
+        # W3 新增: 探针题状态机
+        **probe,
+    }
+
+
+def _update_via_plugin_or_legacy(
+    engine: Any,
+    state: Any,
+    obs: Any,
+    student_id: str,
+) -> Any:
+    """v0.84.0-d: Plugin 路径 vs legacy 路径选择.
+
+    Plugin 路径 (PluginRuntime 已 start()):
+      1. 构造 LearningEvent (event_type="response_submitted", payload=Observation.to_dict())
+      2. bus.publish("response_submitted", event)
+      3. Runtime subscriber (PluginRuntime._handle_response_submitted) 收到 event,
+         内部调 Runtime.update_belief -> BeliefEngine.update(state, obs, log_event=True)
+         (v0.98.1: 曾误传 log_event=False 抑制 evidence/event 落库, 已修复)
+      4. state 被 mutate in place, 返回同一对象
+
+    Legacy 路径 (PluginRuntime 未 start 或 bus 无 subscriber):
+      - 直接 BeliefEngine.update(state, obs) (老行为, 向后兼容 tests)
+      - 用于 Plugin SDK 雏形验证期间 (留 fallback, 不破坏现有 lbc001/lbc002 数据)
+
+    Args:
+        engine: BeliefEngine 实例 (per-student)
+        state: BeliefState 实例
+        obs: Observation 实例
+        student_id: 学生 ID (event.student_id 用)
+
+    Returns:
+        BeliefState (updated, 同一对象 reference)
+    """
+    # Lazy imports to avoid circular deps at module load
+    from cogedu.cta.event_log import LearningEvent
+    from cogedu.event import get_default_bus
+
+    # 构造 event
+    # v0.96.9: 显式传 student_id — Observation 无 student_id 字段,
+    #   旧 fallback 落到 skill_id, plugin subscriber 会更新到幽灵学生
+    #   (如 "python.loops"), 真实学生 state 永远不更新 (见 discussions 2026-08-19)
+    event = LearningEvent.from_response_submitted(
+        obs,
+        source="web_api_belief_submit_answer",
+        student_id=student_id,
+    )
+
+    # Publish 到 bus
+    bus = get_default_bus()
+    success = bus.publish("response_submitted", event)
+
+    if success == 0:
+        # 无 subscriber (PluginRuntime 未启动或测试环境), 走 legacy 路径
+        # 向后兼容: 不破坏现有 tests + lbc001/lbc002 答题流程
+        _log.debug(
+            "submit_answer: bus.publish response_submitted 返 0 (无 subscriber), "
+            "走 legacy direct path. v0.84.0-d PluginRuntime 启动后不再走此路径."
+        )
+        return engine.update(state, obs)
+
+    # Plugin 路径: state 已被 Runtime subscriber mutate (in place reference)
+    # student_id 跟 event.student_id 一致 (Observation.skill_id fallback)
+    # Runtime subscriber 通过 state_factory 拿到同一 (engine, state) 对象
+    return state
+
+
+def submit_answer(
+    student_id: str,
+    problem_id: str,
+    skill_id: str,
+    correct: bool,
+    bloom_layer: str,
+    explanation_text: str = "",
+    user_answer: str = "",  # v0.49.2: 给答题历史详情页用
+    correct_answer: str = "",  # v0.49.2: 正确答案(从 Q 矩阵读)
+    # v0.52.2: AI 评判的具体 reasoning (Bisen 反馈 partial credit 缺失,
+    #   短期先存 response_history, Phase 5 partial credit 训练用历史数据)
+    ai_reasoning: str = "",
+    # v0.54.0-e: partial credit 评分 0.0-1.0 (1.0=完全对, 0.0=完全错, 0.7=70%对)
+    #   优先级高于 correct: score >= 0.6 派生 correct=True
+    #   老调用方不传 score 时, fallback: correct=True → score=1.0, else 0.0
+    score: float = 0.0,
+    # v0.97.2: 提交前自评置信度 0.0-1.0 (None = 未自评/老调用方)
+    #   只采集进 history_entry + event_log payload, 本期不参与任何引擎更新
+    self_confidence: float | None = None,
+    # v0.99.0 (F-09): 答题时延秒 (前端题目加载→提交)。此前 raw_response_time
+    #   列恒 0 (Observation 字段在但无生产者) — F-02 候选信号 + H1 数据依赖
+    response_time_sec: float = 0.0,
+) -> dict[str, Any]:
+    """提交答案 → BeliefEngine.update() → 返回干预建议(如果需要)。
+
+    v0.54.0-e: partial credit 改造
+    - 接收 score: float 参数 (0.0-1.0)
+    - 派生 correct = score >= 0.6
+    - 老调用方只传 correct=True: 派生 score=1.0, correct=True (兼容)
+    - 新调用方传 score=0.7: 派生 correct=True (70% 算对)
+    """
+    student = _get_or_create_student(student_id)
+    engine = student["engine"]
+    current_state = student["state"]
+
+    # 注册该题目的 loading vector(从 Q-matrix)
+    from web.api.qmatrix import get_question_detail
+    prob = get_question_detail(problem_id)
+    if prob and "a_specialized" in prob:
+        item_params = MIRTItemParams(
+            problem_id=problem_id,
+            a_specialized=np.array(prob["a_specialized"]),
+            a_general=prob.get("mirt_params", {}).get("discrimination", 1.0) * 0.5,
+            difficulty=prob.get("mirt_params", {}).get("difficulty", 0.0),
+        )
+        engine.l2.register_item(item_params)
+    # v0.49.2: 如果调用方没传 correct_answer，从 Q 矩阵读
+    if not correct_answer and prob and "correct_answer" in prob:
+        correct_answer = str(prob["correct_answer"])
+
+    # 转换 bloom 层
+    bloom_map = {
+        "L1": BloomLevel.REMEMBER,
+        "L2": BloomLevel.UNDERSTAND,
+        "L3": BloomLevel.APPLY,
+        "L4": BloomLevel.ANALYZE,
+        "L5": BloomLevel.EVALUATE,
+        "L6": BloomLevel.CREATE,
+    }
+    bloom = bloom_map.get(bloom_layer, BloomLevel.APPLY)
+
+    obs = Observation(
+        skill_id=skill_id,
+        problem_id=problem_id,
+        correct=correct,
+        # v0.54.0-e: partial credit score 字段
+        #   老调用方不传 score 时 (score=0.0), engine.update() 内部派生:
+        #     score=0.0 + correct=True → fallback score=1.0 (兼容)
+        #     score=0.0 + correct=False → fallback score=0.0
+        #   新调用方传 score=0.7 → engine.update() 派生 correct=True (>=0.6)
+        score=score,
+        bloom_level=bloom,
+        explanation_text=explanation_text,
+        user_answer=user_answer,
+        correct_answer=correct_answer,
+        ai_reasoning=ai_reasoning,  # v0.52.2: 存 AI reasoning
+        self_confidence=self_confidence,  # v0.97.2: 提交前自评
+        response_time_sec=response_time_sec,  # v0.99.0 (F-09): 时延落 evidence
+    )
+
+    # v0.84.0-d: Plugin SDK 雏形 - produce event, Runtime subscriber 处理
+    # Plugin 原则 (kernel-mapping §6): belief.py 不直接 BeliefEngine.update
+    # 老调用方 (tests) 走 fallback 路径 (无 subscriber 时直接 update, 向后兼容)
+    updated_state = _update_via_plugin_or_legacy(
+        engine=engine,
+        state=current_state,
+        obs=obs,
+        student_id=student_id,
+    )
+    student["state"] = updated_state
+
+    # 持久化:每次答题后保存到 SQLite（W5 传 engine 持久化状态机）
+    # v0.47.5: silent pass → logger.warning
+    # v0.48.5: 加 persisted 标志返回给前端
+    #   Bisen 反馈 7-19 ~ 7-21 期间答的 4 道题没存
+    #   根因: 之前 Flask 进程跑的是老代码 (0.47.5 之前),silent pass 吞 save 失败
+    #   0.47.5 commit 之后,silent pass → _log.warning,但 Bisen 没重启 Flask 进程
+    #   修复: 返回 persisted 字段给前端,save 失败时 alert,不让用户以为成功
+    persisted = False
+    try:
+        _get_db().save_student_state(student_id, updated_state, engine=engine)
+        persisted = True
+    except Exception:
+        _log.warning(
+            "submit_answer: save_student_state 失败(student=%s, problem=%s), 答题数据全丢!",
+            student_id, problem_id, exc_info=True,
+        )
+
+    # v0.52.0: 从 updated_state 读 misconception (BUG 2.2 修复)
+    #   之前 belief.py 末尾独立调 engine.misc_detector.detect(),
+    #   只把结果返回前端 response, 没 append 到 state.C.misconception_hits
+    #   → save_student_state 持久化的 misc_hits 始终空
+    #   → DB misconception_history 永远没数据
+    #   修复: 删末尾独立检测, 改从 updated_state.C.misconception_hits 读最新一条
+    #         (engine.update 内部 _llm_critic_misconception 已 append, 见 BUG 2.1 修复)
+    latest_misc = None
+    for h in reversed(getattr(updated_state.C, "misconception_hits", [])):
+        if h.trigger_problem_id == problem_id:
+            latest_misc = h
+            break
+
+    # v0.97.3 (b): A2 reconcile 答题流注入.
+    #   用 session 窗口 (engine.feature_extractor.get_history) 喂 reconcile:
+    #     - skill_id 来自 history_entry (v0.97.1 已加)
+    #     - misc_id 来自 state.C.misconception_hits (problem_id -> misc_id map)
+    #     - correct/score 来自 history_entry
+    #   失败兜底: 不污染 evidence_log; 不阻断主流程 (防御性自检 [1])
+    try:
+        history_rows = engine.feature_extractor.get_history(student_id) or []
+        if history_rows:
+            # problem_id -> misc_id map (整个 session 累积; miscs 历史)
+            misc_by_pid = {
+                h.trigger_problem_id: h.misc_id
+                for h in getattr(updated_state.C, "misconception_hits", [])
+                if h.trigger_problem_id and h.misc_id
+            }
+            reconcile_rows = []
+            for entry in history_rows:
+                pid = entry.get("problem_id")
+                if not pid:
+                    continue
+                rec = {
+                    "skill_id": entry.get("skill_id"),
+                    "misc_id": misc_by_pid.get(pid),  # None if 没命中
+                    "score": entry.get("score", 0.0),
+                    "correct": bool(entry.get("correct", False)),
+                    "timestamp": entry.get("timestamp"),
+                }
+                reconcile_rows.append(rec)
+            # 排序保证时间升序 (CogMirror 5.7 方案: 跨会话语义不成立,
+            #   in-memory history 天然 session 窗口; 排序确保 reconcile 顺序正确)
+            reconcile_rows.sort(key=lambda r: r.get("timestamp") or "")
+            updated = reconcile_for_student(_get_db(), student_id, reconcile_rows)
+            if updated > 0:
+                _log.info(
+                    "A2 reconcile (b 段): student=%s updated=%d misc evidence",
+                    student_id, updated,
+                )
+    except Exception:
+        # 防御性自检 [1]: reconcile 失败必须 warning, 不 silent pass
+        _log.warning(
+            "submit_answer: A2 reconcile 失败 (student=%s, problem=%s), "
+            "本轮 misc evidence 计数未更新, 不影响主流程",
+            student_id, problem_id, exc_info=True,
+        )
+
+    # 构建响应
+    theta = updated_state.theta_mean
+    dims = ["K", "P", "S", "C", "X"]
+    # v0.54.0-e: 派生 correct (跟 observation.score 一致, score >= 0.6)
+    derived_correct = score >= 0.6 if score > 0 else correct
+    response = {
+        "correct": derived_correct,  # v0.54.0: 派生自 score
+        "score": score,  # v0.54.0: partial credit 评分
+        "theta": {dims[i]: round(float(theta[i]), 4) for i in range(5)},
+        "misc_triggered": latest_misc is not None,
+        "misc_id": latest_misc.misc_id if latest_misc else "",
+        "misc_confidence": round(float(latest_misc.confidence), 4) if latest_misc else 0.0,
+        "c_discount_factor": round(
+            updated_state.C.discount_factor if hasattr(updated_state.C, "discount_factor") else 1.0, 3
+        ),
+        # v0.48.5: 持久化标志,前端据此判断是否需要重试/报警
+        #   false = save 失败,答题数据全丢(可能 next refresh 看不到更新)
+        "persisted": persisted,
+    }
+    return response
