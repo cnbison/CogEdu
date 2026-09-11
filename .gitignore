@@ -26,9 +26,11 @@ dist/
 .coverage
 htmlcov/
 
-# 数据库文件（data/ 目录是源数据 Q 矩阵，必须入库，不要忽略）
+# 数据库文件及其边车文件（data/ 目录是源数据 Q 矩阵，必须入库，不要忽略）
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
 
 # macOS / 编辑器
 .DS_Store
