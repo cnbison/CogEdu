@@ -4,6 +4,8 @@
 
 ## 1. 内核代码的来源与信任基础
 
+> 状态说明（2026-09-11）：本节描述的是**复制完成后的基线状态**。截至本文档更新时，内核复制尚未发生——`cogedu/` 包会在 Phase 0 的 12.2 节"建立安全网"完成之后，才从 ECOS v0.98.0（2026-09-06 快照）实际复制进来。复制完成后请更新此说明并补记精确来源 commit。
+
 CogEdu 的 `cogedu/cta/`、`cogedu/lca/`、`cogedu/evidence/`、`cogedu/event/`、`cogedu/goal/`、`cogedu/bloom/`、`cogedu/domain/`、`cogedu/plugins/`、`cogedu/runtime/` 这几个包，是**从 ECOS v0.98.0（2026-09-06 快照）原样复制过来的**，规模约 27,600 行 Python 代码、121 个文件，配有 1599 个测试用例。
 
 **为什么可以放心复制而不重写**：

@@ -416,7 +416,7 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 - [ ] 定义 `Scene` 对象的字段（第 7 章已提到这是新对象，这里要落到具体 schema）：至少包含 scene_id、关联的 intervention_id/goal_id/evidence_id（引用，不拷贝）、内容区块列表（Phase 1 只有 `text` 和 `image` 两种类型，参考第 11 章 DeepTutor `BlockType` 的思路但不需要一次性做全）
 - [ ] 定义呈现引擎从 Runtime 拿 intervention 的调用方式：直接调用 `ecos.runtime.api.plan(student_id, audience="student", ...)` 拿到 `LCAResult`，明确呈现引擎从这个结果里具体取哪些字段作为生成输入（intervention_type/parameters/expected_gain 里哪些要传给 LLM 做 prompt）
-- [ ] 确定呈现引擎作为 Python 子包的位置和边界（`ecos/presentation/` 或类似路径），明确它**只读**调用 Runtime API，不直接 import 内核内部类——这条规则要和 Phase 0 补的静态检查（12.3 节）覆盖到同一批目录
+- [ ] 确定呈现引擎作为 Python 子包的位置和边界（按 CLAUDE.md 目录约定为 `cogedu/presentation/`），明确它**只读**调用 Runtime API，不直接 import 内核内部类——这条规则要和 Phase 0 补的静态检查（12.3 节）覆盖到同一批目录
 
 ### 13.3 1-B：大纲生成（参考 OpenMAIC outline-generator.ts，233 行体量）
 
