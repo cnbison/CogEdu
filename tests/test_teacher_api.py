@@ -125,10 +125,17 @@ def _seed_temp_db():
 
 @pytest.fixture
 def client():
-    """Flask test client (ECOS_DB_PATH 已指向 temp DB)."""
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as c:
+    """FastAPI TestClient (ECOS_DB_PATH 已指向 temp DB).
+
+    12.4 (0-C): teacher 路由已迁 FastAPI (web/api/routers/teacher.py),
+    本测试随之切换; 裸 TestClient 不触发 lifespan → PluginRuntime 不启动
+    (对齐原 Flask test_client 行为, 测试不依赖 Plugin path)。
+    """
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+
+    with TestClient(app) as c:
         yield c
 
 
@@ -195,7 +202,7 @@ class TestRoster:
         """班级列表返回学生 + 关键字段."""
         resp = client.get("/api/teacher/students")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         sids = [s["student_id"] for s in data["students"]]
         assert "lbc-t1" in sids
         assert "lbc-t2" in sids
@@ -213,7 +220,7 @@ class TestRoster:
     def test_roster_cold_start_student(self, client):
         """无答题记录学生 (lbc-t2): answered_count=0, 无 risk 判定."""
         resp = client.get("/api/teacher/students")
-        t2 = next(s for s in resp.get_json()["students"] if s["student_id"] == "lbc-t2")
+        t2 = next(s for s in resp.json()["students"] if s["student_id"] == "lbc-t2")
         assert t2["answered_count"] == 0
         assert t2["intervention_count"] == 0
 
@@ -226,7 +233,7 @@ class TestStudentDetail:
         """学生详情返回 state 摘要 + 报告."""
         resp = client.get("/api/teacher/students/lbc-t1")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["student_id"] == "lbc-t1"
         assert data["answered_count"] == 3
         assert data["theta_5d"]["K"] == pytest.approx(1.2)
@@ -247,7 +254,7 @@ class TestEvidenceChain:
         """证据链按 5D 维度聚合 (K/P/S/C/X)."""
         resp = client.get("/api/teacher/students/lbc-t1/evidence")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert set(data["dimensions"].keys()) == {"K", "P", "S", "C", "X"}
         # 每个维度有标签 + 信念字段 (前端渲染契约)
         for dim in ("K", "P", "S", "C", "X"):
@@ -259,7 +266,7 @@ class TestEvidenceChain:
     def test_evidence_responses_and_cross_dim(self, client):
         """证据链含答题记录 + 跨维度 misconception/TC."""
         resp = client.get("/api/teacher/students/lbc-t1/evidence")
-        data = resp.get_json()
+        data = resp.json()
         assert data["summary"]["answered_count"] == 3
         assert isinstance(data["misconceptions"], list)
         assert len(data["misconceptions"]) == 1
@@ -275,7 +282,7 @@ class TestDiagnostic:
         """非 POMDP learner → diagnostic=null, report 不崩 (防御性)."""
         resp = client.get("/api/teacher/students/lbc-t1/diagnostic")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         # lbc-t1 在测试 DB 里无 LCA state, 非 POMDP policy → diagnostic None
         assert data["diagnostic"] is None
         assert data["pomdp_state_names"] == ["Engaged", "Frustrated", "Bored", "Confused"]
@@ -289,7 +296,7 @@ class TestInterventions:
         """干预历史返回 list (空 DB 下为空列表)."""
         resp = client.get("/api/teacher/students/lbc-t1/interventions")
         assert resp.status_code == 200
-        assert resp.get_json()["interventions"] == []
+        assert resp.json()["interventions"] == []
 
 
 class TestCalibration:
@@ -300,7 +307,7 @@ class TestCalibration:
         + 全部计入 n_skipped, 不造曲线."""
         resp = client.get("/api/teacher/students/lbc-t1/calibration")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["student_id"] == "lbc-t1"
         assert data["has_data"] is False
         assert data["curves"] == []
@@ -330,7 +337,7 @@ class TestCalibration:
 
         resp = client.get("/api/teacher/students/lbc-t3/calibration")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["n_self_assessed"] == 2
         assert data["n_skipped"] == 0
         assert [c["bucket"] for c in data["curves"]] == ["0.7"]  # 非 "0.6"
@@ -349,17 +356,27 @@ class TestCalibration:
 
 class TestTeacherApiDefensive:
     def test_no_silent_pass(self):
-        """teacher.py 无 silent pass."""
+        """teacher.py (helpers) + routers/teacher.py 无 silent pass."""
         import subprocess
         result = subprocess.run(
             ["grep", "-nE", r"^\s*except.*:[[:space:]]*(pass|continue)\s*$",
-             "web/api/teacher.py"],
+             "web/api/teacher.py", "web/api/routers/teacher.py"],
             capture_output=True, text=True,
         )
         assert result.stdout.strip() == "", f"silent pass: {result.stdout}"
 
-    def test_blueprint_registered(self, client):
-        """teacher_bp 注册到 app."""
-        from web.api.app import app
-        assert "teacher.api_teacher_students" in app.view_functions
-        assert "teacher.api_teacher_student_evidence" in app.view_functions
+    def test_router_registered(self, client):
+        """teacher 路由注册到 FastAPI app (7 端点全量)."""
+        from web.api.fastapi_app import app
+
+        paths = {r.path for r in app.routes}
+        for sub in (
+            "/api/teacher/students",
+            "/api/teacher/students/{student_id}",
+            "/api/teacher/students/{student_id}/evidence",
+            "/api/teacher/students/{student_id}/diagnostic",
+            "/api/teacher/students/{student_id}/interventions",
+            "/api/teacher/students/{student_id}/calibration",
+            "/api/teacher/students/{student_id}/misconceptions",
+        ):
+            assert sub in paths, f"路由缺失: {sub}"

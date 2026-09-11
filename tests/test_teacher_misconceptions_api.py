@@ -43,15 +43,19 @@ def _clean_misconception_evidence():
 
 @pytest.fixture
 def client():
-    from web.api.app import app
-    with app.test_client() as c:
+    """FastAPI TestClient (12.4: misconceptions 路由已迁 FastAPI)."""
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+
+    with TestClient(app) as c:
         yield c
 
 
 def test_endpoint_returns_empty_for_student_with_no_misconceptions(client):
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
     assert resp.status_code == 200
-    data = resp.get_json()
+    data = resp.json()
     assert data["student_id"] == "stu_c1"
     assert data["has_data"] is False
     assert data["items"] == []
@@ -73,7 +77,7 @@ def test_endpoint_returns_misconception_items_with_metadata(client):
 
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
     assert resp.status_code == 200
-    data = resp.get_json()
+    data = resp.json()
     assert data["has_data"] is True
     assert len(data["items"]) == 1
     item = data["items"][0]
@@ -99,7 +103,7 @@ def test_endpoint_marks_quarantined_misconceptions(client):
 
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
     assert resp.status_code == 200
-    data = resp.get_json()
+    data = resp.json()
     item = data["items"][0]
     assert item["quarantined"] is True
     assert item["laplace_confidence"] < 0.3
@@ -114,7 +118,7 @@ def test_endpoint_handles_unknown_misc_id_gracefully(client):
     ])
 
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
-    data = resp.get_json()
+    data = resp.json()
     item = data["items"][0]
     assert item["misc_id"] == "M99_legacy"
     # 找不到 -> name 退化到 misc_id, description 空
@@ -132,7 +136,7 @@ def test_endpoint_sorts_items_by_misc_id(client):
     ])
 
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
-    data = resp.get_json()
+    data = resp.json()
     assert [i["misc_id"] for i in data["items"]] == ["M1", "M2", "M3"]
 
 
@@ -148,5 +152,5 @@ def test_endpoint_returns_500_on_internal_failure(client, monkeypatch):
     )
     resp = client.get("/api/teacher/students/stu_c1/misconceptions")
     assert resp.status_code == 500
-    body = resp.get_json()
+    body = resp.json()
     assert "error" in body

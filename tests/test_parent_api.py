@@ -110,10 +110,15 @@ def _seed_temp_db():
 
 @pytest.fixture
 def client():
-    """Flask test client (ECOS_DB_PATH 已指向 temp DB)."""
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as c:
+    """FastAPI TestClient (ECOS_DB_PATH 已指向 temp DB).
+
+    12.4 (0-C): parent 路由已迁 FastAPI (web/api/routers/parent.py)。
+    """
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+
+    with TestClient(app) as c:
         yield c
 
 
@@ -136,7 +141,7 @@ class TestParentRoster:
         """roster 返回种子学生 + 关键字段."""
         resp = client.get("/api/parent/students")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         by_id = {s["student_id"]: s for s in data["students"]}
         assert "lbc-p1" in by_id and "lbc-p2" in by_id
         p1 = by_id["lbc-p1"]
@@ -173,7 +178,7 @@ class TestParentRoster:
         )
         resp = client.get("/api/parent/students")
         assert resp.status_code == 200
-        assert resp.get_json() == {"students": []}
+        assert resp.json() == {"students": []}
 
 
 # ── overview (4 tests) ───────────────────────────────────────────────────────
@@ -195,7 +200,7 @@ class TestParentOverview:
         """overview 返回 five_d (mastery/bloom/confidence) + interventions."""
         resp = client.get("/api/parent/students/lbc-p1/overview")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["student_id"] == "lbc-p1"
         mastery = data["five_d"]["mastery"]
         assert set(mastery.keys()) == {"K", "P", "S", "C", "X"}
@@ -212,7 +217,7 @@ class TestParentOverview:
         )
         resp = client.get("/api/parent/students/lbc-p1/overview")
         assert resp.status_code == 200
-        engagement = resp.get_json()["engagement"]
+        engagement = resp.json()["engagement"]
         assert engagement is not None
         assert engagement["current_state"] == "Frustrated"
         assert isinstance(engagement["advice"], list) and engagement["advice"]
@@ -221,7 +226,7 @@ class TestParentOverview:
         """无 plugin + 默认非 POMDP policy → engagement null (不报错)."""
         resp = client.get("/api/parent/students/lbc-p1/overview")
         assert resp.status_code == 200
-        assert resp.get_json()["engagement"] is None
+        assert resp.json()["engagement"] is None
 
 
 # ── engagement 按需诊断路径 (2 tests) ────────────────────────────────────────
@@ -257,7 +262,7 @@ class TestEngagementOnDemand:
 
         resp = client.get("/api/parent/students/lbc-p1/overview")
         assert resp.status_code == 200
-        engagement = resp.get_json()["engagement"]
+        engagement = resp.json()["engagement"]
         assert engagement is not None
         assert engagement["current_state"] == "Engaged"
         # evolution 经第 9 Runtime API 喂入 → recent_states 非空
@@ -280,11 +285,18 @@ class TestEngagementOnDemand:
 
 
 class TestParentFrontendRoutes:
-    def test_parent_route_serves_placeholder_pre_build(self, client):
-        """/parent/ 可访问 (dist build 前 fallback web/parent/index.html 占位页)."""
-        resp = client.get("/parent/")
-        assert resp.status_code == 200
-        assert "ECOS 家长端".encode("utf-8") in resp.data
+    def test_parent_route_serves_placeholder_pre_build(self):
+        """/parent/ 可访问 (dist build 前 fallback web/parent/index.html 占位页).
+
+        12.4 过渡期注: 静态页托管还在 Flask app.py (12.4-5 迁),
+        此用例暂用 Flask client, 静态路由迁移后一并切换。
+        """
+        from web.api.app import app
+
+        with app.test_client() as c:
+            resp = c.get("/parent/")
+            assert resp.status_code == 200
+            assert "ECOS 家长端".encode("utf-8") in resp.data
 
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────
