@@ -31,6 +31,36 @@ def isolated_ecos_db(tmp_path, monkeypatch):
     """每个测试自动使用独立临时 DB, 防止污染 web/ecos.db 生产库."""
     import os
 
+    # 12.4 (0-C): PluginRuntime + 默认事件总线无条件重置 (在 early-return
+    # 之前!) — FastAPI TestClient 的 lifespan 会 ensure_started(), 若不重置,
+    # 上一测试启动的 runtime 及其 bus subscriber 跨测试泄漏 (带着指向已删除
+    # tmp DB 的 engine/store 引用, 后续 lca/dual_agent 测试走进陈旧 Plugin
+    # 路径 → "重启后状态归零"假象)。reset_plugin_runtime 只置空单例不退订
+    # bus, 所以 bus 也要 reset (test_event_stub 既有的同款模式, 提为全局)。
+    try:
+        from web.api.plugin_runtime import reset_plugin_runtime
+
+        reset_plugin_runtime()
+    except ImportError:
+        pass
+    try:
+        from cogedu.event import reset_default_bus
+
+        reset_default_bus()
+    except ImportError:
+        pass
+    # dual_agent 开关归一化: 部分 module fixture 直接赋值 True 不复原
+    # (历史遗留泄漏, 12.4 新增的 9 字段契约测试将其暴露)。conftest autouse
+    # 先于 module 级 fixture 执行, 不影响需要 True 的测试自行设置。
+    try:
+        import web.api.dual_agent as _da_mod
+
+        _da_mod.DUAL_AGENT_ENABLED = os.environ.get(
+            "ECOS_DUAL_AGENT_ENABLED", "0"
+        ) == "1"
+    except ImportError:
+        pass
+
     # 尊重已有隔离: 部分 module 级 fixture (test_teacher_api 等) 自设
     # ECOS_DB_PATH 指向专用 temp DB — 非生产路径时不覆盖
     current = os.environ.get("ECOS_DB_PATH")

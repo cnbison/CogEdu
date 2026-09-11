@@ -113,7 +113,7 @@ def rejudge_with_retry(llm_client, prompt: str) -> tuple[dict | None, int]:
         (result_dict, attempts, last_raw) on success (v0.99.0: 3 元组)
         (None, attempts, last_raw) on failure
     """
-    from web.api.app import _call_llm_judge_with_retry
+    from web.api.judge import _call_llm_judge_with_retry
     return _call_llm_judge_with_retry(llm_client, prompt)
 
 
@@ -165,7 +165,7 @@ def main():
 
     # 拿到 LLM client
     print("\n🤖 初始化 LLM client...")
-    from web.api.app import get_llm
+    from web.api.llm import get_llm
     llm = get_llm()
     print(f"   LLM client ready")
 

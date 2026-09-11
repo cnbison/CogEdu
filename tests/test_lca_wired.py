@@ -377,23 +377,23 @@ class TestLCARouteIntegration:
         assert hasattr(lca_mod, "LCA_ENABLED")
 
     def test_app_registers_lca_debug_endpoint(self):
-        """app.py 注册了 /api/lca_debug/<student_id> 路由."""
-        from web.api.app import app
+        """FastAPI app 注册了 /api/lca_debug/{student_id} 路由 (12.4 迁移)."""
+        from web.api.fastapi_app import app
 
-        routes = [r.rule for r in app.url_map.iter_rules()]
-        assert "/api/lca_debug/<student_id>" in routes, \
+        routes = {r.path for r in app.routes}
+        assert "/api/lca_debug/{student_id}" in routes, \
             f"/api/lca_debug 端点未注册, 当前 routes={routes}"
 
     def test_app_imports_lca_module(self):
-        """app.py 导入了 web.api.lca (LCA 在调用栈入口)."""
-        from web.api import app as app_mod
+        """FastAPI 路由层导入了 web.api.lca (LCA 在调用栈入口)."""
+        from web.api.routers import student as student_router
 
-        # 检查 app.py 模块是否 import 了 lca 相关
+        # 检查路由模块是否 import 了 lca 相关
         #   通过源码字符串检查 (避免触发 app 初始化)
         import inspect
-        source = inspect.getsource(app_mod)
+        source = inspect.getsource(student_router)
         assert "web.api.lca" in source or "from web.api import lca" in source, \
-            "app.py 应 import web.api.lca (LCA 调用入口)"
+            "routers/student.py 应 import web.api.lca (LCA 调用入口)"
 
 
 # ──────────────────────────────────────────────────────────────────────

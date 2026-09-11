@@ -31,9 +31,10 @@ def _seed_temp_db():
 
 @pytest.fixture
 def client():
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as c:
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+    with TestClient(app) as c:
         yield c
 
 
@@ -42,14 +43,14 @@ class TestStateMotivation:
         """/api/state 含 motivation 4 字段."""
         resp = client.get("/api/state/mot-stu-1")
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert "motivation" in data
         for field in ("frustration", "engagement", "confidence", "observation_count"):
             assert field in data["motivation"], f"motivation 缺 {field}"
 
     def test_default_motivation_neutral(self, client):
         """新学生 → 中性值."""
-        data = client.get("/api/state/mot-stu-2").get_json()
+        data = client.get("/api/state/mot-stu-2").json()
         mot = data["motivation"]
         assert mot["frustration"] == pytest.approx(0.0)
         assert mot["engagement"] == pytest.approx(0.5)

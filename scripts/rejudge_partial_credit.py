@@ -175,7 +175,7 @@ def main():
 
     # 3. 拿到 LLM client
     print("🤖 初始化 LLM client...")
-    from web.api.app import get_llm
+    from web.api.llm import get_llm
     llm = get_llm()
     print(f"   LLM client ready")
     print()
@@ -186,7 +186,7 @@ def main():
     fail_list = []
     changed_count = 0  # 跟原 score 不一样的 (说明历史确实错判)
 
-    from web.api.app import _build_judge_prompt, _call_llm_judge_with_retry, _parse_judge_result
+    from web.api.judge import _build_judge_prompt, _call_llm_judge_with_retry, _parse_judge_result
 
     for cand in candidates:
         student_id = cand["student_id"]

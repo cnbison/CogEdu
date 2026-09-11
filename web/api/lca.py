@@ -78,7 +78,7 @@ def get_lca_engine() -> LCAEngine:
     global _engine
     if _engine is None:
         try:
-            from web.api.app import get_llm  # 避免循环 import
+            from web.api.llm import get_llm  # 12.4: 自 app.py 抽出 (框架无关)  # 避免循环 import
 
             # LCA_ENABLED=False 时不传 llm_client, RationaleGenerator 走模板 fallback
             llm_client = get_llm() if LCA_ENABLED else None

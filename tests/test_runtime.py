@@ -418,15 +418,16 @@ class TestRuntimeBackwardCompat:
     """v0.83.0-d: web/api/belief.py 主入口仍 work, Runtime API 是旁路."""
 
     def test_web_api_belief_endpoint_still_works(self):
-        """web/api/app.py /api/answer 端点仍注册 (Runtime API 旁路, 主入口保持)."""
-        try:
-            from web.api.app import app
-            routes = [r.rule for r in app.url_map.iter_rules()]
-            # web/api 主入口保持
-            assert "/api/answer" in routes
-            assert "/api/lca_debug/<student_id>" in routes
-        except Exception as e:
-            pytest.skip(f"web/api/app.py 加载失败 (可能缺 LLM 配置): {e}")
+        """FastAPI /api/answer 端点仍注册 (Runtime API 旁路, 主入口保持).
+
+        12.4 (0-C): 路由已迁 web/api/routers/student.py, 检查对象换 FastAPI app。
+        """
+        from web.api.fastapi_app import app
+
+        routes = {r.path for r in app.routes}
+        # web/api 主入口保持
+        assert "/api/answer" in routes
+        assert "/api/lca_debug/{student_id}" in routes
 
 
 # ──────────────────────────────────────────────────────────────────────

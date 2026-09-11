@@ -145,6 +145,77 @@ class TestSSEStream:
 # ─── PluginRuntime 激活 (12.4-2) ────────────────────────────────────────────
 
 
+class TestPluginRuntimeAnswerChain:
+    """12.4-2 收尾: lifespan 激活 PluginRuntime 后, /api/answer 全链路
+    走事件总线 (publish response_submitted → PluginRuntime subscriber →
+    Runtime.update_belief → engine.update), 状态真实更新。
+
+    这条链路是 CLAUDE.md 架构红线 1 的主路径 (状态只经 Runtime 变更),
+    FastAPI 迁移 (12.4-5) 后在此锁定。
+    """
+
+    def test_answer_updates_state_via_plugin_path(self, monkeypatch):
+        import os
+
+        from fastapi.testclient import TestClient
+
+        from web.api.fastapi_app import app
+        from web.api.plugin_runtime import (
+            get_plugin_runtime,
+            reset_plugin_runtime,
+        )
+
+        # 无 LLM 惯例 (belief 的 misconception/perception critic 会调 LLM)
+        import web.api.llm as llm_mod
+
+        monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
+
+        # 隔离 DB + schema + 学生行 (conftest autouse 已设 ECOS_DB_PATH)
+        from cogedu.persistence.db import Database
+
+        db = Database(os.environ["ECOS_DB_PATH"])
+        db.init_schema()
+        db.upsert_student("stu-plugin-chain")
+
+        reset_plugin_runtime()
+        try:
+            with TestClient(app) as client:
+                assert get_plugin_runtime().is_started
+                resp = client.post("/api/answer", json={
+                    "student_id": "stu-plugin-chain",
+                    "problem_id": "PB-Q01",
+                    "skill_id": "python.variables",
+                    "correct": True,
+                    "score": 1.0,
+                    "bloom_layer": "L1",
+                    "user_answer": "5",
+                })
+                assert resp.status_code == 200
+                body = resp.json()
+                # 9 字段契约 (Plugin 路径下同样成立)
+                assert set(body.keys()) == {
+                    "correct", "score", "theta", "misc_triggered",
+                    "misc_id", "misc_confidence", "c_discount_factor",
+                    "persisted", "reasoning",
+                }
+                assert body["persisted"] is True
+
+                # 状态真实更新 = subscriber 确实跑了 Runtime.update_belief
+                # (Plugin 路径返回的 state 对象由 subscriber 原地 mutate;
+                #  若 subscriber 没跑, history 不会有这条答题记录)
+                from web.api.belief import _STUDENT_STATES
+
+                engine = _STUDENT_STATES["stu-plugin-chain"]["engine"]
+                history = engine._response_history.get(
+                    "stu-plugin-chain", []
+                )
+                assert any(
+                    h.get("problem_id") == "PB-Q01" for h in history
+                ), "Plugin 路径下 response_history 未更新 — subscriber 未跑"
+        finally:
+            reset_plugin_runtime()
+
+
 class TestPluginRuntimeLifespan:
     def test_lifespan_starts_plugin_runtime(self):
         """with TestClient (触发 lifespan) → PluginRuntime 激活 + bus 有 subscriber."""

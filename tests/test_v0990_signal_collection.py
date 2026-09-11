@@ -18,9 +18,10 @@ import pytest
 
 @pytest.fixture
 def flask_client():
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as client:
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+    with TestClient(app) as client:
         yield client
 
 
@@ -29,10 +30,10 @@ def no_llm(monkeypatch):
     """测试统一 get_llm → None (无 API key 语境, 与 test_web_evidence_injection 同惯例).
 
     防止 /api/answer 触发真实 LLM 调用 (misconception/perception critic).
-    judge 测试内部用 with patch("web.api.app.get_llm", ...) 显式覆盖.
+    judge 测试内部用 with patch("web.api.llm.get_llm", ...) 显式覆盖.
     """
-    import web.api.app as app_mod
-    monkeypatch.setattr(app_mod, "get_llm", lambda: None)
+    import web.api.llm as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
 
 
 @pytest.fixture
@@ -101,14 +102,28 @@ class TestF11BehaviorEventPersistence:
 
 class TestF10ExplanationFallback:
     def test_explanation_text_defaults_to_user_answer(self, flask_client, tmp_db):
-        """前端不传 explanation_text → 后端 fallback user_answer (误解检测器输入)."""
+        """前端不传 explanation_text → 后端 fallback user_answer (误解检测器输入).
+
+        12.4: fake 返回值补齐 9 字段契约 (FastAPI 版 /api/answer 有
+        response_model=AnswerResponse, 缺字段会 500 — 测试关注点在
+        captured kwargs, fake 返回完整形状即可)。
+        """
         captured = {}
 
         def fake_submit_answer(**kwargs):
             captured.update(kwargs)
-            return {"student_id": kwargs["student_id"], "persisted": True}
+            return {
+                "correct": kwargs.get("correct", False),
+                "score": kwargs.get("score", 0.0),
+                "theta": {"K": 0.0, "P": 0.0, "S": 0.0, "C": 0.0, "X": 0.0},
+                "misc_triggered": False,
+                "misc_id": "",
+                "misc_confidence": 0.0,
+                "c_discount_factor": 1.0,
+                "persisted": True,
+            }
 
-        with patch("web.api.app.submit_answer", side_effect=fake_submit_answer):
+        with patch("web.api.routers.student.submit_answer", side_effect=fake_submit_answer):
             resp = flask_client.post("/api/answer", json={
                 "student_id": "stu-sig",
                 "problem_id": "PB-Q04",
@@ -129,9 +144,18 @@ class TestF10ExplanationFallback:
 
         def fake_submit_answer(**kwargs):
             captured.update(kwargs)
-            return {"student_id": kwargs["student_id"], "persisted": True}
+            return {
+                "correct": kwargs.get("correct", False),
+                "score": kwargs.get("score", 0.0),
+                "theta": {"K": 0.0, "P": 0.0, "S": 0.0, "C": 0.0, "X": 0.0},
+                "misc_triggered": False,
+                "misc_id": "",
+                "misc_confidence": 0.0,
+                "c_discount_factor": 1.0,
+                "persisted": True,
+            }
 
-        with patch("web.api.app.submit_answer", side_effect=fake_submit_answer):
+        with patch("web.api.routers.student.submit_answer", side_effect=fake_submit_answer):
             resp = flask_client.post("/api/answer", json={
                 "student_id": "stu-sig",
                 "problem_id": "PB-Q04",
@@ -231,10 +255,10 @@ class FakeJudgeLLM:
 class TestF05JudgeAudit:
     def test_success_judge_writes_audit_row(self, flask_client, tmp_db):
         """判分成功 → judge_audit_log 出现 judged=1 行, model/attempts 记录."""
-        from web.api.app import get_llm
+        from web.api.llm import get_llm
         good = json.dumps({"correct": True, "reasoning": "对", "score": 1.0})
         llm = FakeJudgeLLM(good)
-        with patch("web.api.app.get_llm", return_value=llm):
+        with patch("web.api.llm.get_llm", return_value=llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "stu-sig", "problem_id": "PB-Q01",
                 "student_answer": "5",
@@ -253,7 +277,7 @@ class TestF05JudgeAudit:
     def test_failed_judge_writes_audit_row_with_raw_output(self, flask_client, tmp_db):
         """3 次 retry 全失败 → judged=0 行 + raw_output 留最后一次原始返回."""
         llm = FakeJudgeLLM(["bad1", "bad2", "bad3"])
-        with patch("web.api.app.get_llm", return_value=llm):
+        with patch("web.api.llm.get_llm", return_value=llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "stu-sig", "problem_id": "PB-Q02",
                 "student_answer": "x",

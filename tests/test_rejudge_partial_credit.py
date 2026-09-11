@@ -280,7 +280,7 @@ class TestEndToEndRejudge:
 
         fake_llm = type("FakeLLM", (), {"chat": fake_chat})()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             import sys
             old_argv = sys.argv
             sys.argv = ["rejudge.py", "--db", db_path, "--q-matrix", qfile,
@@ -312,7 +312,7 @@ class TestEndToEndRejudge:
 
         fake_llm = type("FakeLLM", (), {"chat": fake_chat})()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             import sys
             old_argv = sys.argv
             sys.argv = ["rejudge.py", "--db", db_path, "--q-matrix", qfile,
@@ -350,7 +350,7 @@ class TestEndToEndRejudge:
         original_history = json.loads(cur.fetchone()[0])
         conn.close()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             import sys
             old_argv = sys.argv
             sys.argv = ["rejudge.py", "--db", db_path, "--q-matrix", qfile,
@@ -390,7 +390,7 @@ class TestEndToEndRejudge:
 
         fake_llm = type("FakeLLM", (), {"chat": fake_chat})()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             import sys
             old_argv = sys.argv
             sys.argv = ["rejudge.py", "--db", db_path, "--q-matrix", qfile,

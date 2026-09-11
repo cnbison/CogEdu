@@ -55,9 +55,10 @@ class FakeLLM:
 @pytest.fixture
 def flask_client():
     """Flask test client fixture."""
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as client:
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+    with TestClient(app) as client:
         yield client
 
 
@@ -108,7 +109,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_succeeds_on_first_attempt(self):
         """第一次 LLM 调用成功, 直接返回."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         valid_json = json.dumps({"correct": True, "reasoning": "对"})
         fake_llm = FakeLLM(plan=valid_json)
@@ -122,7 +123,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_succeeds_on_retry(self):
         """第一次 parse 失败, 第二次成功."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         invalid_json = "这不是 JSON 格式"
         valid_json = json.dumps({"correct": True, "reasoning": "对"})
@@ -137,7 +138,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_returns_none_after_max_retries(self):
         """3 次都失败 → return (None, 3)."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         # 3 次都返回非 JSON
         fake_llm = FakeLLM(plan=["invalid1", "invalid2", "invalid3"])
@@ -149,7 +150,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_logs_warnings_on_parse_failure(self, caplog):
         """每次 parse 失败必须 _log.warning (防御性自检 [1])."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         fake_llm = FakeLLM(plan=["bad json"] * 3)
 
@@ -163,7 +164,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_logs_warnings_on_chat_failure(self, caplog):
         """LLM chat() 抛异常时也必须 _log.warning (防御性自检 [1])."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         class RaisingLLM:
             call_count = 0
@@ -181,7 +182,7 @@ class TestJudgeHelperRetry:
 
     def test_helper_rejects_llm_response_without_correct_field(self):
         """LLM 返回 JSON 但缺 'correct' 字段 → 视为 parse 失败, retry."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         # 第 1 次缺 correct 字段, 第 2 次正常
         bad_json = json.dumps({"reasoning": "没 correct 字段"})
@@ -207,7 +208,7 @@ class TestJudgeEndpoint:
         """3 次 retry 全失败 → 422 + needs_rejudge=True."""
         fake_llm = FakeLLM(plan=["invalid1", "invalid2", "invalid3"])
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-Q26",
@@ -215,7 +216,7 @@ class TestJudgeEndpoint:
             })
 
         assert resp.status_code == 422
-        data = resp.get_json()
+        data = resp.json()
         assert data["judged"] is False
         assert data["error_code"] == "LLM_JUDGE_FAILED"
         assert data["needs_rejudge"] is True
@@ -227,7 +228,7 @@ class TestJudgeEndpoint:
         valid_json = json.dumps({"correct": True, "reasoning": "完全正确"})
         fake_llm = FakeLLM(plan=valid_json)
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-Q26",
@@ -235,7 +236,7 @@ class TestJudgeEndpoint:
             })
 
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["judged"] is True
         assert data["correct"] is True
         assert data["attempts"] == 1
@@ -245,7 +246,7 @@ class TestJudgeEndpoint:
         valid_json = json.dumps({"correct": True, "reasoning": "ok"})
         fake_llm = FakeLLM(plan=["bad json", valid_json])
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-Q26",
@@ -253,7 +254,7 @@ class TestJudgeEndpoint:
             })
 
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["judged"] is True
         assert data["attempts"] == 2
 
@@ -291,7 +292,7 @@ class TestJudgeNoStatePollution:
         """
         fake_llm = FakeLLM(plan=["bad"] * 3)
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             with patch("web.api.belief.submit_answer") as mock_submit:
                 resp = flask_client.post("/api/judge", json={
                     "student_id": "lbc001",
@@ -328,7 +329,7 @@ class TestJudgeNoStatePollution:
 
         fake_llm = FakeLLM(plan=["bad"] * 3)
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-Q26",
@@ -365,7 +366,7 @@ class TestJudgeNoStatePollution:
 
         fake_llm = FakeLLM(plan=["bad"] * 3)
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-Q26",
@@ -449,7 +450,7 @@ class TestDefensiveChecks:
         """422 返回时必须有 logger.warning (防御性自检 [1])."""
         fake_llm = FakeLLM(plan=["bad"] * 3)
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             with caplog.at_level(logging.WARNING):
                 resp = flask_client.post("/api/judge", json={
                     "student_id": "lbc001",

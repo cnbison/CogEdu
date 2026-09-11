@@ -35,7 +35,7 @@ class TestBuildJudgePrompt:
 
     def test_prompt_without_rubric_uses_legacy_format(self):
         """无 rubric 时, prompt 走老格式 (只要求 correct, 不要求 score)."""
-        from web.api.app import _build_judge_prompt
+        from web.api.judge import _build_judge_prompt
 
         prompt = _build_judge_prompt(
             problem_text="for i in [1,2,3]: print(i)",
@@ -52,7 +52,7 @@ class TestBuildJudgePrompt:
 
     def test_prompt_with_rubric_injects_4_levels(self):
         """有 rubric 时, prompt 注入 4 档分 + 要求 LLM 输出 score."""
-        from web.api.app import _build_judge_prompt
+        from web.api.judge import _build_judge_prompt
 
         rubric = {
             "0.0": "选 E (完全不会)",
@@ -88,7 +88,7 @@ class TestParseJudgeResult:
 
     def test_legacy_correct_only_derives_score(self):
         """老数据 (只有 correct, 无 score) → score 派生 (1.0 or 0.0)."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # correct=True
         correct, score, reasoning = _parse_judge_result({"correct": True, "reasoning": "ok"})
@@ -101,7 +101,7 @@ class TestParseJudgeResult:
 
     def test_new_score_only_derives_correct(self):
         """新数据 (只有 score, 无 correct) → correct 派生 (score >= 0.6)."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # score=1.0
         correct, score, reasoning = _parse_judge_result({"score": 1.0, "reasoning": "ok"})
@@ -122,7 +122,7 @@ class TestParseJudgeResult:
 
     def test_both_correct_and_score_prefers_score(self):
         """两者都有 → score 优先 (v0.58.0 偏好)."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # 矛盾: correct=False 但 score=0.6 → score 优先
         correct, score, reasoning = _parse_judge_result(
@@ -133,7 +133,7 @@ class TestParseJudgeResult:
 
     def test_score_out_of_range_clamps(self):
         """score 越界 (例如 LLM 返回 1.5 或 -0.3) → clamp 到 [0, 1]."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # score=1.5 → clamp 到 1.0
         correct, score, _ = _parse_judge_result({"score": 1.5})
@@ -144,10 +144,10 @@ class TestParseJudgeResult:
 
     def test_score_invalid_type_falls_back_to_zero(self):
         """score 字段存在但类型无效 (如字符串) → fallback 0.0 + log warning."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # score="abc" (无法转 float) → 0.0
-        with patch("web.api.app._log") as mock_log:
+        with patch("web.api.judge._log") as mock_log:
             correct, score, _ = _parse_judge_result({"score": "abc"})
         assert score == 0.0
         # 验证 log warning
@@ -172,7 +172,7 @@ class TestCallLLMJudgeRetryDefensive8:
 
     def test_result_missing_both_correct_and_score_raises(self):
         """LLM 返回 JSON 但缺 correct 和 score → ValueError, retry 触发."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         # LLM 返回 {"reasoning": "ok"} 但缺 correct/score
         fake_llm = type("FakeLLM", (), {
@@ -186,7 +186,7 @@ class TestCallLLMJudgeRetryDefensive8:
 
     def test_result_with_score_only_passes(self):
         """LLM 返回 {"score": 0.6} (无 correct) → 通过 (v0.58.0 新协议)."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         fake_llm = type("FakeLLM", (), {
             "chat": lambda self, **kwargs: json.dumps({"score": 0.6, "reasoning": "ok"})
@@ -199,7 +199,7 @@ class TestCallLLMJudgeRetryDefensive8:
 
     def test_result_with_correct_only_passes(self):
         """LLM 返回 {"correct": True} (无 score, 老协议) → 通过 (向后兼容)."""
-        from web.api.app import _call_llm_judge_with_retry
+        from web.api.judge import _call_llm_judge_with_retry
 
         fake_llm = type("FakeLLM", (), {
             "chat": lambda self, **kwargs: json.dumps({"correct": True, "reasoning": "ok"})
@@ -218,9 +218,10 @@ class TestCallLLMJudgeRetryDefensive8:
 
 @pytest.fixture
 def flask_client():
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as client:
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+    with TestClient(app) as client:
         yield client
 
 
@@ -235,7 +236,7 @@ class TestJudgeEndpointRubric:
             "chat": lambda self, **kwargs: valid_json
         })()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             # 找一个有 rubric 的题 (PB-C02 / PC-C01 都有 partial_credit_rubric)
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
@@ -245,7 +246,7 @@ class TestJudgeEndpointRubric:
 
         # 验证 200 + score 字段
         if resp.status_code == 200:
-            data = resp.get_json()
+            data = resp.json()
             assert data["judged"] is True
             assert "score" in data, "v0.58.0: 必须返回 score 字段"
             assert data["score"] == 0.6
@@ -258,7 +259,7 @@ class TestJudgeEndpointRubric:
             "chat": lambda self, **kwargs: valid_json
         })()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             # PB-Q26 没 partial_credit_rubric
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
@@ -267,7 +268,7 @@ class TestJudgeEndpointRubric:
             })
 
         if resp.status_code == 200:
-            data = resp.get_json()
+            data = resp.json()
             # 老协议: LLM 只返回 correct, score 派生 1.0
             assert data["correct"] is True
             assert data["score"] == 1.0  # 派生
@@ -283,7 +284,7 @@ class TestJudgeEndpointRubric:
         # Mock LLM, 捕获 prompt
         fake_llm = type("FakeLLM", (), {"chat": fake_chat})()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 "problem_id": "PB-C02",  # 有 rubric
@@ -310,7 +311,7 @@ class TestJudgeEndpointRubric:
 
         fake_llm = type("FakeLLM", (), {"chat": fake_chat})()
 
-        with patch("web.api.app.get_llm", return_value=fake_llm):
+        with patch("web.api.llm.get_llm", return_value=fake_llm):
             resp = flask_client.post("/api/judge", json={
                 "student_id": "lbc001",
                 # v0.98.8: PB-Q26 已补 rubric (F-06), 改用仍无 rubric 的输出题
@@ -336,7 +337,7 @@ class TestDefensiveCheck8:
 
     def test_legacy_correct_only_response_still_works(self):
         """LLM 只返回 {correct: bool} (老 API 客户端) → score 派生 1.0 or 0.0."""
-        from web.api.app import _parse_judge_result
+        from web.api.judge import _parse_judge_result
 
         # correct=True
         correct, score, _ = _parse_judge_result({"correct": True})

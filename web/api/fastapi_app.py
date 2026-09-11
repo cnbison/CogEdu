@@ -59,13 +59,25 @@ app = FastAPI(
 )
 
 # ─── 路由注册 (迁移顺序见文件头) ────────────────────────────────────────────
-from web.api.routers import dual_agent, events, parent, stream, teacher  # noqa: E402
+from web.api.routers import (  # noqa: E402
+    dual_agent,
+    events,
+    parent,
+    static_pages,
+    student,
+    stream,
+    teacher,
+)
 
 app.include_router(stream.router)
 app.include_router(teacher.router)
 app.include_router(parent.router)
 app.include_router(events.router)
 app.include_router(dual_agent.router)
+# 12.4-5: 核心路由 + 静态托管 (含 /api/answer 答题主链路, 最复杂, 最后迁)
+app.include_router(student.router)
+# 静态页放最后: /student/{path} 等宽路由兜底, 不能抢先匹配 API 路由
+app.include_router(static_pages.router)
 
 
 # ─── 基础端点 (自 Flask app.py 平移, 修复 import ecos 遗留 bug) ─────────────

@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from web.api.app import _build_judge_prompt
+from web.api.judge import _build_judge_prompt
 from web.api.qmatrix import get_all_problems
 
 RUBRIC_KEYS = {"0.0", "0.3", "0.6", "1.0"}

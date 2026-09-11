@@ -285,18 +285,14 @@ class TestEngagementOnDemand:
 
 
 class TestParentFrontendRoutes:
-    def test_parent_route_serves_placeholder_pre_build(self):
+    def test_parent_route_serves_placeholder_pre_build(self, client):
         """/parent/ 可访问 (dist build 前 fallback web/parent/index.html 占位页).
 
-        12.4 过渡期注: 静态页托管还在 Flask app.py (12.4-5 迁),
-        此用例暂用 Flask client, 静态路由迁移后一并切换。
+        12.4-5: 静态托管已迁 FastAPI (web/api/routers/static_pages.py)。
         """
-        from web.api.app import app
-
-        with app.test_client() as c:
-            resp = c.get("/parent/")
-            assert resp.status_code == 200
-            assert "ECOS 家长端".encode("utf-8") in resp.data
+        resp = client.get("/parent/")
+        assert resp.status_code == 200
+        assert "ECOS 家长端".encode("utf-8") in resp.content
 
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────

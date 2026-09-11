@@ -49,8 +49,8 @@ def wired_env(tmp_db, monkeypatch):
     )
     monkeypatch.setattr(belief_api, "_evidence_engine", None)
     # get_llm 无 API key 会 raise, 测试统一给 None (与测试环境惯例一致)
-    import web.api.app as app_mod
-    monkeypatch.setattr(app_mod, "get_llm", lambda: None)
+    import web.api.llm as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
     yield tmp_db
     # 重置单例缓存 (monkeypatch 会还原属性, 但显式重置防 session 泄漏)
     belief_api._evidence_engine = None

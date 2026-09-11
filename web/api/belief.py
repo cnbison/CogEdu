@@ -134,7 +134,7 @@ def _get_or_create_student(student_id: str) -> dict:
             #   在 self.llm is None 时崩 (NoneType has no attribute chat_json)
             # v0.52.0: 传 misconception_library_str (BUG 2.1 修复)
             # v0.98.0 (b-b): 注入 evidence_engine + event_log (实例 ③, DB 恢复路径)
-            from web.api.app import get_llm
+            from web.api.llm import get_llm  # 12.4: 自 app.py 抽出 (框架无关)
             engine = BeliefEngine(
                 config=config,
                 llm_client=get_llm(),
@@ -411,7 +411,7 @@ def _get_or_create_student(student_id: str) -> dict:
             #   在 self.llm is None 时崩 (NoneType has no attribute chat_json)
             # v0.52.0: 传 misconception_library_str (BUG 2.1 修复)
             # v0.98.0 (b-b): 注入 evidence_engine + event_log (实例 ③, 全新路径)
-            from web.api.app import get_llm
+            from web.api.llm import get_llm  # 12.4: 自 app.py 抽出 (框架无关)
             engine = BeliefEngine(
                 config=config,
                 llm_client=get_llm(),

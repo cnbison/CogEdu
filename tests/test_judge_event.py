@@ -210,13 +210,20 @@ class TestBackwardCompat:
     """Response fields unchanged (judged/correct/score/reasoning/attempts)."""
 
     def test_response_fields_unchanged(self):
-        """Verify the /api/judge response keys (judged/correct/score/reasoning/attempts) are preserved."""
-        # Read web/api/app.py:api_judge_answer to verify response keys
-        with open("/Users/loubicheng/project/ecos/web/api/app.py") as f:
-            content = f.read()
+        """Verify the /api/judge response keys (judged/correct/score/reasoning/attempts) are preserved.
 
-        # Find api_judge_answer function and check response keys
-        # Just verify the response dict has the expected keys
+        12.4 修复: 原实现 open() 参考项目绝对路径
+        /Users/loubicheng/project/ecos/... (违反 CLAUDE.md 硬边界),
+        改为读本仓库 FastAPI 路由源码。
+        """
+        from pathlib import Path
+
+        router_py = (
+            Path(__file__).resolve().parents[1]
+            / "web" / "api" / "routers" / "student.py"
+        )
+        content = router_py.read_text(encoding="utf-8")
+
         expected_keys = {"judged", "problem_id", "student_id", "correct", "score", "reasoning", "attempts"}
         # Quick check: api_judge_answer should still return all expected keys
         # by looking at the response dict literal
@@ -233,11 +240,12 @@ class TestBackwardCompat:
 class TestDefensiveChecks:
     """防御性自检 [1] silent pass + [8] AST scan."""
 
-    def test_no_silent_pass_in_app_py_judge_section(self):
-        """Grep 'except ...: pass' in web/api/app.py (judge section)."""
+    def test_no_silent_pass_in_judge_router(self):
+        """Grep 'except ...: pass' in web/api/judge.py + routers/student.py (judge section)."""
         pattern = r"^\s*except.*:[[:space:]]*(pass|continue)\s*$"
         result = subprocess.run(
-            ["grep", "-nE", pattern, "web/api/app.py"],
+            ["grep", "-nE", pattern, "web/api/judge.py",
+             "web/api/routers/student.py"],
             capture_output=True, text=True,
         )
         assert result.stdout.strip() == "", (

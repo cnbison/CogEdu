@@ -22,17 +22,18 @@ import pytest
 
 @pytest.fixture
 def flask_client():
-    from web.api.app import app
-    app.config["TESTING"] = True
-    with app.test_client() as client:
+    from fastapi.testclient import TestClient
+
+    from web.api.fastapi_app import app
+    with TestClient(app) as client:
         yield client
 
 
 @pytest.fixture(autouse=True)
 def no_llm(monkeypatch):
     """get_llm → None, 防止真实 LLM 调用 (与 test_v0990_signal_collection 同惯例)."""
-    import web.api.app as app_mod
-    monkeypatch.setattr(app_mod, "get_llm", lambda: None)
+    import web.api.llm as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
 
 
 @pytest.fixture
@@ -66,7 +67,7 @@ class TestAnswerResponseContract:
             "bloom_layer": "L4",
         })
         assert resp.status_code == 200
-        body = resp.get_json()
+        body = resp.json()
 
         # 字段集合契约 (多一个少一个都算破坏) — 9 字段 =
         # belief-migration-map.md 表 #12 的 8 个字段 + 路由层回显的
@@ -105,7 +106,7 @@ class TestAnswerResponseContract:
             "bloom_layer": "L4",
         })
         assert resp.status_code == 200
-        body = resp.get_json()
+        body = resp.json()
         assert body["score"] == 0.7
         assert body["correct"] is True, "score>=0.6 应派生 correct=True"
 
@@ -119,7 +120,7 @@ class TestAnswerResponseContract:
             "bloom_layer": "L3",
         })
         assert resp.status_code == 200
-        assert resp.get_json()["persisted"] is True
+        assert resp.json()["persisted"] is True
 
 
 # ─── 2. 持久化失败可见性 (真实事故防线) ──────────────────────────────────
@@ -167,7 +168,7 @@ class TestPersistenceFailureVisibility:
 
         # 主流程不阻断: 仍然 200, 学生端不白屏
         assert resp.status_code == 200
-        body = resp.get_json()
+        body = resp.json()
         # 失败信号必须到达前端 (这是事故修复的核心行为)
         assert body["persisted"] is False
         # 其余字段不受影响 (引擎更新本身是成功的)
