@@ -95,37 +95,39 @@ class TestFrontendEventFactories:
         assert event2.payload["problem_id"] is None
 
 
-# ── Blueprint registration (1 test) ────────────────────────────────────────
+# ── 路由注册 (1 test) ───────────────────────────────────────────────────────
 
 
-class TestBlueprintRegistration:
-    """v0.85.0-d: event_stub_bp registered in app."""
+class TestRouteRegistration:
+    """v0.85.0-d (12.4 迁移): 4 事件端点注册在 FastAPI app."""
 
-    def test_blueprint_registered_in_app(self):
-        """event_stub_bp registered with Flask app."""
-        from web.api.app import app
-        # Check if any view function has the endpoint name
-        # Flask blueprint endpoints are namespaced with the blueprint name
-        view_functions = list(app.view_functions.keys())
-        # Blueprint endpoints: event_stub.api_event_hint / event_stub.api_event_idle / etc
-        assert "event_stub.api_event_hint" in view_functions
-        assert "event_stub.api_event_idle" in view_functions
-        assert "event_stub.api_event_goal_change" in view_functions
-        assert "event_stub.api_event_reflection" in view_functions
+    def test_event_routes_registered_in_app(self):
+        from web.api.fastapi_app import app
+
+        paths = {r.path for r in app.routes}
+        for sub in (
+            "/api/event/hint",
+            "/api/event/idle",
+            "/api/event/goal_change",
+            "/api/event/reflection",
+        ):
+            assert sub in paths, f"路由缺失: {sub}"
 
 
-# ── Endpoint behavior via Flask test client (4 tests) ──────────────────────
+# ── Endpoint behavior via FastAPI TestClient (4 tests) ─────────────────────
 
 
 class TestEndpointBehavior:
-    """4 endpoint behavior via Flask test_client."""
+    """4 endpoint behavior via FastAPI TestClient (12.4 自 Flask 迁移)."""
 
     @pytest.fixture
     def client(self):
-        """Flask test client."""
-        from web.api.app import app
-        app.config["TESTING"] = True
-        with app.test_client() as c:
+        """FastAPI TestClient (裸 client, 不触发 lifespan → 不依赖 Plugin path)."""
+        from fastapi.testclient import TestClient
+
+        from web.api.fastapi_app import app
+
+        with TestClient(app) as c:
             yield c
 
     def test_hint_endpoint_emits_event(self, client):
@@ -142,7 +144,7 @@ class TestEndpointBehavior:
             "hint_level": 2,
         })
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["status"] == "logged"
         assert data["student_id"] == "stu-001"
         assert "event_id" in data
@@ -162,7 +164,7 @@ class TestEndpointBehavior:
             "hint_level": 1,
         })
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["status"] == "logged"
         assert "hint" in data
         hint = data["hint"]
@@ -182,7 +184,7 @@ class TestEndpointBehavior:
             "hint_level": 1,
         })
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert "hint" in data
         hint = data["hint"]
         assert "常见误区" in hint
@@ -196,7 +198,7 @@ class TestEndpointBehavior:
             "hint_level": 1,
         })
         assert resp.status_code == 200
-        data = resp.get_json()
+        data = resp.json()
         assert data["status"] == "logged"
         assert "hint" in data
         assert "没有针对性" in data["hint"]
@@ -262,10 +264,19 @@ class TestProductionActivation:
     """
 
     def test_if_name_block_calls_plugin_runtime_start(self):
-        """web/api/app.py if __name__ block calls plugin_runtime ensure_started()."""
-        # Read the file and verify the activation code is present
-        with open("/Users/loubicheng/project/ecos/web/api/app.py") as f:
-            content = f.read()
+        """web/api/app.py if __name__ block calls plugin_runtime ensure_started().
+
+        12.4 修复: 原实现硬编码参考项目绝对路径
+        /Users/loubicheng/project/ecos/web/api/app.py — 违反 CLAUDE.md
+        硬边界 (CogEdu 测试不得依赖 ../ecos 存在), 改为项目内相对路径。
+        FastAPI 侧的等价激活 (lifespan) 由 test_fastapi_skeleton 锁定。
+        """
+        from pathlib import Path
+
+        app_py = (
+            Path(__file__).resolve().parents[1] / "web" / "api" / "app.py"
+        )
+        content = app_py.read_text(encoding="utf-8")
 
         # Check: if __name__ block contains ensure_started()
         assert 'if __name__ == "__main__"' in content
@@ -317,10 +328,11 @@ class TestDefensiveChecks:
     """防御性自检 [1]: silent pass scan in event_stub.py."""
 
     def test_no_silent_pass_in_event_stub(self):
-        """Grep 'except ...: pass' in web/api/event_stub.py."""
+        """Grep 'except ...: pass' in web/api/event_stub.py + routers/events.py."""
         pattern = r"^\s*except.*:[[:space:]]*(pass|continue)\s*$"
         result = subprocess.run(
-            ["grep", "-nE", pattern, "web/api/event_stub.py"],
+            ["grep", "-nE", pattern, "web/api/event_stub.py",
+             "web/api/routers/events.py"],
             capture_output=True, text=True,
         )
         assert result.stdout.strip() == "", (

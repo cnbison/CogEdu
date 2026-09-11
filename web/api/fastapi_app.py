@@ -59,11 +59,13 @@ app = FastAPI(
 )
 
 # ─── 路由注册 (迁移顺序见文件头) ────────────────────────────────────────────
-from web.api.routers import parent, stream, teacher  # noqa: E402
+from web.api.routers import dual_agent, events, parent, stream, teacher  # noqa: E402
 
 app.include_router(stream.router)
 app.include_router(teacher.router)
 app.include_router(parent.router)
+app.include_router(events.router)
+app.include_router(dual_agent.router)
 
 
 # ─── 基础端点 (自 Flask app.py 平移, 修复 import ecos 遗留 bug) ─────────────
