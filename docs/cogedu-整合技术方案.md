@@ -443,43 +443,59 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.2 1-A：接口契约设计
 
-- [ ] 定义 `Scene` 对象的字段（第 7 章已提到这是新对象，这里要落到具体 schema）：至少包含 scene_id、关联的 intervention_id/goal_id/evidence_id（引用，不拷贝）、内容区块列表（Phase 1 只有 `text` 和 `image` 两种类型，参考第 11 章 DeepTutor `BlockType` 的思路但不需要一次性做全）
-- [ ] 定义呈现引擎从 Runtime 拿 intervention 的调用方式：直接调用 `ecos.runtime.api.plan(student_id, audience="student", ...)` 拿到 `LCAResult`，明确呈现引擎从这个结果里具体取哪些字段作为生成输入（intervention_type/parameters/expected_gain 里哪些要传给 LLM 做 prompt）
-- [ ] 确定呈现引擎作为 Python 子包的位置和边界（按 CLAUDE.md 目录约定为 `cogedu/presentation/`），明确它**只读**调用 Runtime API，不直接 import 内核内部类——这条规则要和 Phase 0 补的静态检查（12.3 节）覆盖到同一批目录
+- [x] **1-A-1** 定义 Outline/Scene schema：`cogedu/presentation/types.py`。`Outline` = outline_id + intervention 引用（intervention_id/goal_id/evidence_id，**引用不拷贝**）+ steps 列表；`Scene` = scene_id + outline_id + 同上三个追溯字段 + blocks 列表（Phase 1 仅 `text`/`image` 两种类型）。为 Phase 3 的 `actions` 字段留 schema 扩展点（只留位置，不实现）
+  - ✅ 2026-09-12 完成：`GenerationContext`（含 `from_lca_result()` duck-typing 提取——**连 LCAResult 的类型引用都不建立**，防未来顺手调用其内部方法）+ `Outline`/`OutlineStep`/`Scene`（blocks discriminator union，`degraded`/`warnings` 为 1-D-3 预留）。Pydantic 而非 dataclass：schema 同时服务 LLM 输出校验、HTTP 响应模型、落库 payload 三处，且 fastapi 已连带依赖 pydantic
+- [x] **1-A-2** 写"呈现引擎 → Runtime 调用映射表"（`docs/presentation-runtime-map.md`，仿 `belief-migration-map.md` 风格）：明确从 `plan()` 返回的 `LCAResult` 里取哪些字段进 LLM prompt（intervention.type/parameters、rationale、bloom_target、clt_level、ca_stage），哪些只记录不进 prompt（expected_gain/expected_risk）
+  - ✅ 2026-09-12 完成：进 prompt = intervention_type/target_skills/misconceptions/tcs/difficulty/scaffolding/clt/ca_stage/bloom_target/rationale；**expected_gain/expected_risk 只记录**（LinUCB 内部估计，进 prompt 会诱导 LLM 编造"预期效果"）；goal_id/evidence_id 由 web 调用方显式传入、Phase 1 允许 None
+- [x] **1-A-3** 定包边界 + 防线：`cogedu/presentation/` 只读调用 `cogedu.runtime.api`，禁止 import `cogedu.cta/lca/evidence` 内部类——这条规则要和 Phase 0 补的静态检查（12.3 节）覆盖到同一批目录：把 `cogedu/presentation/` 纳入 githooks 零 mutation AST 扫描范围（核对 `scripts/` 扫描器的目录清单）；ruff/mypy 按新代码目录收紧
+  - ✅ 2026-09-12 完成：扫描器 glob 加 `cogedu/presentation/**/*.py`（扫描 66 文件通过）；mypy `[[tool.mypy.overrides]]` 对 `cogedu.presentation.*` 启用 strict（顺带修掉 overrides 单表语法错误 + 清理无效配置项 `check_base_classes`）；包边界规则写入 `cogedu/presentation/__init__.py` docstring
+- [x] **1-A-4** 定持久化契约：outline/scene 存储与追溯查询形状（按 intervention_id/evidence_id 反查场景），延续 12.5 双后端 adapter 模式。**已决策（2026-09-12）：1-A 即建双后端表**，不先内存后补——追溯字段是第 11 章"错因诊断可视化"的物理前提
+  - ✅ 2026-09-12 完成：表结构（`presentation_outlines`/`presentation_scenes`，payload 全文 JSON + 追溯列建索引）与查询形状（`PresentationStore` 六方法，含 `list_scenes_by_evidence` 错因反查）写入 `docs/presentation-runtime-map.md` §4；实现落 1-C-3
+- [x] **1-A-5** 定 LLM 依赖注入方式：`presentation/` 是内核子包，**不反向 import `web/api/llm.py`**——engine 构造时注入 LLM client（FastAPI 装配时传 `get_llm()`，测试注入 mock）
+  - ✅ 2026-09-12 完成：presentation 侧声明最小 Protocol（`chat_json`），不绑定 `ECOSLLMClient` 具体类型；`chat_json` 已自带 think 块剥离 + 围栏清理 + JSON 解析失败抛 ValueError，1-D 容错层在其之上补合规性修复
+
+> **三个决策点已确认（2026-09-12）**：①图片策略 v1 先静态占位/示意图，接口留出生成/检索位；②Scene/Outline 1-A 即建双后端表；③v1 非流式生成，Phase 3 再上 SSE。
 
 ### 13.3 1-B：大纲生成（参考 OpenMAIC outline-generator.ts，233 行体量）
 
-- [ ] 复用 `ECOSLLMClient`（MiniMax 主/Moonshot 备），不新建 LLM 客户端
-- [ ] Prompt 设计：输入 = intervention（LCA 输出）+ 可选的知识库片段（如果 Phase 5 还没做，先留空接口，之后接上）；输出 = 结构化大纲（几个知识点/几步讲解，参考 OpenMAIC 的 `SceneOutline` 类型定义）
-- [ ] 大纲阶段先不接 PDF 输入（那是第 7 章/Phase 5 的事），但接口设计上预留位置——OpenMAIC 的 outline-generator 本身就是把 `pdfText`/`pdfImages` 作为可选参数，这个思路可以直接照抄，即使 Phase 1 暂时不传
+- [ ] **1-B-1** 大纲 prompt（`cogedu/presentation/prompts.py`）：输入 = 1-A-2 选定的 LCAResult 字段 + `kb_snippets` 可选参数（Phase 5 前恒空）+ `pdf_text`/`pdf_images` 预留可选参数（照抄 OpenMAIC outline-generator 的思路——它本身就是把 pdfText/pdfImages 作为可选参数，Phase 1 暂时不传）
+- [ ] **1-B-2** `cogedu/presentation/outline.py` OutlineGenerator：调注入的 LLM client → 解析（先 `json.loads`，1-D 补容错）→ schema 校验（字段缺失/越界的处理策略）→ Outline 对象
+- [ ] **1-B-3** 单元测试（mock LLM）：正常 / 坏 JSON / 缺字段三路
+- [ ] **1-B-4** HTTP 端点：`web/api/routers/presentation.py` 新 router，`POST /api/presentation/outline` + Pydantic 模型 + HTTP 契约测试
 
 ### 13.4 1-C：场景生成（参考 OpenMAIC scene-generator.ts，1931 行体量——这是本 Phase 的工作量重心）
 
-- [ ] 按大纲的每一步，生成具体的场景内容：Phase 1 范围内每个场景只产出"讲解文字 + 配图（可以是生成的图片，也可以先只做文字配图片占位/检索图片，视资源而定）"
-- [ ] 数学/物理内容的文本要支持行内公式标记（`$...$`/`$$...$$`），生成时让 LLM 按这个格式输出，不需要额外处理，交给前端渲染阶段处理（见 13.5）
-- [ ] 场景与 `Goal`/`Evidence` 的关联：每个场景生成后要能追溯"这是为了帮助学生解决哪个知识点/哪次错因"，这个关联字段现在就要带上，不要等后面补——直接决定了后续 Evidence Engine 呈现和第 11 章"错因诊断可视化"这类扩展能不能做起来
-- [ ] **不做**：多角色讨论、AI 同学插话（这些是 v1 范围外，见第 3/8 章），Phase 1 场景只有单一讲解视角
+- [ ] **1-C-1** 场景 prompt：按大纲单步生成讲解文字，prompt 里明确约束 `$...$`/`$$...$$` 公式格式（交给 1-E KaTeX 渲染）；**单一讲解视角**，多角色讨论/AI 同学插话是 v1 范围外（见第 3/8 章），代码注释里标注
+- [ ] **1-C-2** `cogedu/presentation/scene.py` SceneGenerator：每步产出 text block + image block（**已决策：v1 静态占位/示意图，接口留出生成/检索位**）
+- [ ] **1-C-3** 追溯关联落地：scene 落库时带 intervention_id/goal_id/evidence_id，双后端实现 + 按 evidence_id 反查的测试（1-A-4 契约的实现）——直接决定后续 Evidence Engine 呈现和第 11 章"错因诊断可视化"能不能做起来
+- [ ] **1-C-4** 单元 + HTTP 测试（mock LLM）：场景数与大纲步数一致、公式格式约束命中、追溯字段完整
 
-### 13.5 1-D：生成健壮性（借鉴 OpenMAIC 的 json-repair.ts + generation-retry.ts）
+### 13.5 1-D：生成健壮性（借鉴 OpenMAIC 的 json-repair.ts + generation-retry.ts，1-C 基本流程跑通后补）
 
-- [ ] LLM 输出结构化 JSON 时做容错解析（LLM 偶尔会输出格式不完全合规的 JSON，需要修复而不是直接报错），可以参考 OpenMAIC 这两个模块的思路自己用 Python 实现一版，不需要照抄代码（Python 生态有现成的 JSON 修复库可以评估，比如 `json-repair` PyPI 包，如果许可和维护状况合适可以直接用，不用自己写）
-- [ ] 生成失败时的重试策略：明确重试次数上限、超时时间，失败后的降级行为（比如退化成更简单的模板化内容，而不是让学生端卡住空白）
+- [ ] **1-D-1** 评估 PyPI `json-repair`（license/维护状况），合适直接用，不合适则参考 OpenMAIC `json-repair.ts` 思路用 Python 自写 `cogedu/presentation/json_repair.py`
+- [ ] **1-D-2** 重试策略：次数上限/超时/退避，参数进配置，封装在生成入口
+- [ ] **1-D-3** 降级行为：重试耗尽 → 模板化 degraded scene，带 `degraded: true` 标记 + **warning 留痕不静默**（对齐 v0.47.5 "宁可明确失败信号也不静默吞异常"的仓库约定），学生端可感知但不空白
+- [ ] **1-D-4** 测试：坏 JSON 修复 / 重试耗尽 → 降级标记 + warning 留痕
 
 ### 13.6 1-E：前端渲染
 
-- [ ] 场景播放的最简 UI：按顺序展示每个场景的文字+图片，不需要 Phase 3 才做的播放状态机（idle/playing/paused/live），Phase 1 可以先是"翻页式"的简单交互
-- [ ] **数学公式渲染直接用 KaTeX**（第 11 章的发现，不用自己设计方案），识别文本里的 `$...$`/`$$...$$` 定界符并渲染
-- [ ] 图片展示的基础组件（懒加载、加载失败占位）
+- [ ] **1-E-1** 学生端场景页（`web/student/` 扩展）：翻页式交互，按顺序展示 text+image，不需要 Phase 3 的播放状态机（idle/playing/paused/live）
+- [ ] **1-E-2** KaTeX 集成（第 11 章的发现，不用自己设计方案）：识别 `$...$`/`$$...$$` 定界符渲染；**内容渲染必须走转义，不裸 innerHTML**——LLM 输出直接进 DOM 是 XSS 面
+- [ ] **1-E-3** 图片组件：懒加载 + 加载失败占位
+- [ ] **1-E-4** degraded 场景的 UI 提示
 
 ### 13.7 1-F：回写事件闭环（这一步是验证"整合真正生效"的关键）
 
-- [ ] 学生在场景上的行为（比如"点了下一步""停留时间""在某个讲解后主动提问"）要产生一条 `LearningEvent`，通过 Runtime API 的 `update_belief` 写回内核——这条链路走通，才算真正验证了"呈现引擎是内核的下游消费方，不是另起一套状态"这个第 2 章反复强调的原则
-- [ ] 这一步依赖 Phase 0 的"统一入口"已经做完，如果 Phase 0 还没完全结束，Phase 1 这一步可以先接到 Runtime API（本来就该走这条路），不受 Phase 0 影响
+- [ ] **1-F-1** 定义场景行为事件类型（`scene_next`/`scene_dwell`/`scene_question` 之类，对齐现有 LearningEvent 命名约定）
+- [ ] **1-F-2** Plugin 形式接入：学生端埋点 + HTTP 端点 → publish 事件 → 事件总线订阅者 → `Runtime.update_belief`（**零 mutation**，复用 12.3 验证过的 `response_submitted` 模式）——走通才算验证"呈现引擎是内核的下游消费方，不是另起一套状态"（第 2 章原则）
+- [ ] **1-F-3** 事件落库复用现有 event_log 路径（12.6 灰度已验证 hint/reflection 落库）
+- [ ] **1-F-4** HTTP 全链路测试：埋点 → 总线 → belief 变化断言（对齐 12.4 `/api/answer` 全链路测试风格）
 
 ### 13.8 1-G：端到端验证
 
-- [ ] 完整链路测试：学生答错一道题 → CTA 更新 belief → LCA 输出 intervention → 呈现引擎生成大纲+场景 → 学生端展示 → 学生行为回写事件 → belief 再次更新，全程用真实（或高仿真）数据跑通至少 3-5 个完整案例，人工检查每一步的内容是否合理（不只是"跑通不报错"，而是"生成的讲解内容对不对、和学生的实际薄弱点匹配不匹配"）
-- [ ] 补充这条端到端链路的自动化回归测试，纳入现有 pytest 体系
+- [ ] **1-G-1** 真实进程端到端 3-5 案例（答错 → CTA → LCA → 大纲 → 场景 → 展示 → 行为回写 → belief 再更新），沿用 12.6 灰度脚本模式 + 真实 LLM；**人工检查内容质量**（讲解对不对、和学生实际薄弱点匹不匹配），不只是"跑通不报错"
+- [ ] **1-G-2** 端到端自动化回归纳入 pytest
+- [ ] **1-G-3** 收尾：方案文档第 13 章勾选 + CLAUDE.md/README/CHANGELOG 同步 + commit/push
 
 ---
 

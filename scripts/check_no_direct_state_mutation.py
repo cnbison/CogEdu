@@ -113,9 +113,15 @@ def _root_is_state(node: ast.expr) -> bool:
 def main():
     root = Path(__file__).resolve().parent.parent
 
-    # 扫描 cogedu/cta/ + cogedu/dual_agent/ + web/api/ (包名自 ecos 改为 cogedu)
+    # 扫描 cogedu/cta/ + cogedu/dual_agent/ + cogedu/presentation/ + web/api/
+    # (包名自 ecos 改为 cogedu; presentation/ 为 Phase 1 1-A-3 纳入的新代码目录)
     targets = []
-    for pattern in ["cogedu/cta/**/*.py", "cogedu/dual_agent/**/*.py", "web/api/**/*.py"]:
+    for pattern in [
+        "cogedu/cta/**/*.py",
+        "cogedu/dual_agent/**/*.py",
+        "cogedu/presentation/**/*.py",
+        "web/api/**/*.py",
+    ]:
         targets.extend(root.glob(pattern))
     # 排除 __pycache__ + test_*.py
     targets = [

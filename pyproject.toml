@@ -94,6 +94,12 @@ python_version = "3.11"
 # 内核自 ECOS 复制而来，未做全量类型校验——起步阶段只报告，不阻断
 ignore_missing_imports = true
 warn_unused_ignores = false
-check_base_classes = false
+# 注: 原有 check_base_classes = false 为无效配置项 (mypy 不认识, 2026-09-12 启用
+#     presentation strict override 时暴露), 已移除。
 # 后续 Phase 0-C 重写 web/api (FastAPI + Pydantic) 时对新代码启用严格模式：
 #   [tool.mypy.overrides] module = "web.api.*" strict = true
+
+# ─── Phase 1 1-A-3: 呈现引擎为新写代码, 直接启用 strict ───────────────────
+[[tool.mypy.overrides]]
+module = "cogedu.presentation.*"
+strict = true
