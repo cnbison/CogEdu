@@ -469,10 +469,14 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.4 1-C：场景生成（参考 OpenMAIC scene-generator.ts，1931 行体量——这是本 Phase 的工作量重心）
 
-- [ ] **1-C-1** 场景 prompt：按大纲单步生成讲解文字，prompt 里明确约束 `$...$`/`$$...$$` 公式格式（交给 1-E KaTeX 渲染）；**单一讲解视角**，多角色讨论/AI 同学插话是 v1 范围外（见第 3/8 章），代码注释里标注
-- [ ] **1-C-2** `cogedu/presentation/scene.py` SceneGenerator：每步产出 text block + image block（**已决策：v1 静态占位/示意图，接口留出生成/检索位**）
-- [ ] **1-C-3** 追溯关联落地：scene 落库时带 intervention_id/goal_id/evidence_id，双后端实现 + 按 evidence_id 反查的测试（1-A-4 契约的实现）——直接决定后续 Evidence Engine 呈现和第 11 章"错因诊断可视化"能不能做起来
-- [ ] **1-C-4** 单元 + HTTP 测试（mock LLM）：场景数与大纲步数一致、公式格式约束命中、追溯字段完整
+- [x] **1-C-1** 场景 prompt：按大纲单步生成讲解文字，prompt 里明确约束 `$...$`/`$$...$$` 公式格式（交给 1-E KaTeX 渲染）；**单一讲解视角**，多角色讨论/AI 同学插话是 v1 范围外（见第 3/8 章），代码注释里标注
+  - ✅ 2026-09-12 完成：`build_scene_messages`（prompts.py）——公式定界符约束 + 单一视角禁令都在 prompt 里（有单测锁定命中）；输出 JSON 含 `image_concept` 配图意图字段
+- [x] **1-C-2** `cogedu/presentation/scene.py` SceneGenerator：每步产出 text block + image block（**已决策：v1 静态占位/示意图，接口留出生成/检索位**）
+  - ✅ 2026-09-12 完成：每场景恒为 `[text, image]` 两 block；占位图 `placeholder=True` + `image_concept` 进 alt；`image_provider` 注入点（注入即替换占位图，有单测锁定）。`generate_one` 是 1-D 重试/降级复用的最小单元。**顺带**：`Outline.context` 字段（生成上下文随大纲落库，第二阶段从持久化层恢复后重建 prompt——不存的话 difficulty/clt_level 等 pedagogy 字段会丢）
+- [x] **1-C-3** 追溯关联落地：scene 落库时带 intervention_id/goal_id/evidence_id，双后端实现 + 按 evidence_id 反查的测试（1-A-4 契约的实现）——直接决定后续 Evidence Engine 呈现和第 11 章"错因诊断可视化"能不能做起来
+  - ✅ 2026-09-12 完成：`cogedu/persistence/presentation_store.py`（PresentationStore，LCAStore/DualAgentStore 同模式：独立表 + adapter 双后端 + 幂等 ON CONFLICT + `degraded` 落库列）；索引含 `idx_scenes_evidence` 错因反查。路由编排：`/outline` 生成即落库（落库失败 warning 不中断呈现）+ `web/api/presentation_service.py`（框架无关编排层）/ `POST /api/presentation/scenes`（404/502 分级）。conftest 补 presentation 单例归一化
+- [x] **1-C-4** 单元 + HTTP 测试（mock LLM）：场景数与大纲步数一致、公式格式约束命中、追溯字段完整
+  - ✅ 2026-09-12 完成：`tests/test_presentation_scene.py`（13 用例）+ `tests/test_presentation_store.py`（双后端参数化奇偶 12 用例，PG 无服务器 skip）+ `/scenes` HTTP 契约 4 用例。全量 **1696 用例通过**
 
 ### 13.5 1-D：生成健壮性（借鉴 OpenMAIC 的 json-repair.ts + generation-retry.ts，1-C 基本流程跑通后补）
 

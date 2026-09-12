@@ -104,6 +104,13 @@ def isolated_ecos_db(tmp_path, monkeypatch):
         monkeypatch.setattr(da_mod, "_dual_store", None)
     except ImportError:
         pass
+    # Phase 1 (1-C): 呈现持久化单例 (同上, 指向已删除 tmp DB 的缓存要清)
+    try:
+        import web.api.presentation_service as pres_mod
+
+        monkeypatch.setattr(pres_mod, "_store", None)
+    except ImportError:
+        pass
 
     yield tmp_db
 

@@ -154,6 +154,10 @@ class Outline(BaseModel):
     title: str
     steps: list[OutlineStep]
     created_at: str = Field(default_factory=_utcnow_iso)
+    # 生成上下文随 Outline 落库：第二阶段（场景生成）从持久化层恢复
+    # outline 后需要同一份 pedagogy 字段重建 prompt——不存的话
+    # difficulty/clt_level 等会丢，场景与大纲的针对性就脱节了
+    context: GenerationContext | None = None
 
 
 # ---------------------------------------------------------------------------

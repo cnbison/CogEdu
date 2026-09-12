@@ -122,3 +122,70 @@ class TestOutlineEndpoint:
     def test_openapi_contract_registered(self, client):
         """路由注册进 OpenAPI (静态页宽路由兜底不能抢先匹配)."""
         assert "/api/presentation/outline" in client.get("/openapi.json").json()["paths"]
+
+
+# ─── /scenes (1-C) ───────────────────────────────────────────────────────────
+
+_SCENE_LLM_OUTPUT = {
+    "title": "第一步",
+    "text": "讲解正文，含公式 $x^2$。",
+    "image_concept": "示意图",
+}
+
+
+class TestScenesEndpoint:
+    def test_scenes_200_contract(self, client, monkeypatch, isolated_ecos_db):
+        """/outline 落库 → /scenes 恢复 context → 每步一个 Scene."""
+        monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
+        resp = client.post("/api/presentation/outline", json={"student_id": "stu_http"})
+        assert resp.status_code == 200
+        outline_id = resp.json()["outline_id"]
+
+        monkeypatch.setattr(
+            "web.api.llm.get_llm",
+            lambda: FakeLLM(dict(_SCENE_LLM_OUTPUT)),  # output 不消耗, 每步同款
+        )
+        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        assert resp.status_code == 200
+        scenes = resp.json()
+        assert len(scenes) == 2  # 场景数 = 大纲步数
+        for scene in scenes:
+            assert scene["outline_id"] == outline_id
+            assert scene["intervention_id"] == "int_http1"
+            assert [b["type"] for b in scene["blocks"]] == ["text", "image"]
+            assert scene["degraded"] is False
+
+    def test_scenes_unknown_outline_404(self, client, monkeypatch, isolated_ecos_db):
+        monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
+        resp = client.post(
+            "/api/presentation/scenes", json={"outline_id": "no_such"}
+        )
+        assert resp.status_code == 404
+        assert "不存在" in resp.json()["error"]
+
+    def test_scenes_llm_failure_502(self, client, monkeypatch, isolated_ecos_db):
+        monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
+        outline_id = client.post(
+            "/api/presentation/outline", json={"student_id": "stu_http"}
+        ).json()["outline_id"]
+        monkeypatch.setattr(
+            "web.api.llm.get_llm",
+            lambda: FakeLLM(error=ValueError("LLM 输出无法解析为 JSON")),
+        )
+        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        assert resp.status_code == 502
+        assert "场景生成失败" in resp.json()["error"]
+
+    def test_outline_persisted_and_replayable(self, client, monkeypatch, isolated_ecos_db):
+        """/outline 落库 (含 context) — 落库失败 warning 不中断呈现的反向锚点."""
+        from web.api.presentation_service import get_store
+
+        monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
+        data = client.post(
+            "/api/presentation/outline",
+            json={"student_id": "stu_http", "evidence_id": "ev_1"},
+        ).json()
+        stored = get_store().get_outline(data["outline_id"])
+        assert stored is not None
+        assert stored.context is not None  # 第二阶段恢复 pedagogy 字段的物理前提
+        assert stored.evidence_id == "ev_1"

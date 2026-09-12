@@ -12,7 +12,7 @@ outline-generator 的可选参数思路，Phase 1 暂不传）。
 """
 from __future__ import annotations
 
-from cogedu.presentation.types import GenerationContext
+from cogedu.presentation.types import GenerationContext, OutlineStep
 
 # CLT 级别 → 讲解铺垫指导（expertise reversal：新手给完整例题，高手给留白）
 _CLT_HINTS: dict[int, str] = {
@@ -83,6 +83,63 @@ def build_outline_messages(
         user_parts.append(f"教材图片 {len(pdf_images)} 张（编号 img_0..img_{len(pdf_images) - 1}，讲解步骤可引用编号）")
 
     user_parts.append("请输出讲解大纲 JSON。")
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n".join(user_parts)},
+    ]
+
+
+# ─── 场景生成 (1-C-1) ────────────────────────────────────────────────────────
+
+
+def build_scene_messages(
+    ctx: GenerationContext,
+    outline_title: str,
+    step: OutlineStep,
+) -> list[dict[str, str]]:
+    """组装单步场景生成 messages.
+
+    Phase 1 范围约束（13.4）：
+    - 每个场景只产出讲解文字（text block）+ 配图意图（image block，
+      v1 为占位图，``image_concept`` 作为配图说明/alt）
+    - 公式一律 LaTeX（$...$ 行内 / $$...$$ 独立），渲染归前端 KaTeX
+    - **单一讲解视角**：多角色讨论 / AI 同学插话是 v1 范围外
+      （方案文档第 3/8 章），prompt 里显式禁止，防止 LLM 自作主张
+    """
+    system = (
+        "你是一位面向中国 K12 学生（初中/高中）的数理化学习教练，"
+        "正在为学生撰写一个讲解场景（一段连贯的讲解内容）。\n"
+        "要求：\n"
+        "- 全程使用中文。\n"
+        "- 数学/物理/化学公式一律用 LaTeX 记号：行内公式用 $...$，"
+        "独立公式用 $$...$$（渲染由前端处理，直接写 LaTeX 即可）。\n"
+        "- 只用单一的讲解者视角，不要写多角色对话，不要虚构 AI 同学插话。\n"
+        "- 讲解要口语化、有引导性，贴合给定难度和支持程度。\n"
+        "- 只输出 JSON，不要输出任何其他文字或代码围栏。\n"
+        '- JSON 格式：{"title": str, "text": str, "image_concept": str}。\n'
+        "- text 为讲解正文（300~600 字），image_concept 为一句话的配图意图"
+        "（说明这幅图应该画什么，用于生成/检索配图）。"
+    )
+
+    user_parts: list[str] = [
+        f"讲解主题：{outline_title}",
+        f"本步骤标题：{step.title}",
+    ]
+    if step.key_points:
+        user_parts.append("本步骤要点：\n- " + "\n- ".join(step.key_points))
+    if step.objective:
+        user_parts.append(f"本步骤目标：{step.objective}")
+    user_parts.append(f"干预类型：{ctx.intervention_type}")
+    user_parts.append(f"目标知识点：{', '.join(ctx.target_skills) or '（未指定）'}")
+    if ctx.target_misconceptions:
+        user_parts.append(
+            f"学生已暴露的误概念（讲解要针对性纠正）：{', '.join(ctx.target_misconceptions)}"
+        )
+    user_parts.append(f"内容难度（0 极易~1 极难）：{ctx.difficulty:.2f}")
+    user_parts.append(f"支持程度（0~1，越高铺垫越多）：{ctx.scaffolding_level:.2f}")
+    user_parts.append(f"认知层次目标：{ctx.bloom_target}")
+
+    user_parts.append("请输出本步骤的讲解场景 JSON。")
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": "\n".join(user_parts)},
