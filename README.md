@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**Phase 0 进行中**（2026-09-12）：12.2「建立安全网」+ 12.3「补齐状态入口缺口」+ 12.4「Flask → FastAPI」+ 12.5「SQLite → PostgreSQL」已完成——内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点）；**持久化层已双后端化**（SQLite 原路径零改动，PostgreSQL 经 DSN 启用，含一次性数据迁移脚本），全量 **1651 个测试用例通过**。下一步：12.6「回归与灰度」。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
+**Phase 0 完成**（2026-09-12）：内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点）；**持久化层已双后端化**（SQLite 原路径零改动，PostgreSQL 经 DSN 启用，含一次性数据迁移脚本）；真实进程灰度全链路通过。全量 **1651 个测试用例通过**。下一步：Phase 1（呈现引擎最小可用版本）。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 开发环境（克隆后一次性）
 

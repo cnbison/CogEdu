@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 0 / 12.6 回归与灰度（完成，Phase 0 收官）
+
+**全量回归**：1651 用例通过，pre-push hook 持续复验。
+
+**真实进程灰度**（uvicorn + PG canary 库）：答题主链路（9 字段契约 / theta 演化 / M8 误概念 F-10 触发 / lca_decision passthrough）、真实 LLM judge、事件落库、教师端 7 视图、家长端（幽灵学生 404）、报告 interpretation、SSE 真实服务端推流、静态页 no-cache、重启持久化（theta_cov 真实 SE 恢复 / history / answered_ids 防重复出题）、dual_agent 开关两路径进程级验证——全部通过。
+
+**灰度发现并修复**：`web/teacher/` 静态页为 12.2 内核复制遗漏（ECOS 有、CogEdu 无，`/teacher/` 自复制起恒 404），已按复制自包含原则补入。
+
 ### 2026-09-12 — Phase 0 / 12.5 SQLite → PostgreSQL（完成，双后端化）
 
 **轻量适配层**（`cogedu/persistence/adapter.py`）：占位符翻译 / 行值归一化 / DSN scheme 识别 / executescript 分句 / 连接工厂。不上 ORM，"换数据库不触碰业务逻辑"落到全部 5 个持久化模块（db.py Database + DualAgentStore + LCAStore + EventLog.from_sqlite + evidence_engine，比原计划 db.py 单点多覆盖 4 个）。

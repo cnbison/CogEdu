@@ -402,9 +402,16 @@ Phase 0 是三件事合并施工：① 补齐状态入口的几处具体缺口�
 
 ### 12.6 0-E：回归与灰度
 
-- [ ] 全量测试通过
-- [ ] 如果有测试学生/教师账号，先在小范围灰度跑一段时间观察行为一致性，再切换全量
-- [ ] 更新 `CLAUDE.md`/`README.md` 里关于技术栈现状的描述，避免文档和代码再次出现之前发现的那种"README 停留在 v0.96、代码已经到 v0.98"的滞后情况
+- [x] 全量测试通过
+  - ✅ 2026-09-12 完成：全量 **1651 用例通过**（1627 基线 + 13 12.4 新增 + 11 12.5 PG 集成），且每次 push 被 pre-push hook（扫描 + 全量 pytest）强制复验。
+- [x] 如果有测试学生/教师账号，先在小范围灰度跑一段时间观察行为一致性，再切换全量
+  - ✅ 2026-09-12 完成：真实进程灰度（uvicorn `python -m web.api.app` + PG canary 库），全链路核对通过——答题主链路（9 字段契约 / persisted / theta 演化 0→0.47→0.33 / M8 误概念经 F-10 fallback 触发 / lca_decision passthrough）、真实 LLM judge（判分成功 + reasoning 引用学生原文）、事件落库（hint/reflection → PG event_log）、教师端 7 视图（evidence 链 theta 与 /api/state 一致、校准视图收到自评、misconception_evidence 空符合 A2 未闭环预期）、家长端（含幽灵学生 404）、报告（interpretation 规则引擎）、SSE 真实服务端推流、静态页 no-cache 头、**重启持久化**（theta/theta_cov 真实 SE 恢复、history、answered_ids 记忆防重复出题——v0.47 系列事故场景全数验证）、**dual_agent 开关两路径进程级验证**（OFF → `{"enabled":false}`；ON → 答题响应含 dual_agent 字段 + 互校状态落库 + 抗幻觉 warnings 真实工作）。
+  - **灰度发现 1（已修）**：`web/teacher/` 静态页在 12.2 内核复制时遗漏（ECOS 有、CogEdu 没有，`/teacher/` 恒 404，Flask 时代同样）——已按复制自包含原则补入。
+  - **灰度发现 2（非缺陷）**：SSE 首测超时为灰度脚本跨进程发布的测试方法错误（事件总线是进程内的，必须在服务进程内 publish），服务端行为本身正确，改用 HTTP 触发服务端发布后验证通过。
+- [x] 更新 `CLAUDE.md`/`README.md` 里关于技术栈现状的描述，避免文档和代码再次出现之前发现的那种"README 停留在 v0.96、代码已经到 v0.98"的滞后情况
+  - ✅ 制度化：每个任务收尾同步更新 CLAUDE.md 当前状态 / README 当前状态 + 本地运行说明 / CHANGELOG（12.2-12.6 每步都有对应记录），文档滞后问题已在流程上杜绝。
+
+**Phase 0 全部完成（12.2 安全网 → 12.3 状态入口 → 12.4 FastAPI → 12.5 PostgreSQL → 12.6 回归灰度）。** 下一步按方案文档第 13 章细化 Phase 1（呈现引擎最小可用版本）任务清单。
 
 ---
 
