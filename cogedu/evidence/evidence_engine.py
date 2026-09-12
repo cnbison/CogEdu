@@ -400,6 +400,7 @@ class EvidenceEngine:
                         :before, :after, :delta,
                         :misc, :tc, :quality
                     )
+                    RETURNING evidence_id
                     """,
                     dict(
                         sid=evidence.student_id,
@@ -425,7 +426,8 @@ class EvidenceEngine:
                         quality=data["quality_score"],
                     ),
                 )
-                return cur.lastrowid or 0
+                # 12.5: RETURNING 统一取代 lastrowid (SQLite ≥3.35 / PG 通用)
+                return int(cur.fetchone()["evidence_id"])
         except Exception:
             _log.warning("_add_to_evidence_log 失败 (student=%s)", evidence.student_id,
                          exc_info=True)

@@ -1,10 +1,19 @@
-"""SQLite 数据库层——连接管理 + Schema 初始化.
+"""数据库层——连接管理 + Schema 初始化 (12.5 / 0-D: SQLite / PostgreSQL 双后端).
 
 对应 research/10-engineering/05-persistence-session.md §2。
 
 MVP 范围：6 张核心表（students / interventions / evidence_log /
 calibration_log / bloom_goals / trajectory_snapshots）。
 隐私保护（MVP 简化）：SQLite 文件加密由文件系统层负责，不在应用层实现。
+
+12.5 (0-D) 双后端说明:
+  - SQLite: 原有行为零改动 (单连接 + WAL + check_same_thread=False)
+  - PostgreSQL: DatabaseConfig(dsn=...) 或 Database("postgres://...") 启用,
+    经 adapter 翻译占位符 + dict 行 + autocommit 连接 + transaction() 块;
+    schema 见 pg_schema.py (9 张表, JSON 列维持 TEXT, 评估见该文件头)
+  - 业务方法 (save_student_state 等) 的 SQL 双后端通用:
+    占位符由 adapter.translate_sql 翻译, 自增 ID 统一 RETURNING 取代 lastrowid,
+    INSERT OR IGNORE 统一改写为 ON CONFLICT DO NOTHING (两后端都支持)
 """
 
 from __future__ import annotations
@@ -13,6 +22,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -20,6 +30,17 @@ from pathlib import Path
 from typing import Any, Generator, Iterable, Optional
 
 from ..cta.belief_state import BeliefState, BloomProfileState, DimensionState
+from .adapter import (
+    BACKEND_POSTGRES,
+    BACKEND_SQLITE,
+    PGConnectionProxy,
+    detect_backend,
+    normalize_value,
+    open_connection,
+    split_statements,
+    translate_sql,
+)
+from .pg_schema import PG_SCHEMA_SQL
 
 _log = logging.getLogger(__name__)
 
@@ -260,31 +281,55 @@ CREATE INDEX IF NOT EXISTS idx_judge_audit_student
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class DatabaseConfig:
-    """数据库配置."""
+    """数据库配置.
+
+    12.5: dsn 非 None → PostgreSQL 后端; 否则 db_path → SQLite 文件.
+    """
+
     db_path: str = "ecos.db"
     timeout_sec: float = 10.0
+    dsn: Optional[str] = None  # 12.5: PostgreSQL DSN (postgres://...)
 
 
 class Database:
-    """SQLite 数据库主接口（MVP）。
+    """数据库主接口（12.5 起 SQLite / PostgreSQL 双后端）。
 
     用法：
-        db = Database("ecos.db")
+        db = Database("ecos.db")                    # SQLite (原有行为不变)
+        db = Database("postgres:///cogedu")         # PostgreSQL (12.5)
         db.init_schema()
         db.save_student(student_id, belief_state)
     """
 
+    # 类级默认: 兼容测试用 Database.__new__ 绕过 __init__ 直接设 _conn 的构造
+    # (默认 SQLite 语义; 正常 __init__ 会按 config 重设)
+    backend: str = BACKEND_SQLITE
+
     def __init__(self, config: DatabaseConfig | str | None = None) -> None:
         if isinstance(config, str):
-            config = DatabaseConfig(db_path=config)
+            # DSN scheme 识别: postgres://... → PG 后端, 否则视为 SQLite 文件路径
+            from .adapter import is_pg_dsn
+
+            if is_pg_dsn(config):
+                config = DatabaseConfig(dsn=config)
+            else:
+                config = DatabaseConfig(db_path=config)
         self.config = config or DatabaseConfig()
-        self._conn: sqlite3.Connection | None = None
+        self.backend = detect_backend(self.config.dsn or self.config.db_path)
+        self._conn: Any = None  # sqlite3.Connection | _PGConnectionProxy
+        # PG: 共享连接上的事务块必须串行 (对齐 SQLite 单写者语义);
+        # psycopg3 查询级线程安全, autocommit 读不受影响
+        self._pg_tx_lock = threading.RLock()
 
     @property
-    def conn(self) -> sqlite3.Connection:
+    def conn(self) -> Any:
         if self._conn is None:
+            if self.backend == BACKEND_POSTGRES:
+                self._conn = self._create_pg_connection()
+                return self._conn
             self._conn = sqlite3.connect(
                 self.config.db_path,
                 timeout=self.config.timeout_sec,
@@ -301,9 +346,31 @@ class Database:
             self._conn.execute("PRAGMA journal_mode = WAL")
         return self._conn
 
+    def _create_pg_connection(self) -> "PGConnectionProxy":
+        """创建 psycopg 连接 (autocommit + dict 行, 12.5).
+
+        连接工厂共用 adapter.open_connection (与各 store 同一逻辑);
+        psycopg 懒加载: 不装 psycopg 的纯 SQLite 环境不受影响.
+        """
+        _backend, conn = open_connection(self.config.dsn)
+        return conn
+
     @contextmanager
-    def tx(self) -> Generator[sqlite3.Connection, None, None]:
-        """事务上下文管理器."""
+    def tx(self) -> Generator[Any, None, None]:
+        """事务上下文管理器 (双后端).
+
+        SQLite: 显式 commit / rollback (原有语义).
+        PostgreSQL: autocommit 连接 + conn.transaction() 块
+          (BEGIN...COMMIT/ROLLBACK 由 psycopg 管理); 共享连接上的事务
+          用 RLock 串行, 对齐 SQLite 单写者语义.
+        """
+        if self.backend == BACKEND_POSTGRES:
+            with self._pg_tx_lock:
+                # 先经 property 触发懒建连 (首次调用时 _conn 还是 None)
+                conn = self.conn
+                with conn.transaction():
+                    yield conn
+            return
         try:
             yield self.conn
             self.conn.commit()
@@ -312,7 +379,15 @@ class Database:
             raise
 
     def init_schema(self) -> None:
-        """初始化数据库 schema（幂等）."""
+        """初始化数据库 schema（幂等）.
+
+        12.5: PostgreSQL 走 pg_schema.PG_SCHEMA_SQL (9 张表一次建齐,
+        无 SQLite 的历史包袱迁移逻辑); SQLite 走原有路径零改动.
+        """
+        if self.backend == BACKEND_POSTGRES:
+            with self.tx() as _:
+                self.conn.executescript(PG_SCHEMA_SQL)
+            return
         with self.tx() as _:
             self.conn.executescript(SCHEMA_SQL)
         # v0.97.3: P2 A2 reconcile misconception_evidence 表 (per-student per-misc
@@ -428,7 +503,7 @@ class Database:
                 VALUES (:id, :grade, :subject, :now, :now, :anon_id)
                 ON CONFLICT(student_id) DO UPDATE SET
                     last_active_at = :now,
-                    grade_level = COALESCE(:grade, grade_level)
+                    grade_level = COALESCE(:grade, students.grade_level)
                 """,
                 dict(id=student_id, grade=grade_level, subject=subject, now=now, anon_id=anonymized_id),
             )
@@ -766,6 +841,7 @@ class Database:
                     :attempts, :latency, :judged, :error_code,
                     :raw_output, :created_at
                 )
+                RETURNING id
                 """,
                 dict(
                     sid=student_id,
@@ -781,7 +857,8 @@ class Database:
                     created_at=now,
                 ),
             )
-            return int(cur.lastrowid)
+            # 12.5: RETURNING 统一取代 lastrowid (SQLite ≥3.35 / PG 通用)
+            return int(cur.fetchone()["id"])
 
     def save_calibration(self, student_id: str, data: dict) -> int:
         """保存互校记录（MVP 直接接收 dict）。"""
@@ -806,6 +883,7 @@ class Database:
                     :human, :fallback,
                     :duration
                 )
+                RETURNING calibration_id
                 """,
                 dict(
                     sid=student_id,
@@ -824,7 +902,8 @@ class Database:
                     duration=data.get("duration_ms"),
                 ),
             )
-            return cur.lastrowid or 0
+            # 12.5: RETURNING 统一取代 lastrowid (SQLite ≥3.35 / PG 通用)
+            return int(cur.fetchone()["calibration_id"])
 
     def load_calibration_history(self, student_id: str, limit: int = 100) -> list[dict]:
         rows = self.conn.execute(
@@ -905,16 +984,19 @@ class Database:
     ) -> None:
         """v0.81.0-a: 持久化 LearningEvent 到 event_log 表.
 
-        Mirror calibration_log save pattern. INSERT OR IGNORE dedups by event_id PRIMARY KEY.
+        Mirror calibration_log save pattern. event_id PRIMARY KEY dedup:
+        12.5 起 ON CONFLICT DO NOTHING (SQLite ≥3.24 / PG 通用, 取代
+        SQLite 方言 INSERT OR IGNORE).
         Callers normally use EventLog.log_event() (ecos/cta/event_log.py) which wraps this.
         This method is exposed on Database for direct DB-level integration tests.
         """
         with self.tx() as _:
             self.conn.execute(
                 """
-                INSERT OR IGNORE INTO event_log (
+                INSERT INTO event_log (
                     event_id, student_id, timestamp, source, event_type, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (event_id) DO NOTHING
                 """,
                 (event_id, student_id, timestamp, source, event_type, payload_json),
             )
@@ -955,11 +1037,12 @@ class Database:
 
     def count_events(self, student_id: str) -> int:
         """v0.81.0-a: 统计学生 event_log 条数 (用于测试 / debug)."""
+        # 12.5: COUNT(*) 别名 + 字符串取列 (dict_row 的 PG 行不支持整数索引)
         row = self.conn.execute(
-            "SELECT COUNT(*) FROM event_log WHERE student_id = ?",
+            "SELECT COUNT(*) AS cnt FROM event_log WHERE student_id = ?",
             (student_id,),
         ).fetchone()
-        return int(row[0]) if row else 0
+        return int(row["cnt"]) if row else 0
 
     # ─── Misconception Evidence (v0.97.3, P2 A2 reconcile) ──────────────────
 
@@ -1141,6 +1224,7 @@ class Database:
                     :state, :bloom, :dna,
                     :grade, :sem
                 )
+                RETURNING snapshot_id
                 """,
                 dict(
                     sid=student_id,
@@ -1154,7 +1238,8 @@ class Database:
                     sem=semester,
                 ),
             )
-            return cur.lastrowid or 0
+            # 12.5: RETURNING 统一取代 lastrowid (SQLite ≥3.35 / PG 通用)
+            return int(cur.fetchone()["snapshot_id"])
 
     def load_trajectory_snapshots(
         self,
@@ -1202,7 +1287,14 @@ def get_db(db_path: Optional[str] = None) -> "Database":
     if _db_instance is None:
         db_path = db_path or os.environ.get("ECOS_DB_PATH", "web/ecos.db")
         try:
-            _db_instance = Database(DatabaseConfig(db_path=db_path))
+            # 12.5: DSN scheme 识别 — ECOS_DB_PATH 可以是 SQLite 文件路径
+            # 或 PostgreSQL DSN (postgres://...), 同一环境变量无缝切换
+            from .adapter import is_pg_dsn
+
+            if is_pg_dsn(db_path):
+                _db_instance = Database(DatabaseConfig(dsn=db_path))
+            else:
+                _db_instance = Database(DatabaseConfig(db_path=db_path))
             # v0.60.1 修 (CI 失败 root cause #2): 调 init_schema() 确保 schema 存在
             # 幂等: CREATE TABLE IF NOT EXISTS + ALTER TABLE ... try/except
             # CI 干净环境 (无 web/ecos.db) 必须 init_schema, 否则 save_calibration 失败

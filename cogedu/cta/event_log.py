@@ -662,12 +662,11 @@ class EventLog:
         v0.84.0-c: accepts EventLogConfig for retention policy.
         """
         log = cls(config=config)
-        log._conn = sqlite3.connect(
-            db_path,
-            check_same_thread=False,  # v0.51.1: same as Database.conn
-        )
-        log._conn.row_factory = sqlite3.Row
-        log._conn.execute("PRAGMA journal_mode = WAL")
+        # 12.5 (0-D): 双后端 — db_path 可以是 SQLite 文件路径或 PG DSN;
+        # _mode 标签沿用 "sqlite" 表示 "db-backed" (分支零改动)
+        from ..persistence.adapter import open_connection
+
+        _backend, log._conn = open_connection(db_path)
         log._mode = "sqlite"
         # Idempotent table creation (mirrors Database.init_schema pattern)
         log._conn.executescript(_EVENT_LOG_DDL)
@@ -705,10 +704,11 @@ class EventLog:
             assert self._conn is not None
             self._conn.execute(
                 """
-                INSERT OR IGNORE INTO event_log (
+                INSERT INTO event_log (
                     event_id, student_id, timestamp, source, event_type, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                ON CONFLICT (event_id) DO NOTHING
+                """,  # 12.5: ON CONFLICT 取代 SQLite 方言 INSERT OR IGNORE (两后端通用)
                 (
                     event.event_id,
                     event.student_id,
@@ -782,10 +782,10 @@ class EventLog:
         if self._mode == "sqlite":
             assert self._conn is not None
             row = self._conn.execute(
-                "SELECT COUNT(*) FROM event_log WHERE student_id = ?",
+                "SELECT COUNT(*) AS cnt FROM event_log WHERE student_id = ?",
                 (student_id,),
             ).fetchone()
-            return int(row[0]) if row else 0
+            return int(row["cnt"]) if row else 0  # 12.5: 别名取列, 兼容 PG dict 行
         raise RuntimeError(f"EventLog not initialized (mode={self._mode})")
 
     # ── v0.84.0-c: retention policy ──────────────────────────────────────────
@@ -853,10 +853,10 @@ class EventLog:
 
         for sid in students_to_prune:
             count_row = self._conn.execute(
-                "SELECT COUNT(*) FROM event_log WHERE student_id = ?",
+                "SELECT COUNT(*) AS cnt FROM event_log WHERE student_id = ?",
                 (sid,),
             ).fetchone()
-            count = int(count_row[0]) if count_row else 0
+            count = int(count_row["cnt"]) if count_row else 0  # 12.5: 别名取列
             if count <= self._config.max_per_student:
                 continue
             # Keep most recent N; delete the rest

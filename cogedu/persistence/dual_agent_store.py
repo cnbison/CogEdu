@@ -40,11 +40,17 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from .adapter import (
+    BACKEND_POSTGRES,
+    detect_backend,
+    open_connection,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -126,30 +132,34 @@ class DualAgentStore:
     """
 
     def __init__(self, db_path: str = "web/ecos.db"):
+        # 12.5: db_path 可以是 SQLite 文件路径或 PostgreSQL DSN (统一由
+        # adapter.open_connection 识别), 命名保留 db_path 兼容既有调用方
         self.db_path = db_path
-        self._conn: Optional[sqlite3.Connection] = None
+        self.backend = detect_backend(db_path)
+        self._conn: Any = None
+        self._pg_tx_lock = threading.RLock()  # PG: 共享连接事务串行
         self._init_schema()
 
     @property
-    def conn(self) -> sqlite3.Connection:
-        """Lazy 数据库连接 (单例).
+    def conn(self) -> Any:
+        """Lazy 数据库连接 (单例, 12.5 起双后端).
 
-        v0.68.0: check_same_thread=False + WAL 模式 (跟 db.py v0.51.1 同样范式).
-          WAL 允许 reader/writer 并发, 适合 Flask 多线程 dispatch.
+        SQLite: check_same_thread=False + WAL 模式 (v0.68.0 范式, 见 adapter).
+        PostgreSQL: autocommit + dict 行 + 占位符翻译代理 (adapter).
         """
         if self._conn is None:
-            self._conn = sqlite3.connect(
-                self.db_path,
-                timeout=10.0,
-                check_same_thread=False,
-            )
-            self._conn.row_factory = sqlite3.Row
-            self._conn.execute("PRAGMA journal_mode = WAL")
+            _backend, self._conn = open_connection(self.db_path)
         return self._conn
 
     @contextmanager
     def _tx(self):
-        """事务上下文."""
+        """事务上下文 (双后端, 语义同 Database.tx)."""
+        if self.backend == BACKEND_POSTGRES:
+            with self._pg_tx_lock:
+                conn = self.conn
+                with conn.transaction():
+                    yield conn
+            return
         try:
             yield self.conn
             self.conn.commit()

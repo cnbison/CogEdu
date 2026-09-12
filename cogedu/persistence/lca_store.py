@@ -33,12 +33,18 @@ from __future__ import annotations
 import json
 import os
 import logging
-import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from .adapter import (
+    BACKEND_POSTGRES,
+    detect_backend,
+    open_connection,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -132,32 +138,34 @@ class LCAStore:
     """
 
     def __init__(self, db_path: str = "web/ecos.db"):
+        # 12.5: db_path 可以是 SQLite 文件路径或 PostgreSQL DSN (统一由
+        # adapter.open_connection 识别), 命名保留 db_path 兼容既有调用方
         self.db_path = db_path
-        self._conn: Optional[sqlite3.Connection] = None
+        self.backend = detect_backend(db_path)
+        self._conn: Any = None
+        self._pg_tx_lock = threading.RLock()  # PG: 共享连接事务串行
         self._init_schema()
 
     @property
-    def conn(self) -> sqlite3.Connection:
-        """Lazy 数据库连接 (单例).
+    def conn(self) -> Any:
+        """Lazy 数据库连接 (单例, 12.5 起双后端).
 
-        v0.68.0: check_same_thread=False + WAL 模式 (跟 db.py v0.51.1 同样范式).
-          之前默认 check_same_thread=True, Flask threaded dev server 跨线程
-          报 "SQLite objects created in a thread can only be used in that same thread",
-          lca_state 持久化全失败. 修复后 round-by-round LCA state 正常落盘.
+        SQLite: check_same_thread=False + WAL 模式 (v0.68.0 范式, 见 adapter).
+        PostgreSQL: autocommit + dict 行 + 占位符翻译代理 (adapter).
         """
         if self._conn is None:
-            self._conn = sqlite3.connect(
-                self.db_path,
-                timeout=10.0,
-                check_same_thread=False,
-            )
-            self._conn.row_factory = sqlite3.Row
-            self._conn.execute("PRAGMA journal_mode = WAL")
+            _backend, self._conn = open_connection(self.db_path)
         return self._conn
 
     @contextmanager
     def _tx(self):
-        """事务上下文."""
+        """事务上下文 (双后端, 语义同 Database.tx)."""
+        if self.backend == BACKEND_POSTGRES:
+            with self._pg_tx_lock:
+                conn = self.conn
+                with conn.transaction():
+                    yield conn
+            return
         try:
             yield self.conn
             self.conn.commit()
@@ -196,6 +204,9 @@ class LCAStore:
         SQLite 没原生 IF NOT EXISTS for ADD COLUMN, 用 PRAGMA table_info 检查.
         失败 _log.warning 不 raise (老 DB 加列是 best-effort).
         """
+        if getattr(self, "backend", None) == BACKEND_POSTGRES:
+            # 12.5: PG schema (pg_schema.py) 建表即含全部列, 无历史包袱迁移
+            return
         try:
             cursor = self.conn.execute(f"PRAGMA table_info({table})")
             existing_columns = {row[1] for row in cursor.fetchall()}
