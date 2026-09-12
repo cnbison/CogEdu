@@ -220,7 +220,7 @@ class TestCallLLMJudgeRetryDefensive8:
 def flask_client():
     from fastapi.testclient import TestClient
 
-    from web.api.fastapi_app import app
+    from web.api.app import app
     with TestClient(app) as client:
         yield client
 

@@ -15,20 +15,15 @@ Parent Dashboard 数据源 (全部只读, 不 mutate Kernel state, 防御性自�
   - 不放校准视图 / misconceptions (Bisen 拍板 2026-09-06: 校准曲线是教师专业视图)
   - 复用 web.api.teacher 的 DB 直读 helpers (单一实现, 不复制解析逻辑)
 
-端点:
-  GET /api/parent/students                        — 学生列表 (roster, 只读)
-  GET /api/parent/students/<student_id>/overview  — 单聚合 (engagement + advice + five_d + interventions)
+路由: 12.4 (0-C) 起由 web/api/routers/parent.py 提供 (FastAPI),
+  本文件只保留框架无关 helpers, Flask Blueprint 路由层已随迁移删除。
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
 
-from flask import Blueprint, jsonify
-
 _log = logging.getLogger(__name__)
-
-parent_bp = Blueprint("parent", __name__)
 
 # POMDP 状态名 (跟 ParentEngagementPlugin / teacher.py 一致)
 _POMDP_STATE_NAMES = ("Engaged", "Frustrated", "Bored", "Confused")
@@ -93,93 +88,3 @@ def _get_engagement_report(student_id: str) -> Optional[Dict[str, Any]]:
             student_id, exc_info=True,
         )
         return None
-
-
-@parent_bp.route("/api/parent/students")
-def api_parent_students():
-    """学生列表 (roster, 只读) — 家长端入口.
-
-    严禁 _get_or_create_student (v0.96.9 幽灵学生教训):
-    只读 students 表, 空表返回空列表, 不产生任何 DB 行.
-
-    Returns:
-        {"students": [ {student_id, subject, grade_level, last_active_at,
-                        answered_count, correct_rate, current_state} ]}
-    """
-    try:
-        from web.api.teacher import _get_db, _load_student_row, _parse_responses
-        db = _get_db()
-        sids = db.load_student_ids(limit=100)
-
-        students: List[Dict[str, Any]] = []
-        for sid in sids:
-            row = _load_student_row(sid)
-            if row is None:
-                continue
-            responses = _parse_responses(sid)
-            answered_count = len(responses)
-            correct_count = sum(1 for r in responses if r["correct"])
-            correct_rate = (
-                round(correct_count / answered_count, 4) if answered_count else 0.0
-            )
-            report = _get_engagement_report(sid)
-
-            students.append({
-                "student_id": sid,
-                "subject": row.get("subject"),
-                "grade_level": row.get("grade_level"),
-                "last_active_at": row.get("last_active_at"),
-                "answered_count": answered_count,
-                "correct_rate": correct_rate,
-                "current_state": (report or {}).get("current_state"),
-            })
-
-        return jsonify({"students": students})
-    except Exception:
-        _log.warning("parent: /api/parent/students 失败", exc_info=True)
-        return jsonify({"error": "学生列表获取失败", "students": []}), 500
-
-
-@parent_bp.route("/api/parent/students/<student_id>/overview")
-def api_parent_student_overview(student_id: str):
-    """单聚合 overview: engagement + advice + five_d + interventions (四卡数据).
-
-    只读: 学生不存在 → 404 (不创建; 防幽灵学生).
-    家长端不放校准视图 / misconceptions (教师专业视图, Bisen 拍板 2026-09-06).
-
-    Returns:
-        {student_id, engagement: {...report...}, five_d: {mastery, bloom},
-         interventions: [...]}
-    """
-    try:
-        from web.api.teacher import (
-            _get_intervention_history,
-            _load_student_row,
-            _parse_bloom_summary,
-            _parse_theta,
-        )
-        row = _load_student_row(student_id)
-        if row is None:
-            return jsonify({"error": "学生不存在", "student_id": student_id}), 404
-
-        engagement = _get_engagement_report(student_id)
-        interventions = _get_intervention_history(student_id)
-        bloom = _parse_bloom_summary(row)
-        theta = _parse_theta(row)
-
-        return jsonify({
-            "student_id": student_id,
-            "subject": row.get("subject"),
-            "engagement": engagement,
-            "five_d": {
-                "mastery": theta,
-                "bloom": bloom,
-                "overall_confidence": round(float(row.get("confidence") or 0.0), 4),
-            },
-            "interventions": interventions,
-        })
-    except Exception:
-        _log.warning(
-            "parent: /overview 失败 (sid=%s)", student_id, exc_info=True
-        )
-        return jsonify({"error": "概览获取失败", "student_id": student_id}), 500

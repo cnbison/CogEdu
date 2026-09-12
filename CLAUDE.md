@@ -38,9 +38,9 @@ DeepTutor（记忆/可视化/家长权限模型参考）：../DeepTutor
 ## 当前状态（2026-09-11 更新）
 
 - **参考文档版本**：`docs/cogedu-整合技术方案.md` v0.5
-- **当前 Phase**：Phase 0 进行中。12.2「建立安全网」+ 12.3「补齐状态入口的具体缺口」已完成——12.3 结论：三处直连调用（`register_item`/`save_student_state`/`reconcile_for_student`）均维持直接调用不改代码（评估依据与 A2 闭环 tripwire 见方案文档 12.3）；零 mutation AST 扫描已接入 `githooks/`（pre-commit 扫描 + pre-push 扫描 + 全量 pytest，克隆后需跑 `bash scripts/install-hooks.sh` 启用）。下一步：12.4「Flask → FastAPI」。
+- **当前 Phase**：Phase 0 进行中。12.2「建立安全网」+ 12.3「补齐状态入口缺口」+ 12.4「Flask → FastAPI」已完成——**Web 层已全量迁 FastAPI**（`web/api/app.py` 装配 + `web/api/routers/` 按域路由 + SSE 流式端点，Flask 已删除，`/api/answer` 等响应契约与 Flask 版逐字段一致，前端零改动），全量 **1640 用例通过**。零 mutation AST 扫描已接入 `githooks/`（pre-commit 扫描 + pre-push 扫描 + 全量 pytest，克隆后需跑 `bash scripts/install-hooks.sh` 启用）。下一步：12.5「SQLite → PostgreSQL」。
 - **内核代码状态**：**已复制**（2026-09-11）。来源 **ECOS v0.99.4，commit `9cdacab`**（比方案文档原定的 v0.98.0 快照新，经用户确认取最新版；v0.98.0→v0.99.4 内核增量 7 文件/+159 行已补审，结论见 `docs/kernel-baseline-notes.md`）。包名 `ecos` → `cogedu`，仅重命名 import，逻辑零改动，复制后全量测试与基线一致。
-- **仓库现状**：`cogedu/`（内核，121 文件）+ `web/`（**过渡期的 Flask API + student/parent 静态页，自 ECOS 复制**，0-C 迁 FastAPI 时重写替换）+ `githooks/`（pre-commit/pre-push，核心架构红线静态防线）+ `tests/`（1627 用例）+ `scripts/`（含零 mutation AST 扫描器）+ `examples/`（Plugin SDK 样例）+ `data/`（Q 矩阵）+ `discussions/`、`research/`（仅收录测试与文档引用的设计文档）+ `docs/`。
+- **仓库现状**：`cogedu/`（内核，121 文件）+ `web/`（**FastAPI 后端**：`app.py` 装配 + `routers/` 7 域路由 + 框架无关业务模块 `belief.py`/`llm.py`/`judge.py` 等；student/parent 静态页由 FastAPI 托管）+ `githooks/`（pre-commit/pre-push，核心架构红线静态防线）+ `tests/`（1640 用例）+ `scripts/`（含零 mutation AST 扫描器）+ `examples/`（Plugin SDK 样例）+ `data/`（Q 矩阵）+ `discussions/`、`research/`（仅收录测试与文档引用的设计文档）+ `docs/`。
 
 ## 技术栈（详见方案文档第 5 章，这里只列结论）
 

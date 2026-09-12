@@ -28,7 +28,7 @@ def fresh_both(monkeypatch):
 
     # mock LLM (CI 干净环境 robustness, 跟 v0.62.2 同样)
     mock_llm = MagicMock()
-    monkeypatch.setattr("web.api.app.get_llm", lambda: mock_llm)
+    monkeypatch.setattr("web.api.llm.get_llm", lambda: mock_llm)
 
     dual_mod._orchestrator = None
     dual_mod._dual_store = None

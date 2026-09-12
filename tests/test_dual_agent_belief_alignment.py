@@ -45,7 +45,7 @@ def fresh_both(monkeypatch):
 
     # v0.62.1: mock LLM (CI 干净环境无 api_key 防御)
     mock_llm = MagicMock()
-    monkeypatch.setattr("web.api.app.get_llm", lambda: mock_llm)
+    monkeypatch.setattr("web.api.llm.get_llm", lambda: mock_llm)
 
     # 重置 dual_agent 模块状态
     dual_mod._orchestrator = None

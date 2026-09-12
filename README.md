@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**Phase 0 进行中**（2026-09-11）：12.2「建立安全网」+ 12.3「补齐状态入口的具体缺口」已完成——内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名），全量 **1627 个测试用例通过**（1623 基线 + 4 个 HTTP 级安全网）；12.3 评估结论为三处直连调用维持现状（详见方案文档 12.3），零 mutation AST 扫描已接入 git hooks。下一步：12.4「Flask → FastAPI」。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
+**Phase 0 进行中**（2026-09-12）：12.2「建立安全网」+ 12.3「补齐状态入口缺口」+ 12.4「Flask → FastAPI」已完成——内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点，响应契约与 Flask 版逐字段一致，前端零改动），全量 **1640 个测试用例通过**。下一步：12.5「SQLite → PostgreSQL」。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 开发环境（克隆后一次性）
 
@@ -13,6 +13,12 @@ bash scripts/install-hooks.sh   # 启用 git hooks（pre-commit 零 mutation 扫
 ```
 
 未启用 hooks 时 commit/push 不做任何检查，建议所有贡献者启用。
+
+### 本地运行
+
+```bash
+python -m web.api.app    # FastAPI 后端, 端口 5173 (前端 API base 沿用)
+```
 
 ## 文档索引
 

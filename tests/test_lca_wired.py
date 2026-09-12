@@ -378,7 +378,7 @@ class TestLCARouteIntegration:
 
     def test_app_registers_lca_debug_endpoint(self):
         """FastAPI app 注册了 /api/lca_debug/{student_id} 路由 (12.4 迁移)."""
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         routes = {r.path for r in app.routes}
         assert "/api/lca_debug/{student_id}" in routes, \

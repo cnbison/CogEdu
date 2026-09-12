@@ -422,7 +422,7 @@ class TestRuntimeBackwardCompat:
 
         12.4 (0-C): 路由已迁 web/api/routers/student.py, 检查对象换 FastAPI app。
         """
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         routes = {r.path for r in app.routes}
         # web/api 主入口保持

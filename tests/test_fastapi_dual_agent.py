@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client():
-    from web.api.fastapi_app import app
+    from web.api.app import app
 
     with TestClient(app) as c:
         yield c
@@ -24,7 +24,7 @@ def client():
 
 class TestDualAgentDebugRoute:
     def test_route_registered(self):
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         paths = {r.path for r in app.routes}
         assert "/api/dual_agent/debug/{student_id}" in paths

@@ -6,6 +6,25 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 0 / 12.4 Flask → FastAPI（完成，Flask 删除）
+
+**迁移策略**：过渡期 FastAPI 与 Flask 并存（`web/api/fastapi_app.py` + `web/api/routers/`），按方案文档 12.4 建议顺序分 4 个 commit 递进（每步全量测试绿），最后一步翻转：`fastapi_app.py` 更名 `app.py` 替换 Flask 版，剥离 teacher/parent/event_stub 的 Blueprint 路由层（helpers 保留），pyproject 移除 flask 依赖。
+
+**新布局**：`web/api/app.py`（装配 + lifespan 激活 PluginRuntime + `__main__` uvicorn 启动）+ `web/api/routers/`（student/teacher/parent/events/dual_agent/stream/static_pages 7 域）+ 框架无关业务模块（belief/lca/qmatrix/interpretation/dual_agent/plugin_runtime 未重写）+ 新抽出的 `web/api/llm.py`（get_llm 单例）与 `web/api/judge.py`（judge 三件套，解除业务层对装配模块的反向依赖）。
+
+**关键决策**：
+- `/api/answer` 9 字段契约用 `AnswerResponse`（response_model + exclude_none）框架层锁定
+- `score`/`self_confidence`/`response_time` 保留"非数字诚实降级 + warning 留痕"语义（Any 字段 + 手工解析，Pydantic 422 会丢整份学生答案）
+- SSE 能力打通：`GET /api/events/stream` 订阅事件总线实时推送（Phase 1 呈现引擎流式生成复用此模式）
+- 响应 JSON 形状与 Flask 版逐字段一致，前端零改动
+
+**顺带修复**：
+- Flask 版 `/api/version` 与 `/api/report` 的 `import ecos` 重命名漏改（两端点此前恒 500）
+- 硬边界违规 ×2：test_event_stub / test_judge_event 硬编码参考项目绝对路径 `/Users/loubicheng/project/ecos/...`，改为项目内相对路径
+- conftest 隔离加固：PluginRuntime + 默认事件总线无条件重置、`DUAL_AGENT_ENABLED` 每测试归一化（修复 TestClient lifespan 引入的跨测试泄漏，曾导致 lca "重启后归零"假象）
+
+**验证**：全量 **1640 用例通过**（1627 基线 + 13 新增）；uvicorn 真实启动冒烟通过；dual_agent 开关两条路径 HTTP 级测试锁定。
+
 ### 2026-09-11 — Phase 0 / 12.3 补齐状态入口的具体缺口（完成）
 
 **三处直连调用评估（结论：均维持直接调用，不改代码）**

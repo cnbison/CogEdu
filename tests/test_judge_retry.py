@@ -57,7 +57,7 @@ def flask_client():
     """Flask test client fixture."""
     from fastapi.testclient import TestClient
 
-    from web.api.fastapi_app import app
+    from web.api.app import app
     with TestClient(app) as client:
         yield client
 
@@ -410,7 +410,9 @@ class TestDefensiveChecks:
         """
         import ast
         import inspect
-        from web.api import app as app_mod
+
+        from web.api import judge as judge_mod
+        from web.api.routers import student as student_router
 
         def get_code_body(func) -> str:
             """用 ast 拿函数 body 的代码行 (排除 docstring)."""
@@ -425,8 +427,8 @@ class TestDefensiveChecks:
                 body_lines.append(ast.unparse(stmt))
             return "\n".join(body_lines)
 
-        judge_body = get_code_body(app_mod.api_judge_answer)
-        helper_body = get_code_body(app_mod._call_llm_judge_with_retry)
+        judge_body = get_code_body(student_router.api_judge_answer)
+        helper_body = get_code_body(judge_mod._call_llm_judge_with_retry)
         combined = judge_body + "\n" + helper_body
 
         # 禁止出现的代码 pattern (启发式 / 字符串宽松化 / 自评)

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 
 def _client() -> TestClient:
-    from web.api.fastapi_app import app
+    from web.api.app import app
 
     return TestClient(app)
 
@@ -159,7 +159,7 @@ class TestPluginRuntimeAnswerChain:
 
         from fastapi.testclient import TestClient
 
-        from web.api.fastapi_app import app
+        from web.api.app import app
         from web.api.plugin_runtime import (
             get_plugin_runtime,
             reset_plugin_runtime,
@@ -219,7 +219,7 @@ class TestPluginRuntimeAnswerChain:
 class TestPluginRuntimeLifespan:
     def test_lifespan_starts_plugin_runtime(self):
         """with TestClient (触发 lifespan) → PluginRuntime 激活 + bus 有 subscriber."""
-        from web.api.fastapi_app import app
+        from web.api.app import app
         from web.api.plugin_runtime import (
             get_plugin_runtime,
             reset_plugin_runtime,

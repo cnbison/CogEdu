@@ -33,7 +33,7 @@ def _seed_temp_db():
 def client():
     from fastapi.testclient import TestClient
 
-    from web.api.fastapi_app import app
+    from web.api.app import app
     with TestClient(app) as c:
         yield c
 

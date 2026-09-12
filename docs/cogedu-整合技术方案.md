@@ -374,10 +374,17 @@ Phase 0 是三件事合并施工：① 补齐状态入口的几处具体缺口�
 
 ### 12.4 0-C：Flask → FastAPI
 
-- [ ] 建议迁移顺序（从低风险到高风险）：`plugin_runtime.py` → `teacher.py`/`parent.py` → `dual_agent.py` → `app.py`（核心装配）→ `belief.py`（放最后）——**这里不再有"先改造成 Runtime 干净版本再迁移"这层依赖**（因为核心路径本来就是干净的），但 `belief.py` 逻辑最复杂（806 行、大量版本演进注释），仍建议放最后处理
-- [ ] 每个路由文件迁移时，用 FastAPI 的 Pydantic 模型重新定义请求/响应结构，替代原来 Flask 手写的 JSON 解析/校验
-- [ ] 规划至少一处 SSE 流式响应的落地（哪怕 Phase 0 阶段还用不上，也要在框架迁移时把这条能力打通，因为 Phase 1 呈现引擎的流式生成马上就要用）
-- [ ] 迁移完成后跑全部测试 + 手动跑一遍 dual_agent 开关的两条路径（`ECOS_DUAL_AGENT_ENABLED` 相关分支）
+- [x] 建议迁移顺序（从低风险到高风险）：`plugin_runtime.py` → `teacher.py`/`parent.py` → `dual_agent.py` → `app.py`（核心装配）→ `belief.py`（放最后）——**这里不再有"先改造成 Runtime 干净版本再迁移"这层依赖**（因为核心路径本来就是干净的），但 `belief.py` 逻辑最复杂（806 行、大量版本演进注释），仍建议放最后处理
+  - ✅ 2026-09-12 完成，按建议顺序分 4 个 commit 递进（每步全绿）：骨架+lifespan 激活 → teacher/parent（9 端点）→ events+dual_agent（5 端点）→ app.py 核心+静态托管（8 API 端点 + 11 静态路由，含 `/api/answer` 主链路放最后）。过渡期 FastAPI 与 Flask 并存，最后一步翻转删除 Flask。`belief.py` 本体未重写（框架无关业务逻辑，只迁了调用它的路由层）；lifespan 启动时 `ensure_started()` 激活 PluginRuntime（对齐 F-14b 口径），`/api/answer` → bus → `PluginRuntime` → `Runtime.update_belief` 事件总线路径有 HTTP 级测试锁定。
+- [x] 每个路由文件迁移时，用 FastAPI 的 Pydantic 模型重新定义请求/响应结构，替代原来 Flask 手写的 JSON 解析/校验
+  - ✅ 请求侧：`AnswerRequest`/`JudgeRequest`/`InterventionRequest`/`HintRequest` 等。**一处刻意保留手工解析**：`score`/`self_confidence`/`response_time` 用 `Any` 字段而非 `float`——Flask 版的"非数字诚实降级 + warning 留痕"语义（v0.97.2/v0.99.0 拍板）必须保留，Pydantic 422 拒绝整个请求会丢学生答案，比降级更糟（`test_invalid_response_time_defaults_to_zero` 锁定此行为）。
+  - ✅ 响应侧：`/api/answer` 的 9 字段契约用 `AnswerResponse`（`response_model` + `exclude_none`，`dual_agent` 字段仅开关开启时出现）在框架层锁定；动态结构（plugin report/POMDP diagnostic）用 `Any` 字段，不强行建模制造虚假精度。
+- [x] 规划至少一处 SSE 流式响应的落地（哪怕 Phase 0 阶段还用不上，也要在框架迁移时把这条能力打通，因为 Phase 1 呈现引擎的流式生成马上就要用）
+  - ✅ `GET /api/events/stream`（`web/api/routers/stream.py`）：订阅进程内事件总线，LearningEvent 实时转 SSE 推送；线程安全 queue 桥接 sync bus → async 生成器；`max_events`/`idle_timeout` 双终止条件 + 自动 unsubscribe。测试覆盖收事件/不泄漏订阅/空闲超时三态。Phase 1 呈现引擎的流式生成直接复用此模式。
+- [x] 迁移完成后跑全部测试 + 手动跑一遍 dual_agent 开关的两条路径（`ECOS_DUAL_AGENT_ENABLED` 相关分支）
+  - ✅ 全量 **1640 用例通过**（1627 基线 + 13 新增：8 骨架/SSE + 1 Plugin 路径 `/api/answer` 全链路 + 4 dual_agent HTTP）。开关两条路径由 `tests/test_fastapi_dual_agent.py` 在 HTTP 层自动化锁定（off → `{"enabled": false}` 行为不变 / on → 新生 `has_state: false` / on + 观测后字段完整），函数层 24 用例（`test_dual_agent_integration.py`）迁移零改动。另做了 uvicorn 真实启动冒烟（`python -m web.api.app`：`/api/version` 0.99.4、静态页、OpenAPI 全 200）。
+
+**12.4 迁移过程记录（复盘用）**：布局为 `web/api/app.py`（装配）+ `web/api/routers/`（按域 7 个 router）+ 框架无关业务模块（`belief.py` 等未重写）；`get_llm` 抽到 `web/api/llm.py`、judge 三件套抽到 `web/api/judge.py`（解除业务层对装配模块的反向依赖，测试统一 patch 面）。顺带修复：Flask 版 `/api/version` 与 `/api/report` 的 `import ecos` 重命名漏改（两端点此前恒 500）；两处测试硬编码参考项目绝对路径的硬边界违规（`test_event_stub`/`test_judge_event`）；conftest 隔离加固（PluginRuntime+事件总线无条件重置、`DUAL_AGENT_ENABLED` 每测试归一化，修掉 lifespan 引入的跨测试泄漏）。响应 JSON 形状与 Flask 版逐字段一致，前端零改动。
 
 
 ### 12.5 0-D：SQLite → PostgreSQL

@@ -102,7 +102,7 @@ class TestRouteRegistration:
     """v0.85.0-d (12.4 迁移): 4 事件端点注册在 FastAPI app."""
 
     def test_event_routes_registered_in_app(self):
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         paths = {r.path for r in app.routes}
         for sub in (
@@ -125,7 +125,7 @@ class TestEndpointBehavior:
         """FastAPI TestClient (裸 client, 不触发 lifespan → 不依赖 Plugin path)."""
         from fastapi.testclient import TestClient
 
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         with TestClient(app) as c:
             yield c

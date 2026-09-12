@@ -133,7 +133,7 @@ def client():
     """
     from fastapi.testclient import TestClient
 
-    from web.api.fastapi_app import app
+    from web.api.app import app
 
     with TestClient(app) as c:
         yield c
@@ -367,7 +367,7 @@ class TestTeacherApiDefensive:
 
     def test_router_registered(self, client):
         """teacher 路由注册到 FastAPI app (7 端点全量)."""
-        from web.api.fastapi_app import app
+        from web.api.app import app
 
         paths = {r.path for r in app.routes}
         for sub in (
