@@ -1,6 +1,8 @@
 # 教育认知操作系统整合方案（CogEdu）
 
-> 版本：v0.5 draft　|　日期：2026-09-10　|　基础项目：ECOS（核心） + DeepTutor（记忆/知识借鉴） + OpenMAIC（呈现层借鉴）
+> 版本：v0.6 draft　|　日期：2026-09-12　|　基础项目：ECOS（核心） + DeepTutor（记忆/知识借鉴） + OpenMAIC（呈现层借鉴）
+>
+> **v0.6 相对 v0.5 的主要变化**：Phase 3（白板与语音）任务清单细化（第 15 章）——动笔前对 OpenMAIC 参考实现与 CogEdu 现状做了双份代码勘察，**修正两处凭印象的表述**（白板渲染并非"SVG vs Canvas"二选一，OpenMAIC 实际是 DOM+SVG path；播放调度不消费音频时长，靠 ended 事件驱动）；四项决策落档（渲染路线 DOM+SVG、增补 `wb_draw_line`、砍撤销/重做换"重播本页"、TTS 异步补齐+播放端降级）。
 >
 > **v0.5 相对 v0.4 的主要变化**：**更正了一处此前的分析错误**——v0.3 曾判断"学生答题主链路绕过 Runtime 直连内核"，进一步核实代码后发现这个判断不准确：核心路径其实通过事件总线正确接入了 Runtime，只是调用方式是间接的（发布事件而非直接函数调用），之前的分析方法（只搜字面 import）没有覆盖到这种模式。第 2.2 节、第 8/12 章的 Phase 0 范围已相应收窄和修正。
 
@@ -74,7 +76,7 @@
 
 | 模块 | 处置 | 代码审查备注 |
 |---|---|---|
-| 动作引擎 | 重新实现最小子集 | `lib/action/engine.ts`（902 行）实际支持的动作类型：`spotlight`/`laser`/`play_video`/`speech`/`discussion`/`widget_highlight`/`widget_setState`/`widget_annotation`/`widget_reveal`，以及一组白板动作 `wb_open`/`wb_draw_text`/`wb_draw_shape`/`wb_draw_chart`/`wb_draw_latex`/`wb_draw_table`/`wb_draw_line`/`wb_draw_code`/`wb_edit_code`/`wb_clear`/`wb_delete`/`wb_close`。**结合数理化场景，Phase 3（白板与语音）的最小必要集可以更精确地定为**：`wb_draw_text` + `wb_draw_shape` + `wb_draw_latex`（公式，数理化刚需）+ `speech`，其余（spotlight/laser/discussion 辩论/widget_* 系列）明确排除在 v1 外 |
+| 动作引擎 | 重新实现最小子集 | `lib/action/engine.ts`（902 行）实际支持的动作类型：`spotlight`/`laser`/`play_video`/`speech`/`discussion`/`widget_highlight`/`widget_setState`/`widget_annotation`/`widget_reveal`，以及一组白板动作 `wb_open`/`wb_draw_text`/`wb_draw_shape`/`wb_draw_chart`/`wb_draw_latex`/`wb_draw_table`/`wb_draw_line`/`wb_draw_code`/`wb_edit_code`/`wb_clear`/`wb_delete`/`wb_close`。**结合数理化场景，Phase 3（白板与语音）的最小必要集可以更精确地定为**：`wb_draw_text` + `wb_draw_shape` + `wb_draw_latex`（公式，数理化刚需）+ `speech`，其余（spotlight/laser/discussion 辩论/widget_* 系列）明确排除在 v1 外（**v0.6 修订**：Phase 3 细化时增补 `wb_draw_line`，见第 15 章） |
 | 播放引擎 | 重新实现，可作为直接的设计参考 | `lib/playback/engine.ts`（902 行）是一个单文件状态机，状态包括 `idle`/`playing`/`paused`/`live`，实现规整、没有过度设计，是一个体量适中、值得直接参考结构重写的模块 |
 | 白板 UI 组件 | 重新实现 | `components/whiteboard/` 共约 840 行（canvas + history + index），SVG/Canvas 渲染 + 历史记录（撤销/重做），体量可控 |
 | mathml2omml | 值得参考的独立小包 | 用于公式格式转换（MathML→OMML，供 Office 文档使用），如果呈现引擎的导出功能要生成含公式的 PPTX/Word，这个转换逻辑可以直接参考甚至直接复用（它是独立的 npm 包，非深度耦合在 OpenMAIC 主体里） |
@@ -224,7 +226,7 @@ class Parser(Protocol):
 - **Phase 2 收官（2026-09-12）**：2-A 权限模型（guardian_learner_link 显式授权 + guardian_can_access 单一入口）→ 2-C Word 报告导出（mathtext 公式图片嵌入，spike 88%）→ 2-D 家长端/学生确认页 → 2-E 灰度 14 步通过。全量 1804 用例通过；待小范围真实家长用户验证后全量发布
 
 ### Phase 3：白板与语音（范围已精确化）
-- 动作集明确为：`wb_draw_text` + `wb_draw_shape` + `wb_draw_latex` + `speech`，直接参考 OpenMAIC playback engine 的状态机结构重写
+- 动作集明确为：`wb_draw_text` + `wb_draw_shape` + `wb_draw_latex` + `speech`（v0.6 增补 `wb_draw_line`，见第 15 章），直接参考 OpenMAIC playback engine 的状态机结构重写
 
 ### Phase 4：证据链可视化增强（可并行，详细任务见第 16 章）
 - 补齐 ECOS 现有 Evidence（≈L1）与 CognitiveTwinAgent（≈L3）之间缺失的"L2 摘要层"，而非新建整套三层架构（第 16 章有详细修正说明）
@@ -637,59 +639,98 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ## 15. Phase 3 详细开发任务清单（白板与语音）
 
-范围重申：动作集明确为 `wb_draw_text` + `wb_draw_shape` + `wb_draw_latex` + `speech`（第 3/11 章已确认），其余 OpenMAIC 支持的动作类型（spotlight/laser/discussion 辩论/widget_* 系列）明确排除在 v1 外。GeoGebra 类的学生自主探索型可视化工具是另一条能力线（第 11 章新增的 Phase 6），不在本 Phase 范围内，避免混为一谈。
+范围重申（v0.6 修订）：动作集 = `wb_draw_text` + `wb_draw_shape` + **`wb_draw_line`（本节细化时增补，两点式线段——数理化画坐标轴/数轴/辅助线的刚需，三种图形覆盖不了）** + `wb_draw_latex` + `speech`（第 3 章动作引擎行的"四动作"结论由此修订），其余 OpenMAIC 支持的动作类型（spotlight/laser/discussion 辩论/widget_* 系列）明确排除在 v1 外。OpenMAIC 播放引擎的第四态 `live`（discussion/AI 同学追问模式）同样不在本 Phase 范围。GeoGebra 类的学生自主探索型可视化工具是另一条能力线（第 11 章新增的 Phase 6），不在本 Phase 范围内，避免混为一谈。
 
-### 15.1 任务顺序与依赖关系
+### 15.1 任务顺序与依赖关系（细化后）
 
 ```
-3-A 动作模型与协议设计（先做，扩展 Phase 1 的 Scene 对象）
+3-A 动作模型与协议设计（先做：Scene.actions 从预留字段落成正式 schema + 版本机制）
         ↓
-3-B 白板渲染组件 ──┐
-3-C 播放引擎/状态机 ─┤（可并行）
-3-D 语音合成集成  ──┘
+3-B 白板渲染组件 ────┐
+3-C 播放引擎/状态机 ──┼（可并行；3-B/3-C 开发期可用 3-E 常量的占位值，3-E 最后收口定值）
+3-D 语音合成集成 ────┘
         ↓
-3-E 时间常数单一数据源（收口，避免三者各自定义时间参数）
+3-E 时间常数单一数据源（收口：Python 生成侧与 JS 播放端必须同一套数字）
         ↓
-3-F 生成侧改造（呈现引擎要能产出动作序列，不只是文字+图片）
+3-F 生成侧改造（SceneGenerator 产出动作序列 + TTS 异步补齐编排）
         ↓
 3-G 端到端验证
 ```
 
+3-F 依赖 3-A（动作 schema）与 3-D（TTS 接口）；3-B/3-C 依赖 3-A 的 schema 与 3-E 的常量。
+
+**细化时的新发现（2026-09-12，双份代码勘察：OpenMAIC 参考实现 + CogEdu 仓库现状）**
+
+*OpenMAIC 侧（动笔前逐文件核实，修正 v0.5 两处凭印象的表述）：*
+
+1. **白板渲染不是"SVG 还是 Canvas"二选一**（15.3 原文作废）：`whiteboard-canvas.tsx`（456 行）实际是 **DOM 绝对定位 + 图形内嵌 SVG path + CSS/framer-motion 动画**——文字/公式是 HTML（KaTeX `renderToString` 产出直接嵌入），只有 shape 元素内部是 SVG path。它的目标场景是"教师实时编辑"，CogEdu v1 学生是观众，需求面更窄。
+2. **播放调度不消费音频时长**（15.5 原文"返回时长驱动播放引擎"修正）：`lib/playback/engine.ts`（902 行）是**事件驱动 + setTimeout，无 rAF、无绝对时间轴**——speech 等音频 `ended` 回调，无预生成音频才退到估算计时器；音频时长是**入库时**字节嗅探测一次（WAV RIFF / MP3 Xing），存 IndexedDB 供**视频导出**用，播放链路不读它。全引擎最核心的并发正确性机制是 `playbackGeneration` 代数令牌（pause/stop/跳转使旧异步回调失效）。
+3. 可直接抄的事实清单：坐标系 = 固定虚拟画布宽 1000（16:9 高 562.5）、原点左上、非归一化非百分比；`wb_draw_shape` 仅 rectangle/circle/triangle 三种；白板历史 = 快照栈（20 上限、无 redo、只在破坏性操作前压栈）；TTS 统一接口 `{audio: bytes, format}` **不含时长**；超长 speech 按 `。！？` → `，` → 硬切三级降级拆成多个独立动作；时间常数实测值见 15.6。
+
+*CogEdu 现状侧（扩展点与缺口）：*
+
+1. `Scene.actions` 字段已预留（`cogedu/presentation/types.py` 尾部，`list[dict[str, Any]] | None`，Phase 1 恒 None）——3-A 要把它落成真正的 Pydantic discriminator union。
+2. 前端零播放基础设施：scene 页是纯翻页 + 全量重建 DOM，无任何定时器/动画队列；KaTeX 走 CDN，渲染函数 `appendFormula`（`scene.js:130`）可直接提为共享模块。
+3. 无 schema 版本机制：payload 是裸 `model_dump_json()` 落库，无版本列/修订列——actions 是新增嵌套结构，需要补版本字段。
+4. `POST /api/presentation/scenes` 鉴权缺口：请求体只有 `outline_id` 没有 `student_id`，router 级 `require_student_access` 实际只验"已认证"。
+5. `GENERATION_MAX_TOKENS = 4096` 是 outline/scene 共享硬编码常量；动作序列会让 scene 输出显著变长。
+6. 场景生成是逐 step 串行 LLM 调用（1-G 灰度实测达数分钟），同步端点、无异步任务机制——TTS 预生成不能再叠进同一条同步链路。
+
+**已确认决策（2026-09-12，维护者拍板）**：
+
+1. 白板渲染走 **DOM 元素 + 图形内嵌 SVG path** 路线（OpenMAIC 实证路线；v1 无学生自由绘制，否决 Canvas）；
+2. v1 动作集在四动作之外**增补 `wb_draw_line`**（两点式线段，见范围重申）；
+3. **砍掉白板历史（撤销/重做）**，代之以"重播本页"——白板内容是动作序列的确定性重放，学生没有编辑入口，快照栈没有消费方；
+4. **TTS 异步补齐 + 播放端降级**：`POST /scenes` 不等 TTS，后台任务补生成回填 `audio_id`，播放时无音频走估算计时器静音推进。
+
 ### 15.2 3-A：动作模型与协议设计
 
-- [ ] 在 Phase 1 定义的 `Scene` 对象基础上，新增 `actions` 字段：一个有序的动作序列，每个动作至少包含 `type`（`wb_draw_text`/`wb_draw_shape`/`wb_draw_latex`/`speech` 四选一）、`payload`（具体内容，比如文字内容/图形参数/LaTeX 字符串/语音文本）、时序信息（相对开始时间、预计持续时间）
-- [ ] 白板坐标系统设计：参考 OpenMAIC `whiteboard-canvas.tsx` 的思路，确定一套简单够用的坐标/图层模型，不需要 OpenMAIC 全部的复杂度（它要支持十几种动作类型的坐标语义，CogEdu 只需要覆盖文字/图形/公式三种）
+- [ ] **3-A-1** 动作 schema：`Scene.actions` 从 `list[dict]` 落成 Pydantic discriminator union（参照 `SceneBlock` 的 `Annotated[..., Field(discriminator=...)]` 模式）：`WbDrawTextAction`（`content`/`x`/`y`/`width=400`/`font_size=18`/`color`）、`WbDrawShapeAction`（`shape ∈ rectangle|circle|triangle`/`x`/`y`/`width`/`height`/`fill_color`）、`WbDrawLineAction`（`x1`/`y1`/`x2`/`y2`/`color`/线宽）、`WbDrawLatexAction`（`latex`/`x`/`y`/`width`/`color`）、`SpeechAction`（`text`/`voice`/`speed=1.0`/`audio_id` 回填位）。字段与默认值对齐 OpenMAIC `packages/@openmaic/dsl/src/action.ts` 的 payload 定义。**action_id 由生成侧统一重分配**（LLM 给的 id 不可信，对齐 Phase 1 `step_id` 惯例）；`ALLOWED_ACTION_TYPES` 白名单常量 + 穷尽性校验（Pydantic union 天然获得运行时版本，对齐 OpenMAIC `isActionType` + 编译期穷尽检查的意图）
+- [ ] **3-A-2** 坐标系统：固定虚拟画布宽 1000、高 562.5（16:9），原点左上，数值用像素（OpenMAIC 同款，非归一化/百分比）。LLM 输出越界值 **clamp 进画布 + warning 留痕**，不拒绝整场
+- [ ] **3-A-3** 时序模型修正（对 15.2 原文）：每个动作带 `estimated_duration_ms`（生成侧按 3-E 常量估算），**不做绝对时间轴**——调度是顺序事件驱动（3-C-2），预计时长只服务时间轴预览与未来导出
+- [ ] **3-A-4** schema 版本机制：`Outline`/`Scene` 顶层加 `schema_version: int`（Phase 1 存量 = 1，含 actions = 2），随 payload 自动落库；前端按版本/`actions` 是否为空分支——**`actions=None` 的 Phase 1 旧场景必须继续以纯翻页模式可渲染**（回归锁定）
 
-### 15.3 3-B：白板渲染组件
+### 15.3 3-B：白板渲染组件（技术路线已拍板：DOM + SVG path）
 
-- [ ] **渲染技术选型（需要决策）**：SVG 还是 Canvas？SVG 优势是矢量缩放、和 KaTeX 渲染的公式更容易叠加对齐、无障碍访问更好；Canvas 优势是自由绘制/手绘笔触效果更好、性能在复杂图形下更稳。K12 数理化场景以"文字讲解+规整图形+公式"为主，不追求手绘笔触真实感，**建议优先评估 SVG 方案**，但这个决策建议在实际写一个原型对比后再最终确定，不要纯靠讨论拍板
-- [ ] 历史记录（撤销/重做）：参考 OpenMAIC `whiteboard-history.tsx` 的设计思路重新实现
-- [ ] `wb_draw_latex` 动作的公式渲染**直接复用 Phase 1 已经引入的 KaTeX**，不要在白板组件里单独再实现一套公式渲染逻辑——这是"同一能力只写一次"的具体体现，白板和场景文字共享同一个公式渲染函数
+- [ ] **3-B-1** 画布组件 `web/student/whiteboard.js`（新文件，与 scene.js 解耦）：虚拟坐标 1000×562.5 → 屏幕的等比缩放（ResizeObserver 测容器 + `containerScale = min(cw/1000, ch/562.5)`，参考 OpenMAIC `whiteboard-canvas.tsx`；它的 456 行里视口交互占大头，CogEdu v1 是观众场景，**滚轮缩放/拖拽平移/双击复位不做**，只做自适应等比缩放）。元素按 actions 数组顺序渲染，单层平面无图层模型（OpenMAIC 同款）。LLM 文本一律 `textContent`/受控节点构建（沿用 scene 页安全约定；KaTeX 产出的 HTML 是唯一例外——来源是本地渲染不是 LLM 原文）
+- [ ] **3-B-2** `wb_draw_latex` 公式渲染复用：把 `appendFormula`（`scene.js:130`）提为 `web/student/formula.js` 共享模块，scene 文字块与白板公式动作共用同一函数（"同一能力只写一次"的落点；KaTeX 暂维持 CDN，vendor 本地化可顺带做掉 scene.html 里既有的 TODO）。`throwOnError: false` + 渲染失败降级等宽原文
+- [ ] **3-B-3** 交互 = 播放/暂停/重播本页（已拍板砍掉撤销/重做）。OpenMAIC `whiteboard-history.tsx` 的快照栈设计**记录在案不实现**——未来若做教师端编辑场景再启用
+- [ ] **3-B-4** 元素入场动画：CSS transition（参考 OpenMAIC 的 450ms 入场 + 50ms stagger 级联），参数进 3-E 常量
 
 ### 15.4 3-C：播放引擎/状态机
 
-- [ ] 参考 OpenMAIC `lib/playback/engine.ts` 的状态机设计（`idle`/`playing`/`paused`/`live` 四态），用 TS 重新实现，规模上参考它的体量（约 900 行），但因为动作类型少很多，实际代码量应该明显小于这个数字
-- [ ] 处理动作序列的时序调度：下一个动作什么时候触发（比如"讲完一段话后再开始画下一个图形"），这部分逻辑要和 15.6 的时间常数模块配合
+- [ ] **3-C-1** 状态机**三态 `idle`/`playing`/`paused`**（纯 JS 模块，不依赖框架）——OpenMAIC 第四态 `live`（discussion/AI 同学追问）不在 Phase 3 范围。转移：start（idle→playing）/ pause / resume / stop（任意→idle）
+- [ ] **3-C-2** 调度：**事件驱动 + setTimeout，不用 rAF**（OpenMAIC 同款）：speech 动作等音频 `ended`（无音频 → `estimate_speech_duration_ms` 估算计时器）；`wb_*` 动作执行（含 `WB_DRAW_MS` 级动画等待）后推进下一个。**核心并发机制照抄 `playbackGeneration` 代数令牌**：pause/stop/翻页使令牌失效，所有旧异步回调先查令牌再执行——没有它，"暂停后旧 setTimeout 又画出下一个图形"这类 bug 必现
+- [ ] **3-C-3** 语音同步优先级（对齐 OpenMAIC）：有 `audio_id` 且加载成功 → `ended` 事件驱动；否则估算计时器（字幕同步推进）。**音频时长不参与调度**（15.5 原文已修正）
+- [ ] **3-C-4** 翻页联动：actions 是 scene 级，翻页 = stop + 令牌失效 + 音频停止；重播本页 = stop 后从头重放
 
 ### 15.5 3-D：语音合成集成
 
-- [ ] TTS 供应商选型：不采用 OpenMAIC 的十几家供应商方案，评估 1-2 家中文语音合成服务（可以从现有 LLM 供应商 MiniMax 是否有配套语音能力开始评估，减少新增供应商接入的运维成本），确定后封装成统一接口，方便以后替换
-- [ ] 语音生成需要返回时长信息，用于驱动播放引擎的动作时序（比如某段讲解语音生成后有实际的音频时长，后续动作要等这段播完再触发，而不是靠硬编码的估算时长）
+- [ ] **3-D-1** 供应商：**MiniMax TTS 单供应商**（事实依据：OpenMAIC 注册表内已有 `minimax-tts`，speech-2.8-hd 等模型；CogEdu LLM 已用 MiniMax，**零新增供应商**）。封装 Protocol 接口（对齐 presentation 包 LLM 注入同款模式，不绑具体 SDK）：`generate(text, *, voice, speed) -> TTSResult{audio_bytes, format}`——**不含时长**（OpenMAIC 同款，理由见 3-D-2）；v1 不做多供应商注册表
+- [ ] **3-D-2** 时长获取：入库时**字节嗅探测一次**（WAV RIFF chunk 走查 / MP3 Xing/Info 帧数优先 + CBR 估算兜底；靠 magic bytes 不信任 format 声明；失败返回 `None` 优雅降级——OpenMAIC `audio-duration.ts` 约 330 行的思路，Python 重写），存库供记录/未来导出；播放调度不消费（3-C-2）
+- [ ] **3-D-3** 长文本拆分：MiniMax 单次合成限长查官方文档后定常量；超限按 `。！？!?；;：:\n` → `，,、` → 硬切三级降级，拆成多个连续 speech 动作（`{action_id}_{i}`，各自独立音频、不做字节拼接，OpenMAIC `splitLongSpeechActions` 同款）
+- [ ] **3-D-4** 存储与幂等：`presentation_audio` 表（`audio_id` PK、`scene_id`、`action_id`、`audio` BLOB、`duration_ms` 可空、`format`、`created_at`，双后端模式入 `presentation_store.py` + `pg_schema.py`）；`audio_id = tts_{scene_id}_{action_id}` 幂等键，已存在跳过（留 force 重生成口）
+- [ ] **3-D-5** 降级链（对齐"宁可明确降级不静默"约定）：无音频 → **静音 + 估算计时器**（字幕推进，UI 明示"语音生成中/不可用"）；**v1 不做浏览器 Web Speech API 兜底**——OpenMAIC 为此写了约 350 行（Chrome 15s 截断需分句、`voiceschanged` 竞态、Firefox 暂停恢复），K12 校园设备兼容性参差，收益不抵复杂度
 
 ### 15.6 3-E：时间常数单一数据源（借鉴 OpenMAIC `choreography/timing.ts` 模式）
 
-- [ ] 把动作持续时间、延迟这类数值常量抽到一个独立、不依赖 React/前端框架的纯模块里，播放引擎和（未来如果做）导出功能共用同一套数字
-- [ ] 这一步现在做的直接收益可能不明显（Phase 2 的导出是静态 PPTX/Word，不涉及时长同步），但为未来如果扩展"导出可播放的视频版课堂"预留了正确的架构起点，成本很低、值得现在就做对
+- [ ] **3-E-1** **跨语言单一数据源**（OpenMAIC 没有的问题，CogEdu 特有）：Python 生成侧要算 `estimated_duration_ms`，JS 播放端要用同一套数字，两份手抄常量必然漂移。方案：常量定义在 `cogedu/presentation/timing.py` 纯模块（不 import web/fastapi，对齐 `timing.ts` "不依赖 React/DOM" 的边界纪律），随 `POST /scenes` 响应（或 `/api/presentation/timing` 端点）下发给前端，**JS 侧不硬编码**。这同时为未来"导出可播放的视频版课堂"保留正确起点（OpenMAIC 的设计动机：app 运行时与导出器必须同一组数字，否则导出视频静默漂移）
+- [ ] **3-E-2** 常量初值（参考 OpenMAIC `timing.ts` 实测值，收口时可调）：`WB_DRAW_MS=800`、元素入场 450ms / stagger 50ms、`estimate_speech_duration_ms`（CJK 占比 >0.3 → `max(2000, 字数×150)`；否则按词 240ms/词）等；纯常量与按内容长度计算的函数型常量分列
 
 ### 15.7 3-F：生成侧改造（扩展 Phase 1 的呈现引擎）
 
-- [ ] Phase 1 的场景生成只产出"文字+图片"，这一步要扩展成"文字+图片+动作序列"，Prompt 设计需要让 LLM 输出结构化的动作指令（参考 OpenMAIC `action-parser.ts` 把 LLM 输出解析成具体动作对象的思路）
-- [ ] 复用 Phase 1 已经做的 JSON 容错解析/重试机制（第 13.5 节），动作序列本身也是结构化输出，同样会遇到 LLM 输出格式不完全合规的问题
+- [ ] **3-F-1** prompt 扩展：`build_scene_messages` 增加动作序列输出段——LLM 在 Scene JSON 内输出 `actions` 数组，few-shot 给含 `wb_draw_latex`/`wb_draw_line` 的完整示例（参考 OpenMAIC `system.md` 的 "MUST output JSON array + 完整示例" 模式）；动作类型说明独立成 prompt snippet 便于迭代
+- [ ] **3-F-2** 容错：整体 parse 失败走现有 `call_with_retry` → `_degraded_scene` 路径不变；**动作级容错新增**——白名单外动作类型丢弃 + warning 留痕（不整场失败）、坐标 clamp（3-A-2）、`audio_id` 回填不参与重试比对。`parse_llm_json`（json_repair 管线）对内嵌数组同样生效，直接复用
+- [ ] **3-F-3** TTS 异步补齐编排（已拍板）：`generate_scenes_for_outline` 返回后，对含 speech 的 scene 起**进程内后台任务**（asyncio task，低并发逐条）预生成回填 `audio_id` 并更新落库。**诚实注记**：进程重启丢任务 = 该场景永久走降级路径，v1 接受（播放端降级兜底完整）；不做持久化任务队列
+- [ ] **3-F-4** `GENERATION_MAX_TOKENS` 拆分：scene 生成器独立常量 + env 可配（动作序列让输出显著变长，4096 共享值需重估）
+- [ ] **3-F-5** 顺手补鉴权缺口：`POST /scenes` 改为按 outline 归属校验（取 outline 的 `student_id` 过 `require_student_access` 同款语义），消除"任何已登录用户可为任意 outline 生成场景"的越权面
 
 ### 15.8 3-G：端到端验证
 
-- [ ] 挑选几个包含数学公式讲解的典型场景（比如"讲解一元二次方程求根公式"），走完整链路：LCA intervention → 生成含动作序列的场景 → 白板渲染+语音播放，人工检查观感是否自然（画图和讲解的节奏是否对得上，公式显示是否清晰）
-- [ ] 补充自动化测试：至少验证"动作序列的时序逻辑不出错"（比如不会出现动作乱序、时间重叠导致画面冲突）
+- [ ] 自动化测试（延续 `tests/test_presentation_*` 布局）：动作 schema 穷尽性/白名单过滤/坐标 clamp；**时序正确性**（不乱序、不重叠、pause/stop/翻页后令牌失效无残留回调）；TTS 拆分边界/字节嗅探失败降级/幂等键；`actions=None` Phase 1 旧场景兼容回归；`/scenes` 鉴权矩阵（含 outline 归属越权 403）；timing 常量下发契约
+- [ ] 灰度：`scripts/canary_phase3_whiteboard.py` 照 1-G/2-E 骨架（真实进程 + 真实登录 + 汇总布尔退出码 + stdout 人工复核）。**TTS 真实调用可配置跳过**（环境开关走估算路径，验证时序主干），真实 TTS 另做 2-3 条小样本验证（音质/时长嗅探正确性/中文与数学符号读法）
+- [ ] 人工复核验收点：挑 2-3 个含公式讲解场景（如"一元二次方程求根公式"）走全链路 LCA intervention → 含动作序列的场景 → 白板渲染+语音播放——画图与讲解节奏对齐、公式清晰度、静音降级路径观感
+- [ ] 回写扩展决策：v1 **不加 action 级埋点**，`scene_viewed`/`scene_completed` 粒度够用（行为信号最小化，对齐 1-F 语义决策）
 
 ---
 
