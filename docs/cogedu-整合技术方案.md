@@ -458,10 +458,14 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.3 1-B：大纲生成（参考 OpenMAIC outline-generator.ts，233 行体量）
 
-- [ ] **1-B-1** 大纲 prompt（`cogedu/presentation/prompts.py`）：输入 = 1-A-2 选定的 LCAResult 字段 + `kb_snippets` 可选参数（Phase 5 前恒空）+ `pdf_text`/`pdf_images` 预留可选参数（照抄 OpenMAIC outline-generator 的思路——它本身就是把 pdfText/pdfImages 作为可选参数，Phase 1 暂时不传）
-- [ ] **1-B-2** `cogedu/presentation/outline.py` OutlineGenerator：调注入的 LLM client → 解析（先 `json.loads`，1-D 补容错）→ schema 校验（字段缺失/越界的处理策略）→ Outline 对象
-- [ ] **1-B-3** 单元测试（mock LLM）：正常 / 坏 JSON / 缺字段三路
-- [ ] **1-B-4** HTTP 端点：`web/api/routers/presentation.py` 新 router，`POST /api/presentation/outline` + Pydantic 模型 + HTTP 契约测试
+- [x] **1-B-1** 大纲 prompt（`cogedu/presentation/prompts.py`）：输入 = 1-A-2 选定的 LCAResult 字段 + `kb_snippets` 可选参数（Phase 5 前恒空）+ `pdf_text`/`pdf_images` 预留可选参数（照抄 OpenMAIC outline-generator 的思路——它本身就是把 pdfText/pdfImages 作为可选参数，Phase 1 暂时不传）
+  - ✅ 2026-09-12 完成：CLT 4 级→铺垫指导、CA 阶段→口吻的映射表内嵌；预留参数传入时生效（有单测锁定）
+- [x] **1-B-2** `cogedu/presentation/outline.py` OutlineGenerator：调注入的 LLM client → 解析（先 `json.loads`，1-D 补容错）→ schema 校验（字段缺失/越界的处理策略）→ Outline 对象
+  - ✅ 2026-09-12 完成：解析失败原样上抛不吞（重试/降级是 1-D 职责）；结构不合规→`OutlineGenerationError` 含原始输出；step_id 统一重分配（LLM 给的 id 不可信）；`SupportsChatJson` Protocol 注入不绑定具体 client
+- [x] **1-B-3** 单元测试（mock LLM）：正常 / 坏 JSON / 缺字段三路
+  - ✅ 2026-09-12 完成：`tests/test_presentation_outline.py` 13 用例（含 from_lca_result duck-typing/Enum 转换、prompt 映射表字段进/只记录字段不进、预留参数）
+- [x] **1-B-4** HTTP 端点：`web/api/routers/presentation.py` 新 router，`POST /api/presentation/outline` + Pydantic 模型 + HTTP 契约测试
+  - ✅ 2026-09-12 完成：`response_model=Outline` 框架层锁契约；错误分级——Runtime 契约不符 500（`RuntimeContractError`，与上游 LLM 失败区分）/ LLM 失败 502 + warning 留痕。`tests/test_presentation_endpoint.py` 5 用例。router 直调 `cogedu.runtime.api.plan`（映射表 §1 唯一入口）。全量 1669 用例通过
 
 ### 13.4 1-C：场景生成（参考 OpenMAIC scene-generator.ts，1931 行体量——这是本 Phase 的工作量重心）
 

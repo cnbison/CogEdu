@@ -66,6 +66,7 @@ from web.api.routers import (  # noqa: E402
     dual_agent,
     events,
     parent,
+    presentation,
     static_pages,
     student,
     stream,
@@ -77,6 +78,8 @@ app.include_router(teacher.router)
 app.include_router(parent.router)
 app.include_router(events.router)
 app.include_router(dual_agent.router)
+# Phase 1 呈现引擎 (两阶段生成, 1-B/1-C)
+app.include_router(presentation.router)
 # 核心路由 (含 /api/answer 答题主链路)
 app.include_router(student.router)
 # 静态页放最后: /student/{path} 等宽路由兜底, 不能抢先匹配 API 路由

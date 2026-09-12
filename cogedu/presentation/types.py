@@ -25,6 +25,15 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 
 
+class RuntimeContractError(Exception):
+    """Runtime 返回结构与呈现引擎的契约不符（如 LCAResult 缺 intervention）.
+
+    与 LLM 侧失败（ValueError / OutlineGenerationError）分开建模：
+    前者是本服务与内核之间的契约问题（web 层按 500 处理），后者是
+    上游 LLM 问题（web 层按 502 处理）。
+    """
+
+
 def _new_id() -> str:
     """短 ID（对齐 Intervention.intervention_id 的 uuid4 hex[:12] 口径）."""
     return uuid.uuid4().hex[:12]
@@ -83,7 +92,7 @@ class GenerationContext(BaseModel):
         """
         intervention = getattr(lca_result, "intervention", None)
         if intervention is None:
-            raise ValueError(
+            raise RuntimeContractError(
                 "LCAResult.intervention 缺失：呈现引擎无法在没有 intervention 的情况下生成"
             )
 
