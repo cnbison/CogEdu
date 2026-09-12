@@ -40,6 +40,16 @@ _BLOOM_NAMES = {
     "L5": "评价",
     "L6": "创造",
 }
+# dominant_layer 是枚举名 (BloomLayer.name, 如 "APPLY") — 单独映射
+# (灰度发现: 用 _BLOOM_NAMES 查 "APPLY" 落空, 报告出现 "APPLY（）")
+_DOMINANT_NAMES = {
+    "REMEMBER": "记忆",
+    "UNDERSTAND": "理解",
+    "APPLY": "应用",
+    "ANALYZE": "分析",
+    "EVALUATE": "评价",
+    "CREATE": "创造",
+}
 
 
 # ─── ReportDocument 结构 (不绑 docx) ─────────────────────────────────────────
@@ -155,9 +165,10 @@ def build_report_document(
     else:
         warnings.append("engagement 报告不可用 (LCA 状态缺失或派生失败)")
     if bloom and bloom.get("dominant"):
+        dominant = str(bloom["dominant"])
         overview_lines.append(
-            f"当前主导 Bloom 层级: {bloom['dominant']}"
-            f"（{_BLOOM_NAMES.get(str(bloom['dominant']), '')}）"
+            f"当前主导 Bloom 层级: {dominant}"
+            f"（{_DOMINANT_NAMES.get(dominant, '')}）"
         )
 
     sections.append(

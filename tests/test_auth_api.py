@@ -285,6 +285,34 @@ class TestFrontendWiring:
         assert "authFetch" in app_js
 
 
+class TestPhase2DFrontend:
+    """2-D (14.6): 家长端真实页 + 学生端授权确认页 — 路由与接线契约."""
+
+    def test_parent_page_served(self, client):
+        resp = client.get("/parent/index.html")
+        assert resp.status_code == 200
+        # 三大块: 仪表盘(roster/overview) + 授权管理 + 报告下载
+        # (页面 JS 经 authFetch('/api' + path) 拼接, 断言 path 字面量)
+        assert "'/parent/students'" in resp.text
+        assert "'/guardian/links'" in resp.text
+        assert "/report?period=' + period" in resp.text
+
+    def test_student_guardian_links_page_served(self, client):
+        resp = client.get("/student/guardian-links.html")
+        assert resp.status_code == 200
+        assert "'/student/guardian-links'" in resp.text
+        assert '"/confirm"' in resp.text and '"/reject"' in resp.text
+
+    def test_student_index_has_links_page_entry(self):
+        from pathlib import Path
+
+        html = (
+            Path(__file__).resolve().parent.parent
+            / "web" / "student" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "/student/guardian-links.html" in html
+
+
 # ─── 角色-路由矩阵 (2-0-3) ───────────────────────────────────────────────────
 
 class TestRoleMatrix:

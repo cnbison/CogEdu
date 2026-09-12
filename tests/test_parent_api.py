@@ -18,8 +18,10 @@ import numpy as np
 import pytest
 
 from cogedu.lca.l4_optimization.pomdp_diagnostic import (
-    POMDPDiagnostic,
     SCHEMA_VERSION as POMDP_DIAG_SCHEMA,
+)
+from cogedu.lca.l4_optimization.pomdp_diagnostic import (
+    POMDPDiagnostic,
     RewardPosteriorSnapshot,
     TransitionPosteriorSnapshot,
 )
@@ -162,8 +164,6 @@ class TestParentRoster:
 
     def test_roster_empty_db_returns_empty_list(self, client, monkeypatch):
         """空 DB → 空列表 (不报错不建行)."""
-        import web.api.parent as parent_api
-        from cogedu.persistence.db import Database
 
         class _FakeDB:
             def load_student_ids(self, limit=100):
@@ -235,11 +235,11 @@ class TestParentOverview:
 class TestEngagementOnDemand:
     def test_engagement_on_demand_full_path(self, client, registered_plugin, monkeypatch):
         """缓存 miss → diagnose_pomdp + diagnose_pomdp_evolution → ingest 双喂入."""
+        import web.api.lca as lca_api
         from cogedu.lca.l4_optimization.linucb import BanditConfig
         from cogedu.lca.l4_optimization.policy_learner import LCAPolicyLearner
         from cogedu.lca.orchestrator import LCAEngine, LCAEngineConfig
         from cogedu.lca.policy_learner import PolicyLearnerConfig
-        import web.api.lca as lca_api
 
         cfg = LCAEngineConfig(
             policy_learner_config=PolicyLearnerConfig(
@@ -286,13 +286,16 @@ class TestEngagementOnDemand:
 
 class TestParentFrontendRoutes:
     def test_parent_route_serves_placeholder_pre_build(self, client):
-        """/parent/ 可访问 (dist build 前 fallback web/parent/index.html 占位页).
+        """/parent/ 可访问 (dist build 前 fallback web/parent/index.html).
 
         12.4-5: 静态托管已迁 FastAPI (web/api/routers/static_pages.py)。
+        2-D (14.6): 占位页重写为真实家长端 (roster/授权管理/报告下载),
+        断言随页面重写更新。
         """
         resp = client.get("/parent/")
         assert resp.status_code == 200
-        assert "ECOS 家长端".encode("utf-8") in resp.content
+        assert "CogEdu 家长端".encode() in resp.content
+        assert "授权管理".encode() in resp.content
 
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────
