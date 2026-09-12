@@ -26,8 +26,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
+
+from web.api.auth import require_authenticated
 
 _log = logging.getLogger(__name__)
 
@@ -63,15 +65,19 @@ app = FastAPI(
 
 # ─── 路由注册 ────────────────────────────────────────────────────────────────
 from web.api.routers import (  # noqa: E402
+    auth,
     dual_agent,
     events,
     parent,
     presentation,
     static_pages,
-    student,
     stream,
+    student,
     teacher,
 )
+
+# 2-0 (14.2): 认证端点最先注册
+app.include_router(auth.router)
 
 app.include_router(stream.router)
 app.include_router(teacher.router)
@@ -104,8 +110,12 @@ def api_get_version():
 
 
 @app.get("/api/students/recent")
-def api_get_recent_students():
-    """最近活跃学生列表 (登录页快捷选择, 按 last_active_at 倒序前 N)."""
+def api_get_recent_students(user: dict = Depends(require_authenticated)):  # noqa: B008 (FastAPI 惯用)
+    """最近活跃学生列表 (登录页快捷选择, 按 last_active_at 倒序前 N).
+
+    2-0-3: 已纳入鉴权 (任意已登录角色) — 此前无鉴权可枚举全部学生 id,
+    是账号体系落地前的越权面。
+    """
     try:
         from cogedu.persistence.db import Database
 

@@ -10,12 +10,19 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+
+from web.api.auth import require_roles
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/dual_agent", tags=["dual_agent"])
+router = APIRouter(
+    prefix="/api/dual_agent",
+    tags=["dual_agent"],
+    # 2-0-3 (14.2): 调试接口仅 staff 可访问
+    dependencies=[Depends(require_roles("teacher", "admin"))],
+)
 
 
 @router.get("/debug/{student_id}")

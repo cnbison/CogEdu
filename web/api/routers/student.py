@@ -30,9 +30,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from web.api.auth import require_student_access
 
 from web.api import llm as llm_service
 from web.api.belief import (
@@ -55,7 +57,12 @@ from web.api.qmatrix import (
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(tags=["student"])
+router = APIRouter(
+    tags=["student"],
+    # 2-0-3 (14.2): 学生数据路由 — 学生本人 (路径参数或请求体的
+    # student_id 与 learning_student_id 匹配) / staff 任意
+    dependencies=[Depends(require_student_access)],
+)
 
 
 # ─── Pydantic 请求/响应模型 ──────────────────────────────────────────────────

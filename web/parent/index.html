@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ECOS 家长端</title>
+    <script src="/auth.js?v=2.0.0"></script>
+    <script>
+      // 2-0-4: 页面守卫 (占位页同样纳入登录态; 2-D 会重写本页)
+      window.addEventListener('DOMContentLoaded', function () {
+        window.CogEduAuth.requireLogin();
+      });
+    </script>
   </head>
   <body style="font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; color: #2b3a4a;">
     <h1>ECOS 家长端</h1>

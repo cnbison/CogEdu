@@ -29,12 +29,18 @@ import queue
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+
+from web.api.auth import require_authenticated
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(tags=["stream"])
+router = APIRouter(
+    tags=["stream"],
+    # 2-0-3 (14.2): 事件流需已登录 (任意角色)
+    dependencies=[Depends(require_authenticated)],
+)
 
 # 已知 topic (跟 PluginRuntime.start 注册的 subscriber 对齐 + 通用 observation)
 KNOWN_TOPICS = [

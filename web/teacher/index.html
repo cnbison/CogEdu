@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <script src="/auth.js?v=2.0.0"></script>
+    <script>
+        // 2-0-4: 页面守卫 (骨架占位页同样纳入登录态)
+        window.addEventListener('DOMContentLoaded', function () {
+            window.CogEduAuth.requireLogin();
+        });
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ECOS 教师端</title>

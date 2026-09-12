@@ -69,6 +69,21 @@ def student_app():
     return student_static("index.html")
 
 
+# ─── 登录态 (2-0-4, Phase 2) ─────────────────────────────────────────────────
+
+
+@router.get("/login")
+def login_page():
+    """登录页 (各端共用, 按角色跳对应首页)."""
+    return _serve(WEB_DIR / "login.html", no_cache=True)
+
+
+@router.get("/auth.js")
+def auth_js():
+    """前端登录态共享脚本 (token 存取 / authFetch / 页面守卫)."""
+    return _serve(WEB_DIR / "auth.js")
+
+
 @router.get("/student/assets/{filename:path}")
 def student_assets(filename: str):
     """React build 静态资源 (js/css), fallback legacy web/student/."""

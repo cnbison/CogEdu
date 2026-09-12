@@ -24,7 +24,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from web.api.auth import require_roles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -32,7 +34,12 @@ from web.api import teacher as teacher_helpers
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/teacher", tags=["teacher"])
+router = APIRouter(
+    prefix="/api/teacher",
+    tags=["teacher"],
+    # 2-0-3 (14.2): 教师端仅 staff 可访问
+    dependencies=[Depends(require_roles("teacher", "admin"))],
+)
 
 
 # ─── Pydantic 响应模型 (12.4: 替代 Flask 手写 JSON 的结构声明) ───────────────

@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- 2-0-4 (Phase 2, 14.2): 登录页 — 各端共用, 按角色跳转对应首页 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 — CogEdu</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #f4f6f9; color: #2b3a4a;
+             display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+      .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
+              padding: 40px 44px; width: 320px; }
+      h1 { font-size: 20px; margin: 0 0 24px; text-align: center; }
+      label { display: block; font-size: 13px; color: #5a6b7d; margin: 14px 0 6px; }
+      input { width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 15px;
+              border: 1px solid #ccd5dd; border-radius: 8px; }
+      input:focus { outline: none; border-color: #4a7dbd; }
+      button { width: 100%; margin-top: 24px; padding: 11px; font-size: 15px;
+               background: #2f6fb2; color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+      button:disabled { background: #9db8d4; cursor: default; }
+      #err { color: #c0392b; font-size: 13px; min-height: 18px; margin-top: 12px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>CogEdu 学习系统</h1>
+      <form id="login-form">
+        <label for="username">用户名</label>
+        <input id="username" name="username" autocomplete="username" required />
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required />
+        <button id="btn" type="submit">登 录</button>
+        <div id="err"></div>
+      </form>
+    </div>
+
+    <script src="/auth.js"></script>
+    <script>
+      (function () {
+        'use strict';
+        var auth = window.CogEduAuth;
+
+        // 已登录直接进对应端 (会话有效性由各页守卫 + 401 兜底)
+        var user = auth.getUser();
+        if (user && auth.getToken()) { location.href = homeOf(user.role); }
+
+        // ?next= 回跳 (白名单: 只允许站内路径, 防 open redirect)
+        var params = new URLSearchParams(location.search);
+        var next = params.get('next') || '';
+        if (next && !next.startsWith('/')) { next = ''; }
+
+        function homeOf(role) {
+          // student → 学生端; guardian → 家长端; teacher/admin → 教师端
+          if (role === 'student') return '/student/';
+          if (role === 'guardian') return '/parent/';
+          return '/teacher/';
+        }
+
+        document.getElementById('login-form').addEventListener('submit', function (e) {
+          e.preventDefault();
+          var btn = document.getElementById('btn');
+          var err = document.getElementById('err');
+          btn.disabled = true;
+          err.textContent = '';
+          fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.getElementById('username').value.trim(),
+              password: document.getElementById('password').value,
+            }),
+          }).then(function (r) {
+            if (!r.ok) {
+              return r.json().catch(function () { return {}; }).then(function (b) {
+                throw new Error(b.error || ('登录失败 (HTTP ' + r.status + ')'));
+              });
+            }
+            return r.json();
+          }).then(function (body) {
+            auth.saveSession(body.token, body.user);
+            location.href = next || homeOf(body.user.role);
+          }).catch(function (e2) {
+            err.textContent = e2.message || '登录失败';
+            btn.disabled = false;
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

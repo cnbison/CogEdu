@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,7 @@ from cogedu.presentation.types import GenerationContext, Outline, RuntimeContrac
 # (呈现引擎对内核的唯一入口 = cogedu.runtime.api, 见映射表 §1)
 from cogedu.runtime.api import plan
 from web.api import llm as llm_service
+from web.api.auth import require_student_access
 from web.api.presentation_service import (
     _RETRY_POLICY,
     generate_scenes_for_outline,
@@ -36,7 +37,13 @@ from web.api.presentation_service import (
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/presentation", tags=["presentation"])
+router = APIRouter(
+    prefix="/api/presentation",
+    tags=["presentation"],
+    # 2-0-3 (14.2): 场景生成/行为回写需学生本人 (student_id 在请求体,
+    # dependency 从 body 取; staff 可代操作)
+    dependencies=[Depends(require_student_access)],
+)
 
 
 class OutlineRequest(BaseModel):

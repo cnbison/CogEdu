@@ -18,16 +18,26 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from web.api.auth import require_roles
 
 from web.api import parent as parent_helpers
 from web.api import teacher as teacher_helpers
 
 _log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/parent", tags=["parent"])
+router = APIRouter(
+    prefix="/api/parent",
+    tags=["parent"],
+    # 2-0-3 (14.2): 家长端需 guardian 角色 (staff 兜底可看)。
+    # 注: per-student 的 guardian_learner_link 关系校验在 2-A 落地,
+    # 本 Phase 只做到"已认证 + 角色正确"粒度 — 遗留缺口已记录在
+    # 方案文档 14.3, 不算权限模型完成态。
+    dependencies=[Depends(require_roles("guardian", "teacher", "admin"))],
+)
 
 
 # ─── Pydantic 响应模型 ────────────────────────────────────────────────────────

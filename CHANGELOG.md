@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 2 / 2-0 最小账号体系（完成）
+
+**背景**：Phase 2 任务清单细化时发现仓库完全没有账号/身份体系（无 users 表、无鉴权，家长端接口无鉴权枚举全部学生），而 2-A 权限模型与灰度验收都以此为前提，故 2-0 作为地基先行。
+
+**持久化**（2-0-1）：`cogedu/persistence/auth_store.py` — users 表（bcrypt 凭证哈希、guardian/student/teacher/admin 四角色、学生账号经 `learning_student_id` 关联 students 学习记录 1:1，无 FK——学习记录懒创建）+ sessions 表（**token 只存 SHA-256 哈希**；服务端会话刻意不用 JWT——"撤销立即生效"是 2-A 验收点）。双后端沿用 LCAStore/PresentationStore 模式，独立 DDL 不动 kernel 镜像的 SCHEMA_SQL。
+
+**认证服务与端点**（2-0-2）：`web/api/auth.py`（bcrypt 校验、会话签发/现查/撤销、禁用账号即撤全部活跃会话；TTL 默认 7 天 `COGEDU_SESSION_TTL_HOURS` 可配；登录统一 401 防用户名枚举）+ `routers/auth.py`（login/logout/me，Bearer header 方案）。
+
+**路由角色矩阵**（2-0-3）：teacher→staff、parent→guardian+staff、student 数据/事件回写/呈现引擎→学生本人（路径参数或 body 的 student_id 与 `learning_student_id` 一致性校验）或 staff、stream→已登录、`/api/students/recent` 收紧。存量 ~1700 契约测试零破坏：conftest autouse `auth_bypass` patch `_resolve_request_user`（测试层设施，非生产后门）；鉴权语义由 `real_auth` marker 下的测试覆盖。canary 脚本接真实开户+登录；`scripts/manage_users.py` 开户 CLI（v1 无自助注册）。**遗留（记录在案）**：parent per-student 的 `guardian_learner_link` 校验随 2-A 落地。
+
+**前端登录态**（2-0-4）：`web/auth.js`（token 存取/authFetch/页面守卫/logout）+ `web/login.html`（按角色跳转，防 open redirect）+ 学生端 authFetch 统一带 Authorization、scene 回写带身份、teacher/parent 页接守卫。
+
+**验证**：新增 `tests/test_auth_api.py` 37 用例；真实进程冒烟（CLI 开户 → 登录 → 带 token 200 → logout → 旧 token 立即 401）。全量 **1765 用例通过**。
+
 ### 2026-09-12 — Phase 1 / 呈现引擎最小可用版本（完成，1-A~1-G 收官）
 
 **两阶段生成**（`cogedu/presentation/`，Phase 1 新写包）：Runtime `plan()` → `GenerationContext`（duck-typing 提取，不建立 LCAResult 类型引用）→ `OutlineGenerator`（大纲）→ `SceneGenerator`（场景，每步 text+image 两 block）。契约 schema（Outline/Scene/GenerationContext）用 Pydantic，同时服务 LLM 输出校验 / HTTP 响应模型 / 落库 payload；契约映射表见 `docs/presentation-runtime-map.md`。包边界：只读调用 `cogedu.runtime.api`，LLM client 注入不绑 web 层；纳入零 mutation 扫描 + mypy strict。

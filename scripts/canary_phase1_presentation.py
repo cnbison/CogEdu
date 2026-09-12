@@ -1,7 +1,8 @@
 """Phase 1 (1-G-1): 呈现引擎真实进程灰度脚本 — 沿用 12.6 灰度模式.
 
 链路: 真实 uvicorn 进程 + 真实 LLM (MiniMax 主), 3 个案例:
-  答错 ×2 → POST /api/presentation/outline (带 evidence_id)
+  开户+登录 (2-0 账号体系落地后走真实登录链路, 无鉴权后门)
+       → 答错 ×2 → POST /api/presentation/outline (带 evidence_id)
          → POST /api/presentation/scenes
          → POST /api/presentation/event (scene_viewed × n + scene_completed)
          → 再答对 → GET /api/state (theta 演化核对)
@@ -35,16 +36,58 @@ CASES = [
     {"sid": "canary_p1_c", "skill": "chemistry.reaction", "wrong": "B", "right": "A"},
 ]
 
+# 2-0: 灰度账号 (每案例一个学生账号, 密码仅灰度 tmp DB 内有效)
+CANARY_PASSWORD = "canary-password-2026"
+_AUTH_TOKEN: str | None = None
+
 
 def req(method: str, path: str, body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
+    headers = {"Content-Type": "application/json"}
+    if _AUTH_TOKEN:
+        headers["Authorization"] = f"Bearer {_AUTH_TOKEN}"
     r = urllib.request.Request(
-        BASE + path, data=data, method=method,
-        headers={"Content-Type": "application/json"},
+        BASE + path, data=data, method=method, headers=headers,
     )
     # 场景请求 = 大纲步数次 LLM 串行调用, 每次含 thinking 模型推理, 全程可达数分钟
     with urllib.request.urlopen(r, timeout=900) as resp:
         return json.loads(resp.read())
+
+
+def _provision_accounts(sids: list[str]) -> None:
+    """灰度开户 (直连 tmp DB 建学生账号).
+
+    开户直连 DB 是因为服务进程独立、v1 无注册端点 (K12 由管理员/教师
+    开户, 见 web/api/auth.py 头注); 登录必须走 HTTP — 灰度环境正是要
+    验证鉴权链路本身 (2-0-3: 不做环境变量关鉴权的后门)。
+    """
+    # ECOS_DB_PATH 已在 main() 设为灰度 tmp DB, import 晚于 env 设置
+    from web.api import auth as auth_service
+
+    for sid in sids:
+        try:
+            auth_service.create_user(
+                username=f"canary_{sid}",
+                password=CANARY_PASSWORD,
+                role="student",
+                display_name=f"灰度学生 {sid}",
+                learning_student_id=sid,
+            )
+        except Exception as e:
+            if "已存在" not in str(e):
+                raise  # 断点续传时账号已建, 其余失败上抛
+
+
+def _login_as(sid: str) -> None:
+    """按案例登录对应学生账号, 后续请求全部带 Bearer token."""
+    global _AUTH_TOKEN
+    resp = req("POST", "/api/auth/login", {
+        "username": f"canary_{sid}",
+        "password": CANARY_PASSWORD,
+    })
+    _AUTH_TOKEN = resp["token"]
+    print(f"[canary] login ok: {resp['user']['username']} "
+          f"(role={resp['user']['role']}, sid={resp['user']['learning_student_id']})")
 
 
 def main() -> int:
@@ -73,10 +116,15 @@ def main() -> int:
             return 1
 
         results = []
+        # 2-0: 开户 (全部案例一次建齐) — 每案例是不同学生, token 是
+        # per-user 的, 循环内逐案例登录自己的账号 (越权 403 会直接失败,
+        # 灰度环境正是要验证鉴权链路本身)
+        _provision_accounts([c["sid"] for c in CASES if not _CASE_FILTER or c["sid"] in _CASE_FILTER])
         for case in CASES:
             if _CASE_FILTER and case["sid"] not in _CASE_FILTER:
                 continue
             sid = case["sid"]
+            _login_as(sid)
             print(f"\n{'=' * 70}\n[case] {sid}  skill={case['skill']}")
 
             # 1. 答错 ×2 (首答 warmup)

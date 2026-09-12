@@ -78,6 +78,13 @@ def isolated_ecos_db(tmp_path, monkeypatch):
     monkeypatch.setattr(db_mod, "_db_instance", None)
     monkeypatch.setattr(store_mod, "_store", None)
     monkeypatch.setattr(lca_store_mod, "_store", None)
+    # Phase 2 (2-0): 账号持久化单例 (同上, 指向已删除 tmp DB 的缓存要清)
+    try:
+        from cogedu.persistence.auth_store import reset_auth_store
+
+        reset_auth_store()
+    except ImportError:
+        pass
 
     # web 层单例缓存 (belief / lca / dual_agent) — 容错: 模块未必被 import
     try:
@@ -130,6 +137,70 @@ def isolated_ecos_db(tmp_path, monkeypatch):
 def project_root() -> Path:
     """项目根目录路径."""
     return PROJECT_ROOT
+
+
+# ─── 鉴权 (Phase 2, 2-0-3) ───────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def auth_bypass(request, monkeypatch):
+    """存量契约测试的鉴权 bypass — 测试层设施, 不是生产后门.
+
+    背景 (2-0-3): 账号体系落地后全部 /api/* 需登录, 存量 ~1700 用例的
+    HTTP 契约测试若逐一补登录, 改动面巨大且与被测契约无关。本 fixture
+    autouse patch web.api.auth._resolve_request_user (dependencies 的
+    唯一取数点, patch 面约定见该模块 docstring), 让存量测试免登录跑,
+    以 admin 身份通过 (角色矩阵对存量测试透明)。
+
+    鉴权语义本身的测试 (登录/401/403/角色矩阵/学生越权) 用
+    @pytest.mark.real_auth 退出 bypass, 配合下方 auth_factory 造真实
+    账号+会话。鉴权回归由 tests/test_auth_api.py 负责 — 存量契约测试
+    不重复覆盖这块。
+    """
+    if request.node.get_closest_marker("real_auth"):
+        yield None
+        return
+    try:
+        import web.api.auth as auth_mod
+    except ImportError:
+        yield None
+        return
+    fake_user = {
+        "user_id": "u_test_bypass",
+        "username": "test_bypass",
+        "role": "admin",
+        "display_name": None,
+        "learning_student_id": None,
+        "password_hash": "",
+        "created_at": "",
+        "disabled_at": None,
+    }
+    monkeypatch.setattr(auth_mod, "_resolve_request_user", lambda req: fake_user)
+    yield fake_user
+
+
+@pytest.fixture()
+def auth_factory():
+    """real_auth 测试用: 经服务层直接造账号 + 会话.
+
+    返回工厂 (username, role, learning_student_id, ...) ->
+    (headers dict 含 Bearer token, user dict)。
+    """
+    from web.api import auth as auth_service
+
+    def _make(username="test_user", password="password123", role="student",
+              learning_student_id=None, **kwargs):
+        user = auth_service.create_user(
+            username=username,
+            password=password,
+            role=role,
+            learning_student_id=learning_student_id,
+            **kwargs,
+        )
+        token, _ = auth_service.issue_session(user["user_id"])
+        return {"Authorization": f"Bearer {token}"}, user
+
+    return _make
 
 
 @pytest.fixture(scope="session")

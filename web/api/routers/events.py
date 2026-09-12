@@ -19,13 +19,21 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from web.api.auth import require_student_access
+
 _log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/event", tags=["events"])
+router = APIRouter(
+    prefix="/api/event",
+    tags=["events"],
+    # 2-0-3 (14.2): 行为回写需学生本人 (student_id 在请求体, dependency
+    # 从 body 取; staff 可代操作)
+    dependencies=[Depends(require_student_access)],
+)
 
 # 复用 Flask 版模块里的框架无关 helpers (hint 规则生成 + emit + 落库),
 # 12.4-6 翻转时该模块去掉 Flask 路由层保留 helpers

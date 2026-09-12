@@ -19,7 +19,8 @@ let _lastGoalId = null;            // 上一题 goal_id (topic:bloom_layer)
 //   各方法: 一个端点一个方法,参数语义化
 const api = {
   async _fetch(url, opts = {}) {
-    const r = await fetch(API + url, opts);
+    // 2-0-4: 统一带 Authorization; 401 → 清 token 跳登录页 (auth.js)
+    const r = await window.CogEduAuth.authFetch(API + url, opts);
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       throw new Error(`HTTP ${r.status} ${url}${text ? ': ' + text.slice(0, 200) : ''}`);
@@ -53,6 +54,9 @@ initLogin();
 // v0.51.4: 同时拉 /api/version 填设置页 "关于" 区的版本号
 //   之前 v0.49.1 hardcoded v0.49.1, 后续 v0.50/v0.51 都没改, Bisen 反馈设置页版本号过时
 document.addEventListener('DOMContentLoaded', () => {
+  // 2-0-4: 页面守卫 — 未登录/会话失效跳 /login (auth.js)
+  window.CogEduAuth.requireLogin();
+
   // 拉版本号填设置页（独立 await, 失败不影响 auto-start）
   api.getVersion().then(d => {
     if (d && d.version) {

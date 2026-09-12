@@ -21,11 +21,16 @@ let totalDwellMs = 0;       // 全部页面累计停留
 let completedReported = false;
 
 // 1-F: 场景行为回写 (best-effort, 失败 console.warn 不静默, 不阻塞翻页)
+// 2-0-4: 回写携带学生身份 (Authorization Bearer) — 服务端校验
+// learning_student_id 与 payload.student_id 一致, 匿名可写已封死
 function trackSceneEvent(eventType, extra) {
   const body = Object.assign({ student_id: sid, outline_id: outline ? outline.outline_id : '' }, extra);
+  const headers = { 'Content-Type': 'application/json' };
+  const token = (window.CogEduAuth && window.CogEduAuth.getToken()) || '';
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   fetch('/api/presentation/event', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(body),
     keepalive: true, // 最后一条 (scene_completed) 在跳转前发出也能送达
   }).catch((e) => console.warn('场景行为事件发送失败:', e));
@@ -34,8 +39,17 @@ function trackSceneEvent(eventType, extra) {
 // ─── 启动 ────────────────────────────────────────────────────────────────
 
 async function boot() {
+  // 2-0-4: 页面守卫 — 未登录/会话失效跳 /login (auth.js)
+  if (window.CogEduAuth) window.CogEduAuth.requireLogin();
   const params = new URLSearchParams(location.search);
-  sid = params.get('sid') || localStorage.getItem('cogedu_last_sid') || '';
+  // 2-0-4: 学生身份优先取登录账号绑定的 learning_student_id —
+  // 服务端按 learning_student_id 与 payload.student_id 一致性校验,
+  // 匿名带任意 sid 的回写已封死
+  const authUser = (window.CogEduAuth && window.CogEduAuth.getUser()) || null;
+  sid = params.get('sid')
+    || (authUser && authUser.learning_student_id)
+    || localStorage.getItem('cogedu_last_sid')
+    || '';
   if (!sid) {
     sid = prompt('请输入学生 ID：');
     if (!sid) { setStatus('缺少学生 ID（URL 形如 /student/scene.html?sid=xxx）', true); return; }

@@ -220,6 +220,7 @@ class Parser(Protocol):
 - **已确认**：不受现有 785 行家长端代码限制，可自由重新设计功能范围和交互形态
 - 导出能力（借鉴 OpenMAIC PPTX/HTML 导出思路，公式导出可参考 mathml2omml）作为家长端的具体功能点一并设计
 - **任务清单已细化（2026-09-12，见第 14 章）**：细化时发现仓库完全没有账号体系 → 新增 **2-0 最小账号体系** 作为地基；v1 = 学习进度总览 + Word 报告导出（公式渲染图片嵌入），预警/证据链简化版视资源可选；PPTX 与 mathml2omml 可编辑公式排 v2
+- **2-0 已完成（2026-09-12）**：users/sessions 双后端表 + bcrypt + 服务端会话（撤销立即生效）；全量路由角色矩阵接线；前端登录页/守卫/回写带身份；canary 走真实登录。遗留：parent per-student 关系校验随 2-A 落地。全量 1765 用例通过
 
 ### Phase 3：白板与语音（范围已精确化）
 - 动作集明确为：`wb_draw_text` + `wb_draw_shape` + `wb_draw_latex` + `speech`，直接参考 OpenMAIC playback engine 的状态机结构重写
@@ -550,13 +551,19 @@ Phase 1 做完、验证通过后，可以按同样方式细化 Phase 2（家长�
 2-E 回归与发布 ─┘（2-D 基本可用后并行推进）
 ```
 
-### 14.2 2-0：最小账号体系（新增任务，2026-09-12 确认）
+### 14.2 2-0：最小账号体系（✅ 2026-09-12 完成）
 
-- [ ] **2-0-1** 账号 schema（`cogedu/persistence/pg_schema.py` 新增迁移）：`users` 表（`user_id` PK、`username` 唯一、`password_hash`、`role`（`guardian`/`student`/`teacher`/`admin`）、`created_at`、`disabled_at`）。**学生账号与学习数据的关联要显式设计**：`students` 表是学习状态表（`student_id` 是学习记录键，不是账号），学生角色账号需一列关联 `learning_student_id`（1:1），家长端所有取数走这条链路。凭证哈希用 bcrypt（`bcrypt` 库，最小依赖），**绝不存明文/可逆形式**
-- [ ] **2-0-2** 认证与会话：`POST /api/auth/login`（登录发会话 token）+ `POST /api/auth/logout` + `GET /api/auth/me`。**会话选服务端存储**（`sessions` 表：token 哈希 + `user_id` + `expires_at` + `revoked_at`），不用 JWT——2-A 的"撤销立即生效"验收要求会话可即时失效，JWT 无状态做不到。FastAPI dependency 注入 `current_user`，路由声明式标角色要求
-- [ ] **2-0-3** 存量接口纳入保护：家长端/教师端 0-C 迁移来的路由补鉴权（未登录 401、角色不符 403）。**存量测试与灰度脚本的出路要先想好**：现有 HTTP 契约测试、12.6 灰度脚本、1-G canary 大量裸调接口，加鉴权后会全挂——提供测试专用登录 helper（测试内直接造用户+会话），canary 脚本走真实登录链路；**不做"环境变量关鉴权"的后门**（灰度环境正是要验证鉴权的地方）
-- [ ] **2-0-4** 前端登录态：学生/家长/教师静态页加登录页 + 401 跳转；`scene.js` 回写事件携带学生身份（当前匿名可写是越权面）
-- [ ] **2-0-5** 测试：登录/登出/过期/撤销会话、角色-路由矩阵（如 guardian 访问教师接口 403）、密码哈希正确性
+- [x] **2-0-1** 账号 schema（`cogedu/persistence/pg_schema.py` 新增迁移）：`users` 表（`user_id` PK、`username` 唯一、`password_hash`、`role`（`guardian`/`student`/`teacher`/`admin`）、`created_at`、`disabled_at`）。**学生账号与学习数据的关联要显式设计**：`students` 表是学习状态表（`student_id` 是学习记录键，不是账号），学生角色账号需一列关联 `learning_student_id`（1:1），家长端所有取数走这条链路。凭证哈希用 bcrypt（`bcrypt` 库，最小依赖），**绝不存明文/可逆形式**
+  - ✅ 2026-09-12 完成：`cogedu/persistence/auth_store.py`（AuthStore，LCAStore/PresentationStore 同款双后端模式，**独立 DDL 不动 kernel 镜像的 SCHEMA_SQL**）；users 表含 `display_name`/`learning_student_id`（1:1，无 FK——学习记录懒创建，账号可先建）；sessions 表 token 只存 SHA-256 哈希；`reset_auth_store` 单例重置进 conftest 隔离
+- [x] **2-0-2** 认证与会话：`POST /api/auth/login`（登录发会话 token）+ `POST /api/auth/logout` + `GET /api/auth/me`。**会话选服务端存储**（`sessions` 表：token 哈希 + `user_id` + `expires_at` + `revoked_at`），不用 JWT——2-A 的"撤销立即生效"验收要求会话可即时失效，JWT 无状态做不到。FastAPI dependency 注入 `current_user`，路由声明式标角色要求
+  - ✅ 2026-09-12 完成：`web/api/auth.py`（服务 + dependencies 一体；TTL 默认 7 天，`COGEDU_SESSION_TTL_HOURS` 可配；登录统一 401 不区分用户不存在/密码错——防用户名枚举；禁用账号即撤销全部活跃会话）+ `routers/auth.py` 三端点。**真实进程冒烟验证**：登录 → 带 token 200 → logout → 同一 token 立即 401
+- [x] **2-0-3** 存量接口纳入保护：家长端/教师端 0-C 迁移来的路由补鉴权（未登录 401、角色不符 403）。**存量测试与灰度脚本的出路要先想好**：现有 HTTP 契约测试、12.6 灰度脚本、1-G canary 大量裸调接口，加鉴权后会全挂——提供测试专用登录 helper（测试内直接造用户+会话），canary 脚本走真实登录链路；**不做"环境变量关鉴权"的后门**（灰度环境正是要验证鉴权的地方）
+  - ✅ 2026-09-12 完成：角色-路由矩阵经 router-level `dependencies` 接线（teacher/staff、parent/guardian+staff、student+event+presentation/学生本人 via `require_student_access` 路径参数或 body 取 student_id、stream/任意已登录、dual_agent/staff、`/api/students/recent` 收紧为已登录）。**存量测试零破坏**：conftest autouse `auth_bypass` patch `web.api.auth._resolve_request_user`（dependencies 唯一取数点，patch 面约定见模块 docstring）——测试层设施非生产后门，鉴权语义本身由 `real_auth` marker 测试负责。canary 脚本已接真实开户（直连灰度 DB）+ 真实登录（HTTP）。**遗留缺口（记录在案）**：parent 接口做到"已认证 guardian 角色"粒度，per-student 的 `guardian_learner_link` 关系校验在 2-A 落地
+  - ✅ 开户 CLI：`scripts/manage_users.py`（create/list/disable/enable，v1 无自助注册——K12 由管理员/教师开户）
+- [x] **2-0-4** 前端登录态：学生/家长/教师静态页加登录页 + 401 跳转；`scene.js` 回写事件携带学生身份（当前匿名可写是越权面）
+  - ✅ 2026-09-12 完成：`web/auth.js`（token 存取/authFetch/requireLogin 守卫/logout，Bearer + localStorage 方案不用 cookie——避免 CSRF 面与 SameSite 复杂度）+ `web/login.html`（按角色跳转，`?next=` 仅站内路径防 open redirect）+ `/login`、`/auth.js` 静态路由；学生端 app.js 统一走 authFetch、scene 页守卫 + 回写带 Authorization、teacher/parent 占位页同样接守卫；scene 页 sid 优先取登录账号绑定的 `learning_student_id`。前端接线有 grep 契约测试锁定
+- [x] **2-0-5** 测试：登录/登出/过期/撤销会话、角色-路由矩阵（如 guardian 访问教师接口 403）、密码哈希正确性
+  - ✅ 2026-09-12 完成：`tests/test_auth_api.py` 37 用例（服务层哈希/账号规则/会话生命周期含撤销立即生效与 token 明文不落库、HTTP 三端点、9 域 401 矩阵、学生越权 body/路径双路 403、前端接线契约）。全量 **1765 用例通过**（2-0 前 1728）
 
 ### 14.3 2-A：权限模型设计（借鉴 DeepTutor `guardians.py`，但落地方式不同）
 
