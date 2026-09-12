@@ -186,6 +186,13 @@ function clearLastSid() {
 
 // v0.49.1: Tab 切换(学习 / 轨迹 / 设置)
 //   默认 Tab 1 active,localStorage 记忆选择(刷新保留)
+// Phase 1 (1-E): 打开讲解场景页 (呈现引擎两阶段生成, 翻页式)
+function openScenePage() {
+  if (!sid) return;
+  localStorage.setItem('cogedu_last_sid', sid);
+  window.location.href = '/student/scene.html?sid=' + encodeURIComponent(sid);
+}
+
 function switchTab(name) {
   const panels = ['study', 'traj', 'settings'];
   for (const p of panels) {

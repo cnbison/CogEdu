@@ -212,3 +212,19 @@ class TestScenesEndpoint:
         assert stored is not None
         assert stored.context is not None  # 第二阶段恢复 pedagogy 字段的物理前提
         assert stored.evidence_id == "ev_1"
+
+
+# ─── 静态页 (1-E) ────────────────────────────────────────────────────────────
+
+
+class TestScenePageStatic:
+    def test_scene_html_served(self, client):
+        """/student/scene.html 经宽路由可访问 (12.2 补 teacher 页遗漏的同类防线)."""
+        resp = client.get("/student/scene.html")
+        assert resp.status_code == 200
+        assert "scene.js" in resp.text
+
+    def test_scene_assets_served(self, client):
+        for path in ("/student/scene.js", "/student/scene.css"):
+            resp = client.get(path)
+            assert resp.status_code == 200, path

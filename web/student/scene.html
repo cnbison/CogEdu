@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>讲解场景 - CogEdu 学生端</title>
+<link rel="stylesheet" href="/student/scene.css?v=1.0.0">
+<!-- KaTeX (1-E-2): 公式渲染. CDN 引入 + 运行时 feature-detect (scene.js),
+     加载失败时公式降级为等宽文本展示, 不阻塞页面.
+     TODO(Phase 2+): 本地 vendor KaTeX dist, 去掉 CDN 依赖 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+        integrity="sha384-7zU0VVGyoGqdF8L1G7BcjN0UsR+KZBTNzk9AbBtFOlWrB4G9u+WoDxb/PPdBkD/t" crossorigin="anonymous"></script>
+<script src="/student/scene.js?v=1.0.0" defer></script>
+</head>
+<body>
+
+<div class="scene-topbar">
+  <div class="wrap">
+    <a class="back" href="/student/">← 返回学习</a>
+    <span class="sid-pill">👤 <span id="scene-sid">—</span></span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- 加载 / 错误态 -->
+  <div id="scene-status" class="scene-status">
+    <div class="spinner"></div>
+    <p id="scene-status-text">正在为你准备讲解…</p>
+    <button id="scene-retry" class="btn" style="display:none;" onclick="location.reload()">重试</button>
+  </div>
+
+  <!-- 场景播放区 (1-E-1: 翻页式, 不做播放状态机) -->
+  <div id="scene-view" style="display:none;">
+    <header class="scene-header">
+      <h2 id="scene-outline-title">—</h2>
+      <span class="progress" id="scene-progress">1 / 1</span>
+    </header>
+
+    <!-- 1-E-4: degraded 场景提示 (1-D-3 降级留痕的学生端呈现) -->
+    <div id="scene-degraded-banner" class="degraded-banner" style="display:none;">
+      ⚠️ 本页为简化讲解（自动生成遇到问题已降级），内容可能不完整。
+    </div>
+
+    <article id="scene-content" class="scene-card">
+      <!-- blocks 由 scene.js 渲染: text (KaTeX) + image (懒加载/占位) -->
+    </article>
+
+    <footer class="scene-pager">
+      <button id="scene-prev" class="btn" onclick="prevScene()" disabled>← 上一页</button>
+      <button id="scene-next" class="btn btn-primary" onclick="nextScene()">下一页 →</button>
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>
