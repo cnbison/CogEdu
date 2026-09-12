@@ -565,18 +565,20 @@ Phase 1 做完、验证通过后，可以按同样方式细化 Phase 2（家长�
 - [x] **2-0-5** 测试：登录/登出/过期/撤销会话、角色-路由矩阵（如 guardian 访问教师接口 403）、密码哈希正确性
   - ✅ 2026-09-12 完成：`tests/test_auth_api.py` 37 用例（服务层哈希/账号规则/会话生命周期含撤销立即生效与 token 明文不落库、HTTP 三端点、9 域 401 矩阵、学生越权 body/路径双路 403、前端接线契约）。全量 **1765 用例通过**（2-0 前 1728）
 
-### 14.3 2-A：权限模型设计（借鉴 DeepTutor `guardians.py`，但落地方式不同）
+### 14.3 2-A：权限模型设计（✅ 2026-09-12 完成，借鉴 DeepTutor `guardians.py`，但落地方式不同）
 
-- [ ] **2-A-1** 设计 `guardian_learner_link` 关系（不是隐含的角色继承，是显式的授权记录）：谁（家长账号）对谁（学生账号）有什么权限、什么时候建立的、能不能撤销。字段：`id`、`guardian_user_id`、`learner_user_id`、`permissions`、`granted_at`、`revoked_at`、`revoked_by`、`revocation_reason`（撤销留痕对齐 DeepTutor）。**存储否决 DeepTutor 的 JSON 文件方案**（那是它 MVP 阶段的取舍），直接建 PG 关系表，享受完整性约束和查询能力：同 (guardian, learner) 对唯一活跃关系（partial unique index `WHERE revoked_at IS NULL`）、不能自己绑定自己、learner 角色账号不能当 guardian（照搬其 `_require_ordinary_user` 每次重查角色的防御思路）。持久化延续 12.5 双后端 adapter 模式（SQLite 跑单测、PG 集成测试无服务器 skip 的既有惯例）
-- [ ] **2-A-2** 权限项（在 DeepTutor 四项基础上按教育场景调整，`reset_credentials` 这类账户凭证权限对 K12 意义不大，不设）：
+- [x] **2-A-1** 设计 `guardian_learner_link` 关系（不是隐含的角色继承，是显式的授权记录）：谁（家长账号）对谁（学生账号）有什么权限、什么时候建立的、能不能撤销。字段：`id`、`guardian_user_id`、`learner_user_id`、`permissions`、`granted_at`、`revoked_at`、`revoked_by`、`revocation_reason`（撤销留痕对齐 DeepTutor）。**存储否决 DeepTutor 的 JSON 文件方案**（那是它 MVP 阶段的取舍），直接建 PG 关系表，享受完整性约束和查询能力：同 (guardian, learner) 对唯一活跃关系（partial unique index `WHERE revoked_at IS NULL`）、不能自己绑定自己、learner 角色账号不能当 guardian（照搬其 `_require_ordinary_user` 每次重查角色的防御思路）。持久化延续 12.5 双后端 adapter 模式（SQLite 跑单测、PG 集成测试无服务器 skip 的既有惯例）
+- [x] **2-A-2** 权限项（在 DeepTutor 四项基础上按教育场景调整，`reset_credentials` 这类账户凭证权限对 K12 意义不大，不设）：
   - `view_progress`（查看学习进度/Belief 概览）
   - `view_evidence`（查看证据链细节，完整版依赖 Phase 4 的可视化增强）
   - `download_report`（下载导出的学习报告）
   - `receive_alerts`（接收异常预警通知，v1 可选项，enum 先留位）
   - `assign_materials`（**不进 v1**，等 Phase 5 知识库，enum 先留位）
-- [ ] **2-A-3** 授权建立流程：家长发起申请 → **学生本人确认**（学生端登录后看到待确认申请）才生效，不能家长单方面绑定学生账号；流程状态 `pending → active / rejected`。无学生账号在用的低龄场景由管理员代确认（admin 最小实现）
-- [ ] **2-A-4** 校验入口单一化：`guardian_can_access(guardian_user_id, learner_user_id, permission)` 一个函数管所有家长端取数授权，**每个数据接口每次请求都现查**——校验时重查双方当前角色（角色变更后旧授权自动失效，防"前学生变家长"类越权路径）。**不做授权缓存**："撤销立即生效"靠无缓存实现，家长端 QPS 低，现查无性能压力
-- [ ] **2-A-5** 测试：一个学生被多个家长关联互不干扰、撤销后家长端下一次请求即失效、未授权学生数据 403、角色变更后旧授权失效、pending 未确认不可见任何数据
+- [x] **2-A-3** 授权建立流程：家长发起申请 → **学生本人确认**（学生端登录后看到待确认申请）才生效，不能家长单方面绑定学生账号；流程状态 `pending → active / rejected`。无学生账号在用的低龄场景由管理员代确认（admin 最小实现）
+- [x] **2-A-4** 校验入口单一化：`guardian_can_access(guardian_user_id, learner_user_id, permission)` 一个函数管所有家长端取数授权，**每个数据接口每次请求都现查**——校验时重查双方当前角色（角色变更后旧授权自动失效，防"前学生变家长"类越权路径）。**不做授权缓存**："撤销立即生效"靠无缓存实现，家长端 QPS 低，现查无性能压力
+- [x] **2-A-5** 测试：一个学生被多个家长关联互不干扰、撤销后家长端下一次请求即失效、未授权学生数据 403、角色变更后旧授权失效、pending 未确认不可见任何数据
+
+  - ✅ 2026-09-12 完成（2-A 全部项）：表落 `cogedu/persistence/auth_store.py`（与 users/sessions 同库；状态机 `pending → active / rejected / revoked` + partial unique index `WHERE status IN ('pending','active')`，比原案 `revoked_at IS NULL` 更贴合申请流——撤销/拒绝后同对可重申）。服务层 `web/api/guardian.py`（五权限项常量 + 流转 + `guardian_can_access`/`guardian_can_access_student` + `list_active_linked_student_ids` 家长 roster 数据源）。端点 `routers/guardian.py`（家长申请/列表/撤回撤销；学生查看/确认/拒绝/撤销；admin 可代确认/拒绝）。**家长端数据接口已接 per-student 校验**：roster 只列 active 关联学生、overview 过 `view_progress` 权限（未授权 403；staff 全量视图不变——存量契约测试零破坏）。**语义注记**：roster 只显示"已授权且有学习记录"的学生（学习记录懒创建，无记录行跳过）；目标学习记录不存在但已授权时 overview 走 404（防幽灵学生语义不变）。测试 `tests/test_guardian_links.py` 21 用例。全量 **1786 用例通过**。授权管理前端页归 2-D（14.6）
 
 ### 14.4 2-B：功能范围（✅ 2026-09-12 已确认，按建议表）
 

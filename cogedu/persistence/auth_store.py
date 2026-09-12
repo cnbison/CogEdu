@@ -63,6 +63,29 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS guardian_learner_link (
+    link_id           TEXT PRIMARY KEY,
+    guardian_user_id  TEXT NOT NULL,
+    learner_user_id   TEXT NOT NULL,
+    permissions       TEXT NOT NULL,   -- JSON 数组 (guardian 权限项)
+    status            TEXT NOT NULL,   -- pending / active / rejected / revoked
+    requested_at      TEXT NOT NULL,
+    confirmed_at      TEXT,
+    confirmed_by      TEXT,            -- 学生本人 或 admin (低龄代确认)
+    revoked_at        TEXT,
+    revoked_by        TEXT,
+    revocation_reason TEXT
+);
+
+-- 2-A-1: 同 (guardian, learner) 对唯一活跃关系 — 撤销/拒绝后可重新申请
+-- (partial unique index, SQLite ≥3.8 / PG 9.0+ 双后端支持)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gll_active_pair
+    ON guardian_learner_link(guardian_user_id, learner_user_id)
+    WHERE status IN ('pending', 'active');
+
+CREATE INDEX IF NOT EXISTS idx_gll_guardian ON guardian_learner_link(guardian_user_id);
+CREATE INDEX IF NOT EXISTS idx_gll_learner ON guardian_learner_link(learner_user_id);
 """
 
 
@@ -239,6 +262,136 @@ class AuthStore:
                 "DELETE FROM sessions WHERE expires_at < ?", (now_iso,)
             )
             return cur.rowcount or 0
+
+    # ─── guardian_learner_link (2-A, 方案文档 14.3) ───────────────────────────
+
+    def create_link(
+        self,
+        link_id: str,
+        guardian_user_id: str,
+        learner_user_id: str,
+        permissions_json: str,
+        requested_at: str,
+    ) -> None:
+        """创建 pending 授权记录. 同对已有 pending/active 时经
+        idx_gll_active_pair 上抛 IntegrityError, 由服务层转业务错误."""
+        with self._tx():
+            self.conn.execute(
+                """
+                INSERT INTO guardian_learner_link (
+                    link_id, guardian_user_id, learner_user_id, permissions,
+                    status, requested_at
+                ) VALUES (?, ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    link_id,
+                    guardian_user_id,
+                    learner_user_id,
+                    permissions_json,
+                    requested_at,
+                ),
+            )
+
+    def get_link(self, link_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM guardian_learner_link WHERE link_id = ?", (link_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def find_active_or_pending_link(
+        self, guardian_user_id: str, learner_user_id: str
+    ) -> dict[str, Any] | None:
+        """同对唯一活跃关系 (partial unique index 的读侧对应)."""
+        row = self.conn.execute(
+            "SELECT * FROM guardian_learner_link "
+            "WHERE guardian_user_id = ? AND learner_user_id = ? "
+            "AND status IN ('pending', 'active')",
+            (guardian_user_id, learner_user_id),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def find_active_link(
+        self, guardian_user_id: str, learner_user_id: str
+    ) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM guardian_learner_link "
+            "WHERE guardian_user_id = ? AND learner_user_id = ? "
+            "AND status = 'active'",
+            (guardian_user_id, learner_user_id),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_links(
+        self,
+        guardian_user_id: str | None = None,
+        learner_user_id: str | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM guardian_learner_link WHERE 1=1"
+        params: list[Any] = []
+        if guardian_user_id is not None:
+            query += " AND guardian_user_id = ?"
+            params.append(guardian_user_id)
+        if learner_user_id is not None:
+            query += " AND learner_user_id = ?"
+            params.append(learner_user_id)
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY requested_at DESC"
+        rows = self.conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def set_link_status(
+        self,
+        link_id: str,
+        status: str,
+        *,
+        confirmed_by: str | None = None,
+        revoked_by: str | None = None,
+        revocation_reason: str | None = None,
+        now_iso: str,
+    ) -> int:
+        """状态流转 (pending→active/rejected, active→revoked).
+
+        流转前置条件由服务层校验, 这里只按 link_id 更新 (带状态守卫:
+        pending 才能确认/拒绝, active 才能撤销 — 防并发重复流转).
+        """
+        sets = ["status = ?"]
+        params: list[Any] = [status]
+        if status == "active":
+            sets += ["confirmed_at = ?", "confirmed_by = ?"]
+            params += [now_iso, confirmed_by]
+            guard = " AND status = 'pending'"
+        elif status in ("rejected", "revoked"):
+            sets += ["revoked_at = ?", "revoked_by = ?", "revocation_reason = ?"]
+            params += [now_iso, revoked_by or "", revocation_reason or ""]
+            guard = (
+                " AND status IN ('pending', 'active')"
+                if status == "rejected"
+                else " AND status = 'active'"
+            )
+        else:
+            raise ValueError(f"非法状态流转目标: {status!r}")
+        params.append(link_id)
+        with self._tx():
+            cur = self.conn.execute(
+                f"UPDATE guardian_learner_link SET {', '.join(sets)} "
+                f"WHERE link_id = ?{guard}",
+                params,
+            )
+            return cur.rowcount or 0
+
+    def get_student_user_by_learning_student_id(
+        self, learning_student_id: str
+    ) -> dict[str, Any] | None:
+        """按学习记录键反查学生角色账号 (家长端取数链路: student_id → user)."""
+        row = self.conn.execute(
+            "SELECT * FROM users WHERE role = 'student' AND learning_student_id = ? "
+            "ORDER BY created_at ASC LIMIT 1",
+            (learning_student_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
 
 # ─── Singleton accessor (同 presentation_store 口径) ─────────────────────────

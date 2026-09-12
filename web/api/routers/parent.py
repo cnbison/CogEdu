@@ -16,16 +16,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from web.api.auth import require_roles
-
+from web.api import guardian as guardian_service
 from web.api import parent as parent_helpers
 from web.api import teacher as teacher_helpers
+from web.api.auth import require_roles
 
 _log = logging.getLogger(__name__)
 
@@ -47,41 +47,49 @@ class ParentRosterItem(BaseModel):
     """家长端 roster 单行 (比教师端少: 无 risk/无 bloom 细节, 家长视角)."""
 
     student_id: str
-    subject: Optional[str] = None
-    grade_level: Optional[str] = None
-    last_active_at: Optional[str] = None
+    subject: str | None = None
+    grade_level: str | None = None
+    last_active_at: str | None = None
     answered_count: int
     correct_rate: float
-    current_state: Optional[str] = None
+    current_state: str | None = None
 
 
 class ParentRosterResponse(BaseModel):
-    students: List[ParentRosterItem]
+    students: list[ParentRosterItem]
 
 
 class ParentOverviewResponse(BaseModel):
     student_id: str
-    subject: Optional[str] = None
-    engagement: Optional[Dict[str, Any]] = None
-    five_d: Dict[str, Any]
-    interventions: List[Dict[str, Any]]
+    subject: str | None = None
+    engagement: dict[str, Any] | None = None
+    five_d: dict[str, Any]
+    interventions: list[dict[str, Any]]
 
 
 # ─── 路由 ────────────────────────────────────────────────────────────────────
 
 
 @router.get("/students", response_model=ParentRosterResponse)
-def api_parent_students():
+def api_parent_students(
+    user: dict = Depends(require_roles("guardian", "teacher", "admin")),  # noqa: B008 (FastAPI 惯用)
+):
     """学生列表 (roster, 只读) — 家长端入口.
 
     严禁 _get_or_create_student (v0.96.9 幽灵学生教训):
     只读 students 表, 空表返回空列表, 不产生任何 DB 行.
+
+    2-A-4 (14.3): guardian 只看到经 guardian_learner_link active 关联的
+    学生 (申请 pending 不可见); staff 保持原有全量视图。
     """
     try:
         db = teacher_helpers._get_db()
-        sids = db.load_student_ids(limit=100)
+        if user["role"] == "guardian":
+            sids = guardian_service.list_active_linked_student_ids(user["user_id"])
+        else:
+            sids = db.load_student_ids(limit=100)
 
-        students: List[Dict[str, Any]] = []
+        students: list[dict[str, Any]] = []
         for sid in sids:
             row = teacher_helpers._load_student_row(sid)
             if row is None:
@@ -115,12 +123,26 @@ def api_parent_students():
 @router.get(
     "/students/{student_id}/overview", response_model=ParentOverviewResponse
 )
-def api_parent_student_overview(student_id: str):
+def api_parent_student_overview(
+    student_id: str,
+    user: dict = Depends(require_roles("guardian", "teacher", "admin")),  # noqa: B008 (FastAPI 惯用)
+):
     """单聚合 overview: engagement + advice + five_d + interventions (四卡数据).
 
     只读: 学生不存在 → 404 (不创建; 防幽灵学生).
+
+    2-A-4 (14.3): guardian 须持有对该学生的 active view_progress 授权,
+    未关联/权限不足 → 403 (每次现查 guardian_learner_link, 撤销立即生效);
+    staff 不受限。
     """
     try:
+        if user["role"] == "guardian" and not guardian_service.guardian_can_access_student(
+            user["user_id"], student_id, "view_progress"
+        ):
+            return JSONResponse(
+                {"error": "无权访问该学生的数据", "student_id": student_id},
+                status_code=403,
+            )
         row = teacher_helpers._load_student_row(student_id)
         if row is None:
             return JSONResponse(

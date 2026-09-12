@@ -68,6 +68,7 @@ from web.api.routers import (  # noqa: E402
     auth,
     dual_agent,
     events,
+    guardian,
     parent,
     presentation,
     static_pages,
@@ -78,6 +79,8 @@ from web.api.routers import (  # noqa: E402
 
 # 2-0 (14.2): 认证端点最先注册
 app.include_router(auth.router)
+# 2-A (14.3): 家长-学生授权流程
+app.include_router(guardian.router)
 
 app.include_router(stream.router)
 app.include_router(teacher.router)

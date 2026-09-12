@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 2 / 2-A 家长-学生权限模型（完成）
+
+**guardian_learner_link 显式授权**（2-A-1/2，`auth_store.py` 增表）：状态机 `pending → active / rejected / revoked`，partial unique index `WHERE status IN ('pending','active')` 保证同对唯一活跃关系（撤销/拒绝后可重申）；撤销留痕（revoked_by / revocation_reason，对齐 DeepTutor）。权限项五档：view_progress / view_evidence / download_report / receive_alerts（留位）/ assign_materials（留位）。
+
+**服务层**（`web/api/guardian.py`）：`guardian_can_access` 单一校验入口，**每次现查双方当前角色**（角色变更/禁用后旧授权自动失效）+ 无缓存（撤销下一请求即失效）；家长按学生 username 发起申请（自绑禁止 / 非 student 角色拒绝 / 权限白名单）。
+
+**授权流程端点**（`routers/guardian.py`，2-A-3）：家长申请/列表/撤回撤销；学生查看待确认/确认/拒绝/撤销；低龄场景 admin 可代确认。错误分级 400/404/409。
+
+**家长端数据接口接入 per-student 校验**（2-A-4）：roster 只列 active 关联学生的学习记录（学习记录懒创建语义不变）；overview 过 `view_progress` 权限，未授权 403；staff 全量视图不变（存量契约测试零破坏）。
+
+**验证**：`tests/test_guardian_links.py` 21 用例（全流程/申请规则/撤销立即生效/角色变更失效/权限粒度/多家长互不干扰/staff 视图）。全量 **1786 用例通过**。授权管理前端页归 2-D。
+
 ### 2026-09-12 — Phase 2 / 2-0 最小账号体系（完成）
 
 **背景**：Phase 2 任务清单细化时发现仓库完全没有账号/身份体系（无 users 表、无鉴权，家长端接口无鉴权枚举全部学生），而 2-A 权限模型与灰度验收都以此为前提，故 2-0 作为地基先行。
