@@ -110,6 +110,18 @@ def isolated_ecos_db(tmp_path, monkeypatch):
         monkeypatch.setattr(pres_mod, "_store", None)
     except ImportError:
         pass
+    # Phase 1 (1-G): cogedu.runtime.api 默认引擎单例 — 呈现引擎 /answer 链路
+    # 的 plan()/update_belief() 不带引擎 kwarg 时会填充, 泄漏会破坏
+    # test_runtime "Singleton 不被构造" 断言 (test_estimate_creates_initial_state)
+    try:
+        import cogedu.runtime.api as runtime_api_mod
+
+        monkeypatch.setattr(runtime_api_mod, "_default_belief_engine", None)
+        monkeypatch.setattr(runtime_api_mod, "_default_lca_engine", None)
+        monkeypatch.setattr(runtime_api_mod, "_default_evaluator", None)
+        monkeypatch.setattr(runtime_api_mod, "_default_event_log", None)
+    except ImportError:
+        pass
 
     yield tmp_db
 

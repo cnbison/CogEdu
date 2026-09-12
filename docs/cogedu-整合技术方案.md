@@ -509,9 +509,12 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.8 1-G：端到端验证
 
-- [ ] **1-G-1** 真实进程端到端 3-5 案例（答错 → CTA → LCA → 大纲 → 场景 → 展示 → 行为回写 → belief 再更新），沿用 12.6 灰度脚本模式 + 真实 LLM；**人工检查内容质量**（讲解对不对、和学生实际薄弱点匹不匹配），不只是"跑通不报错"
-- [ ] **1-G-2** 端到端自动化回归纳入 pytest
-- [ ] **1-G-3** 收尾：方案文档第 13 章勾选 + CLAUDE.md/README/CHANGELOG 同步 + commit/push
+- [x] **1-G-1** 真实进程端到端 3-5 案例（答错 → CTA → LCA → 大纲 → 场景 → 展示 → 行为回写 → belief 再更新），沿用 12.6 灰度脚本模式 + 真实 LLM；**人工检查内容质量**（讲解对不对、和学生实际薄弱点匹不匹配），不只是"跑通不报错"
+  - ✅ 2026-09-12 完成：`scripts/canary_phase1_presentation.py`（真实 uvicorn 进程 + 真实 MiniMax LLM，3 案例）。**全部通过**：每案例 5 场景零 degraded；行为回写 200；答对后 theta K 全部上移（-0.331 → -0.113）；overall_confidence 0.52/0.416。内容质量人工复核：大纲 5 步结构 + 例题递进 + 口诀 + 易错提醒 + 代回验证，算术全部验算无误；Bloom 目标体现在讲解形态（REMEMBER 层→记忆口诀型）；公式 LaTeX 规范。**灰度发现并修复 1**：MiniMax-M3 thinking 块计入 max_tokens，默认 1024 被推理耗尽 → strip 后空文本（LLM 输出为空的 502）——生成器显式 `max_tokens=4096`（`GENERATION_MAX_TOKENS`）。**灰度发现 2（边界注记，非缺陷）**：canary 用合成 skill_id（无 Q 矩阵数据），target_skills 为空 → 生成主题由 LLM 自选，与 skill_id 字面不对应；"内容-薄弱点匹配度"的完整评估要等真实题库/Phase 5 知识库接入，链路本身正确。**运维注记**：场景请求 = 步数次串行 LLM 调用，客户端超时需 ≥900s
+- [x] **1-G-2** 端到端自动化回归纳入 pytest
+  - ✅ 2026-09-12 完成：`tests/test_presentation_e2e.py`——答错×2 → outline(带 evidence_id) → scenes（追溯字段完整）→ scene_viewed×n + scene_completed 回写（lifespan 激活真 PluginRuntime 消费）→ 再答对 theta K 上移 → `list_scenes_by_evidence` 反查。全链路 HTTP 级确定性（脚本化 LLM mock）
+- [x] **1-G-3** 收尾：方案文档第 13 章勾选 + CLAUDE.md/README/CHANGELOG 同步 + commit/push
+  - ✅ 2026-09-12 完成：Phase 1 全部收官（本节 + CLAUDE.md + README + CHANGELOG 同步更新）。全量 **1728 用例通过**
 
 ---
 

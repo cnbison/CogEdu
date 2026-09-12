@@ -26,7 +26,7 @@ from typing import Any
 
 from cogedu.presentation import prompts
 from cogedu.presentation.json_repair import parse_llm_json
-from cogedu.presentation.outline import SupportsChat
+from cogedu.presentation.outline import GENERATION_MAX_TOKENS, SupportsChat
 from cogedu.presentation.retry import RetryPolicy, call_with_retry
 from cogedu.presentation.types import (
     GenerationContext,
@@ -149,7 +149,9 @@ class SceneGenerator:
     ) -> Scene:
         """单步生成（1-D 重试/降级复用的最小单元）."""
         messages = prompts.build_scene_messages(ctx, outline.title, step)
-        raw = parse_llm_json(self._llm.chat(messages))
+        raw = parse_llm_json(
+            self._llm.chat(messages, max_tokens=GENERATION_MAX_TOKENS)
+        )
         scene = self._parse_scene(raw, outline=outline, ctx=ctx, step=step)
         if self._image_provider is not None:
             # 注入了 provider → 替换占位 image block（blocks[1]，1-C-2 约定：

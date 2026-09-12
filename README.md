@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**Phase 0 完成**（2026-09-12）：内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点）；**持久化层已双后端化**（SQLite 原路径零改动，PostgreSQL 经 DSN 启用，含一次性数据迁移脚本）；真实进程灰度全链路通过。全量 **1651 个测试用例通过**。下一步：Phase 1（呈现引擎最小可用版本）。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
+**Phase 1 完成**（2026-09-12）：**呈现引擎最小可用版本上线**——两阶段生成（Runtime `plan()` → 结构化大纲 → 讲解场景），学生端 `/student/scene.html` 翻页式播放（KaTeX 公式渲染），场景行为回写内核（human feedback 通道，影响后续干预选择）；生成健壮性（json-repair 容错 + 重试 + 模板化降级）；真实进程灰度 3 案例全通过。Phase 0 基础（FastAPI Web 层 / 双后端持久化 / 内核复制）见 [CHANGELOG.md](CHANGELOG.md)。全量 **1728 个测试用例通过**。下一步：Phase 2（家长端重新设计 + 导出能力）。
 
 ### 开发环境（克隆后一次性）
 
@@ -19,6 +19,10 @@ bash scripts/install-hooks.sh   # 启用 git hooks（pre-commit 零 mutation 扫
 ```bash
 python -m web.api.app    # FastAPI 后端, 端口 5173 (前端 API base 沿用)
 ```
+
+### 讲解场景（Phase 1）
+
+登录学生端后点"讲解"标签（或直接访问 `/student/scene.html?sid=<学生ID>`）：系统按当前认知状态选干预 → LLM 生成大纲 → 逐步生成讲解场景，翻页式播放（KaTeX 公式渲染）；翻页/看完行为回写内核，影响后续干预选择。场景生成需要 LLM API key（MiniMax 主/Moonshot 备，同 ECOS 约定）。
 
 ### 数据库切换（SQLite → PostgreSQL）
 

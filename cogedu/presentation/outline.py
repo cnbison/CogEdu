@@ -28,6 +28,12 @@ class SupportsChat(Protocol):
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str: ...
 
 
+# 生成输出 token 预算: MiniMax-M3 等 thinking 模型的 <think> 块计入
+# max_tokens, LLMConfig 默认 1024 会被推理块耗尽 → strip 后剩空文本
+# (1-G-1 灰度实测)。JSON 输出 + 推理余量取 4096。
+GENERATION_MAX_TOKENS = 4096
+
+
 class OutlineGenerationError(Exception):
     """大纲生成失败（LLM 输出结构不合规等）。message 携带原始输出供留痕."""
 
@@ -64,7 +70,7 @@ class OutlineGenerator:
         )
 
         def _call() -> Any:
-            return parse_llm_json(self._llm.chat(messages))
+            return parse_llm_json(self._llm.chat(messages, max_tokens=GENERATION_MAX_TOKENS))
 
         raw = (
             call_with_retry(_call, policy, what="outline 生成")

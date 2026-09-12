@@ -35,12 +35,12 @@ DeepTutor（记忆/可视化/家长权限模型参考）：../DeepTutor
 4. **内核算法层面（CTA 的 belief 推断/更新、LCA 的 POMDP/PBVI 策略学习）不需要大改**——这部分代码质量经过审查确认是扎实的（读写分离清晰、有版本演进记录和防御性自检）。如果发现需要修改内核算法，先确认是否真的必要，不要顺手"顺便优化"。
 5. **不要凭空"修复"看起来奇怪的工程决策**。比如 ECOS 的 CI 只能手动触发（`workflow_dispatch`），这是刻意的设计（避免 CI 环境和本地环境因缺 LLM/DB 而产生伪错配），不要"好心"把它改成自动触发的 CI，除非确认团队协作模式已经变化到需要这样做。
 
-## 当前状态（2026-09-11 更新）
+## 当前状态（2026-09-12 更新）
 
 - **参考文档版本**：`docs/cogedu-整合技术方案.md` v0.5
-- **当前 Phase**：**Phase 0 全部完成**（2026-09-12）——12.2「建立安全网」+ 12.3「状态入口评估」+ 12.4「Flask → FastAPI」+ 12.5「SQLite → PostgreSQL」+ 12.6「回归与灰度」（真实进程灰度全链路通过，发现并补上 `web/teacher/` 静态页复制遗漏）。**Web 层 = FastAPI**（Flask 已删除）；**持久化层双后端**（SQLite 原路径零改动，PG 经 DSN 启用）；全量 **1651 用例通过**。下一步：细化并启动 Phase 1（呈现引擎最小可用版本，方案文档第 13 章）。
-- **内核代码状态**：**已复制**（2026-09-11）。来源 **ECOS v0.99.4，commit `9cdacab`**（比方案文档原定的 v0.98.0 快照新，经用户确认取最新版；v0.98.0→v0.99.4 内核增量 7 文件/+159 行已补审，结论见 `docs/kernel-baseline-notes.md`）。包名 `ecos` → `cogedu`，仅重命名 import，逻辑零改动，复制后全量测试与基线一致。
-- **仓库现状**：`cogedu/`（内核，121 文件）+ `web/`（**FastAPI 后端**：`app.py` 装配 + `routers/` 7 域路由 + 框架无关业务模块 `belief.py`/`llm.py`/`judge.py` 等；student/parent 静态页由 FastAPI 托管）+ `cogedu/persistence/`（12.5 起双后端：adapter.py 适配层 + pg_schema.py PG DDL + 迁移脚本）+ `githooks/`（pre-commit/pre-push，核心架构红线静态防线）+ `tests/`（1651 用例，含 PG 集成测试无服务器时 skip）+ `scripts/`（含零 mutation AST 扫描器）+ `examples/`（Plugin SDK 样例）+ `data/`（Q 矩阵）+ `discussions/`、`research/`（仅收录测试与文档引用的设计文档）+ `docs/`。
+- **当前 Phase**：**Phase 1 全部完成**（2026-09-12）——1-A「接口契约」+ 1-B「大纲生成」+ 1-C「场景生成」+ 1-D「生成健壮性」+ 1-E「前端渲染」+ 1-F「回写事件闭环」+ 1-G「端到端验证」（真实进程灰度 3 案例全通过，内容质量人工复核无误）。**呈现引擎 = `cogedu/presentation/`**（两阶段生成：Runtime `plan()` → Outline → Scene，只读调用 Runtime API，LLM 注入不绑 web 层）；场景页 `web/student/scene.html`（翻页式 + KaTeX）；行为回写走 human feedback 通道（`scene_viewed`/`scene_completed` 事件 → PluginRuntime → `append_human_feedback`，**刻意不走 `update_belief`**，理由见 `docs/presentation-runtime-map.md` §6）。全量 **1728 用例通过**。下一步：细化并启动 Phase 2（家长端重新设计 + 导出能力，方案文档第 14 章）。
+- **内核代码状态**：**已复制**（2026-09-11）。来源 **ECOS v0.99.4，commit `9cdacab`**（比方案文档原定的 v0.98.0 快照新，经用户确认取最新版；v0.98.0→v0.99.4 内核增量 7 文件/+159 行已补审，结论见 `docs/kernel-baseline-notes.md`）。包名 `ecos` → `cogedu`，仅重命名 import，逻辑零改动，复制后全量测试与基线一致。**Phase 1 内核 additive 变更**（1-F 事件类型 +2 / 新 factory，算法零改动，见 `kernel-baseline-notes.md` §8）。
+- **仓库现状**：`cogedu/`（内核，121 文件）+ `cogedu/presentation/`（**Phase 1 新写**：types.py 契约 schema + outline/scene 生成器 + json_repair/retry 健壮层；纳入零 mutation 扫描 + mypy strict）+ `web/`（**FastAPI 后端**：`app.py` 装配 + `routers/` 8 域路由（含 presentation）+ 框架无关业务模块 `belief.py`/`llm.py`/`judge.py`/`presentation_service.py` 等；student/parent 静态页由 FastAPI 托管，student 场景页 `scene.html|js|css`）+ `cogedu/persistence/`（双后端：adapter.py 适配层 + pg_schema.py PG DDL + 迁移脚本 + **presentation_store.py**）+ `githooks/`（pre-commit/pre-push，核心架构红线静态防线）+ `tests/`（1728 用例，含 PG 集成测试无服务器时 skip）+ `scripts/`（含零 mutation AST 扫描器 + Phase 1 灰度脚本）+ `examples/`（Plugin SDK 样例）+ `data/`（Q 矩阵）+ `discussions/`、`research/`（仅收录测试与文档引用的设计文档）+ `docs/`（含 **presentation-runtime-map.md** 呈现引擎契约映射）。
 
 ## 技术栈（详见方案文档第 5 章，这里只列结论）
 

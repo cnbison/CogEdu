@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -134,7 +134,7 @@ def generate_scenes(req: ScenesRequest):
 
 
 @router.post("/event")
-def scene_event(req: SceneEventRequest) -> Dict[str, Any]:
+def scene_event(req: SceneEventRequest) -> dict[str, Any]:
     """1-F (13.7): 场景行为回写 — 埋点 → LearningEvent → bus + event_log.
 
     Plugin SDK 原则: 端点不写 state, 只产生 event (PluginRuntime subscriber
@@ -144,7 +144,7 @@ def scene_event(req: SceneEventRequest) -> Dict[str, Any]:
     from cogedu.cta.event_log import LearningEvent
 
     if req.event_type == "scene_viewed":
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "outline_id": req.outline_id,
             "scene_id": req.scene_id,
             "step_id": req.step_id,

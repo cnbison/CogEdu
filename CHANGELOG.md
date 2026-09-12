@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 1 / 呈现引擎最小可用版本（完成，1-A~1-G 收官）
+
+**两阶段生成**（`cogedu/presentation/`，Phase 1 新写包）：Runtime `plan()` → `GenerationContext`（duck-typing 提取，不建立 LCAResult 类型引用）→ `OutlineGenerator`（大纲）→ `SceneGenerator`（场景，每步 text+image 两 block）。契约 schema（Outline/Scene/GenerationContext）用 Pydantic，同时服务 LLM 输出校验 / HTTP 响应模型 / 落库 payload；契约映射表见 `docs/presentation-runtime-map.md`。包边界：只读调用 `cogedu.runtime.api`，LLM client 注入不绑 web 层；纳入零 mutation 扫描 + mypy strict。
+
+**生成健壮性**（1-D）：`json-repair`（PyPI，MIT）容错解析（think 块剥离 + 围栏清理 + 不合规 JSON 修复）；`RetryPolicy` 环境变量可配，生成层只重试解析失败（传输层由 client 内部重试）；重试耗尽 → 模板化 degraded scene（`degraded=true` + warnings 留痕，学生端不空白）。**灰度发现**：MiniMax-M3 thinking 块计入 max_tokens，默认 1024 会被推理耗尽 → 生成器显式 4096。
+
+**回写事件闭环**（1-F，语义决策偏离 13.7 字面并已记录）：场景行为不伪造作答 Observation 进 `update_belief`（会污染 CTA 推断），走 v0.91.0-b 确立的 human feedback 通道——内核 additive 扩展 `scene_viewed`/`scene_completed` 事件类型（算法零改动，见 `kernel-baseline-notes.md` §8）→ `POST /api/presentation/event` → PluginRuntime → `append_human_feedback` → 影响后续 `plan()`。
+
+**前端**：学生端新增"讲解"标签 + `scene.html|js|css` 独立场景页（翻页式，KaTeX 公式渲染——LLM 文本一律 textContent 进 DOM 不裸 innerHTML；图片懒加载 + 失败占位；degraded 提示条）。
+
+**持久化**：`PresentationStore` 双后端（SQLite/PG 奇偶校验测试），`presentation_outlines`/`presentation_scenes` 两表，追溯列索引含 `idx_scenes_evidence` 错因反查（第 11 章可视化的物理前提）。
+
+**端到端验证**（1-G）：真实进程灰度 3 案例（真实 MiniMax LLM）全部通过——5 场景零降级、行为回写 200、答对后 theta K 上移、内容质量人工复核（算术全对、Bloom 目标体现于讲解形态）；`tests/test_presentation_e2e.py` 全链路 HTTP 级回归。全量 **1728 用例通过**（Phase 0 收官时 1651）。
+
 ### 2026-09-12 — Phase 0 / 12.6 回归与灰度（完成，Phase 0 收官）
 
 **全量回归**：1651 用例通过，pre-push hook 持续复验。
