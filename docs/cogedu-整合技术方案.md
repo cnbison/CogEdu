@@ -591,13 +591,19 @@ Phase 1 做完、验证通过后，可以按同样方式细化 Phase 2（家长�
 | 分配学习材料 | v2 | Phase 5 知识库 |
 | 管理使用限制（时长/难度） | v2 | 无强依赖，优先级低 |
 
-### 14.5 2-C：导出能力（格式已决策：Word 优先，公式图片嵌入）
+### 14.5 2-C：导出能力（✅ 2026-09-12 完成，格式已决策：Word 优先，公式图片嵌入）
 
-- [ ] **2-C-1** 公式渲染 spike（先验证再写主链路）：候选 matplotlib mathtext（离线、无 headless browser、numpy 系依赖已入库）渲染 LaTeX → PNG。**已知风险：mathtext 不是完整 LaTeX**（不支持 `\begin{...}` 环境和部分宏），先拿 Phase 1 灰度真实产出的公式样本批量试渲染、统计失败率，再定主方案；单条渲染失败降级为 LaTeX 原文嵌入 + warning 留痕（对齐仓库"宁可明确降级不静默"约定），不让整份报告失败
-- [ ] **2-C-2** 内容结构层（框架无关模块 `web/api/report.py`，不绑 docx）：周期（周/月）→ 数据聚合（答题量/正确率、Belief theta 走势、Bloom 分布、薄弱知识点 top-N、interventions 摘要）→ 结构化 `ReportDocument`（段落/表格/公式占位/图片位）。聚合逻辑与 overview 接口**同源取数**（不各算各的），有单测锁定
-- [ ] **2-C-3** docx 渲染器：`ReportDocument` → docx（`python-docx`，纯 Python，依赖纪律通过）；公式占位 → mathtext PNG 嵌入（按公式串缓存渲染结果，同一报告内重复公式不重复渲染）；报告头尾带生成时间 + 数据截止时间（家长看到的数字要能对上"哪天的状态"）
-- [ ] **2-C-4** HTTP 端点：`GET /api/parent/students/{student_id}/report?period=week|month`，过 `download_report` 权限校验（2-A-4 单一入口），返回文件流；学生不存在 404、无权限 403
-- [ ] **2-C-5** 测试：聚合正确性、公式渲染失败降级、docx 最小 smoke（段落/图片数断言，能被 `python-docx` 重新打开）、越权拒绝
+- [x] **2-C-1** 公式渲染 spike（先验证再写主链路）：候选 matplotlib mathtext（离线、无 headless browser、numpy 系依赖已入库）渲染 LaTeX → PNG。**已知风险：mathtext 不是完整 LaTeX**（不支持 `\begin{...}` 环境和部分宏），先拿 Phase 1 灰度真实产出的公式样本批量试渲染、统计失败率，再定主方案；单条渲染失败降级为 LaTeX 原文嵌入 + warning 留痕（对齐仓库"宁可明确降级不静默"约定），不让整份报告失败
+- [x] **2-C-2** 内容结构层（框架无关模块 `web/api/report.py`，不绑 docx）：周期（周/月）→ 数据聚合（答题量/正确率、Belief theta 走势、Bloom 分布、薄弱知识点 top-N、interventions 摘要）→ 结构化 `ReportDocument`（段落/表格/公式占位/图片位）。聚合逻辑与 overview 接口**同源取数**（不各算各的），有单测锁定
+  - ✅ 2026-09-12 完成：`web/api/report.py` — `ReportDocument`（Pydantic：paragraph/table/formula 三种 block，聚合层 warnings 留痕不静默）；聚合同源 teacher/parent helpers（roster/overview 同一批）；周期 = week(7d)/month(30d) 按 response_history timestamp 过滤（naive 本地 ISO 口径，aware 剥 tzinfo）；薄弱点 = 周期内维度正确率 <0.6 且答题 ≥2 取 top-3 + 最近误概念
+- [x] **2-C-3** docx 渲染器：`ReportDocument` → docx（`python-docx`，纯 Python，依赖纪律通过）；公式占位 → mathtext PNG 嵌入（按公式串缓存渲染结果，同一报告内重复公式不重复渲染）；报告头尾带生成时间 + 数据截止时间（家长看到的数字要能对上"哪天的状态"）
+  - ✅ 2026-09-12 完成：`web/api/docx_renderer.py`（只做翻译不算数；公式 → mathtext PNG 居中嵌入，`lru_cache` 按公式串去重；**单条公式失败降级 LaTeX 原文段落 + 附注 warning，报告整体不失败**；文本内 `$...$`/`$$...$$` 混排经 `extract_formulas` 拆块）；`web/api/formula_render.py`（预检 spike 实证的不支持构造：环境/mhchem/`\operatorname`/CJK——避免产出错误内容图）
+- [x] **2-C-4** HTTP 端点：`GET /api/parent/students/{student_id}/report?period=week|month`，过 `download_report` 权限校验（2-A-4 单一入口），返回文件流；学生不存在 404、无权限 403
+  - ✅ 2026-09-12 完成：`GET /api/parent/students/{sid}/report?period=week|month`；guardian 过 `download_report` 权限（2-A 单一入口）；**语义决策：guardian 对未知学生 → 403（权限检查在前不泄漏存在性），404 防幽灵学生语义由 staff 路径承载**；依赖 python-docx + matplotlib 入 pyproject
+- [x] **2-C-5** 测试：聚合正确性、公式渲染失败降级、docx 最小 smoke（段落/图片数断言，能被 `python-docx` 重新打开）、越权拒绝
+  - ✅ 2026-09-12 完成：`tests/test_parent_report.py` 18 用例（公式渲染含缓存/预检拒绝/混排拆分；聚合含周期过滤/薄弱点/warnings 留痕；docx 重开 smoke 含 inline_shapes 与降级附注断言；HTTP 权限矩阵）。**真实进程冒烟**：开户 → 答题 → 授权（download_report）→ 下载 200（docx 重开正常）→ 学生撤销 → 再下载**立即 403**。全量 **1804 用例通过**
+  - ✅ 2026-09-12 完成：`scripts/spike_mathtext_formula.py` 33 样本（样本来源诚实注记：1-G 真实产出在 tmp canary 库未存档，按 Phase 1 prompt 锁定的公式形态 + K12 典型构造 + 已知风险构造构建；Phase 5 接真实题库后应重跑）。**结果 88%（29/33）**：prompt 约束形态 5/5、K12 典型 21/21 全过；失败 = `\begin{}` 环境 / `\ce{}` mhchem / 未剥离 `$$`。**spike 踩坑两个**（已写进 formula_render.py 头注）：① `math_to_image` 必须保留 `$...$` 定界符——剥离后整串按普通文本渲染，**不报错但内容错误**（仅查 PNG 大小会全绿假象，需目检图像）；② mathtext 对不支持命令有的抛异常有的静默按字面输出——生产渲染器**预检优先于依赖解析异常**。主方案定为 mathtext，失败降级 LaTeX 原文
+- [x] **2-C-2** 内容结构层
 - [ ] **2-C-6**（v2 预留，不在本 Phase 实现）PPTX 格式与 LaTeX→MathML→OMML 可编辑公式链路（参考 OpenMAIC `mathml2omml` 思路），视 v1 报告的实际使用反馈决定做不做
 
 ### 14.6 2-D：前端页面

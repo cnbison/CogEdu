@@ -9,9 +9,10 @@
   - 单聚合端点 /overview: 一次请求拿全部四卡数据
   - 不放校准视图 / misconceptions (教师专业视图, Bisen 拍板 2026-09-06)
 
-端点 (2, 只读):
+端点 (3, 只读):
   GET /api/parent/students
   GET /api/parent/students/{student_id}/overview
+  GET /api/parent/students/{student_id}/report   (2-C-4: Word 报告下载)
 """
 from __future__ import annotations
 
@@ -19,13 +20,14 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from web.api import guardian as guardian_service
 from web.api import parent as parent_helpers
 from web.api import teacher as teacher_helpers
 from web.api.auth import require_roles
+from web.api.report import PERIODS
 
 _log = logging.getLogger(__name__)
 
@@ -174,3 +176,58 @@ def api_parent_student_overview(
         return JSONResponse(
             {"error": "概览获取失败", "student_id": student_id}, status_code=500
         )
+
+
+# ─── 学习报告下载 (2-C-4, Phase 2) ───────────────────────────────────────────
+
+
+@router.get("/students/{student_id}/report")
+def api_parent_student_report(
+    student_id: str,
+    period: str = "week",
+    user: dict = Depends(require_roles("guardian", "teacher", "admin")),  # noqa: B008 (FastAPI 惯用)
+):
+    """学习报告下载 (Word/docx, 2-C)。
+
+    权限: guardian 须持有对该学生的 active `download_report` 授权
+    (2-A-4 单一入口, 每次现查 — 撤销下一请求即失效); staff 不受限。
+    错误: period 非法 400 / 学生不存在 404 / 无权限 403。
+    """
+    try:
+        from web.api.docx_renderer import render_report_docx
+        from web.api.report import build_report_document
+
+        if user["role"] == "guardian" and not guardian_service.guardian_can_access_student(
+            user["user_id"], student_id, "download_report"
+        ):
+            return JSONResponse(
+                {"error": "无权下载该学生的学习报告", "student_id": student_id},
+                status_code=403,
+            )
+        if period not in PERIODS:
+            return JSONResponse(
+                {"error": f"period 需为 {'/'.join(PERIODS)}", "period": period},
+                status_code=400,
+            )
+        report = build_report_document(student_id, period)
+        docx_bytes = render_report_docx(report)
+    except LookupError:
+        return JSONResponse(
+            {"error": "学生不存在", "student_id": student_id}, status_code=404
+        )
+    except Exception:
+        _log.warning(
+            "parent: /report 失败 (sid=%s, period=%s)", student_id, period, exc_info=True
+        )
+        return JSONResponse({"error": "报告生成失败"}, status_code=500)
+
+    from datetime import datetime as _dt
+
+    filename = f"report_{student_id}_{period}_{_dt.now():%Y%m%d}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

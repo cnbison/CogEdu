@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 2 / 2-C 学习报告导出（Word，完成）
+
+**公式渲染 spike**（2-C-1，`scripts/spike_mathtext_formula.py`）：33 样本 88% 通过——Phase 1 prompt 约束形态 5/5、K12 典型公式 21/21 全过；失败集中在 `\begin{}` 环境 / `\ce{}` / 未剥离 `$$`。主方案定 matplotlib mathtext。**spike 踩坑两枚（已固化进渲染器）**：`math_to_image` 必须保留 `$...$` 定界符（剥离后整串按普通文本渲染，不报错但内容错误——仅查 PNG 大小会出现全绿假象，需目检图像）；mathtext 对不支持命令有的抛异常有的静默按字面输出 → 生产渲染器预检优先于依赖解析异常。
+
+**三层结构**（2-C-2/3）：`web/api/formula_render.py`（LaTeX→PNG，预检已知不支持构造，lru_cache 按公式串去重）→ `web/api/report.py`（`ReportDocument` paragraph/table/formula 三种 block；聚合同源 teacher/parent helpers，与 overview 接口数字一致；周期 week/month，薄弱点 = 周期内维度正确率 top-3 + 最近误概念；warnings 留痕不静默）→ `web/api/docx_renderer.py`（只做翻译不算数；公式 PNG 居中嵌入，**单条失败降级 LaTeX 原文 + 附注 warning，报告整体不失败**；报告头带生成时间 + 数据截止时间）。
+
+**端点**（2-C-4）：`GET /api/parent/students/{sid}/report?period=week|month`，guardian 过 `download_report` 权限（2-A 单一入口现查）；guardian 对未知学生 403（权限在前不泄漏存在性），404 防幽灵学生语义由 staff 路径承载。新依赖 python-docx + matplotlib。
+
+**验证**（2-C-5）：`tests/test_parent_report.py` 18 用例；真实进程冒烟：开户 → 答题 → 授权 → 下载 200（docx 重开正常）→ 学生撤销 → 再下载**立即 403**。全量 **1804 用例通过**。
+
 ### 2026-09-12 — Phase 2 / 2-A 家长-学生权限模型（完成）
 
 **guardian_learner_link 显式授权**（2-A-1/2，`auth_store.py` 增表）：状态机 `pending → active / rejected / revoked`，partial unique index `WHERE status IN ('pending','active')` 保证同对唯一活跃关系（撤销/拒绝后可重申）；撤销留痕（revoked_by / revocation_reason，对齐 DeepTutor）。权限项五档：view_progress / view_evidence / download_report / receive_alerts（留位）/ assign_materials（留位）。

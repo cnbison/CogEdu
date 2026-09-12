@@ -43,6 +43,8 @@ dependencies = [
     "json-repair>=0.61",  # 1-D (13.5): LLM 输出 JSON 容错修复 (MIT, 纯 Python)
     "scikit-learn>=1.3",  # ECE 计算 + Isotonic Regression 校准 (metrics/ece.py + dual_agent/calibration.py 用)
     "bcrypt>=4.0",  # 2-0 (14.2): 账号凭证哈希 (Apache-2.0, 2-0-2)
+    "python-docx>=1.1",  # 2-C (14.5): 学习报告 Word 导出 (MIT, 2-C-3)
+    "matplotlib>=3.8",  # 2-C (14.5): 公式 LaTeX→PNG 渲染, mathtext (BSD 兼容, spike 验证 2-C-1)
 ]
 
 [project.optional-dependencies]
