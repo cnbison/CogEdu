@@ -40,6 +40,7 @@ dependencies = [
     "fastapi>=0.115",  # 0-C (12.4): 新 Web 框架, 迁移完成后替换 flask
     "uvicorn>=0.30",   # fastapi 的 ASGI server
     "psycopg[binary,pool]>=3.2",  # 0-D (12.5): PostgreSQL 驱动 + 连接池
+    "json-repair>=0.61",  # 1-D (13.5): LLM 输出 JSON 容错修复 (MIT, 纯 Python)
     "scikit-learn>=1.3",  # ECE 计算 + Isotonic Regression 校准 (metrics/ece.py + dual_agent/calibration.py 用)
 ]
 
@@ -90,7 +91,9 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.11 → 3.12: numpy 新版 .pyi 用了 type 语句 (1-D 接入 json_repair →
+# llm_client 链路跟进 site-packages 存根时暴露); 运行环境是 3.13
+python_version = "3.12"
 # 内核自 ECOS 复制而来，未做全量类型校验——起步阶段只报告，不阻断
 ignore_missing_imports = true
 warn_unused_ignores = false

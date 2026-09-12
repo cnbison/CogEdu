@@ -14,6 +14,7 @@ import os
 
 from cogedu.persistence.presentation_store import PresentationStore
 from cogedu.presentation.outline import OutlineGenerator
+from cogedu.presentation.retry import RetryPolicy
 from cogedu.presentation.scene import SceneGenerator
 from cogedu.presentation.types import Outline, Scene
 from web.api import llm as llm_service
@@ -22,6 +23,10 @@ _log = logging.getLogger(__name__)
 
 # 跟 LCAStore / DualAgentStore 同一 db 路径口径（ECOS_DB_PATH 环境变量）
 DEFAULT_DB_PATH = "web/ecos.db"
+
+# 1-D-2: 生成层重试参数走环境变量 (COGEDU_PRESENTATION_MAX_ATTEMPTS /
+# COGEDU_PRESENTATION_BACKOFF_SEC), 默认值收敛在 RetryPolicy
+_RETRY_POLICY = RetryPolicy.from_env()
 
 _store: PresentationStore | None = None
 
@@ -74,7 +79,9 @@ def generate_scenes_for_outline(outline_id: str) -> list[Scene]:
             "无法为场景生成重建 pedagogy 字段"
         )
     generator = SceneGenerator(llm_service.get_llm())
-    scenes = generator.generate_for_outline(outline, ctx)
+    # 1-D: 重试 + 降级 (解析失败重试耗尽 → degraded scene, 学生端不空白;
+    # 传输层 RuntimeError 不降级, 原样上抛由路由层 502)
+    scenes = generator.generate_for_outline(outline, ctx, policy=_RETRY_POLICY)
     for scene in scenes:
         # 落库失败不中断呈现 (save_scene 内部已 warning 留痕)
         store.save_scene(scene)

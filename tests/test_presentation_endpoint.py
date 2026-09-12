@@ -9,6 +9,7 @@ plan 缺 intervention 500。
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -20,10 +21,12 @@ class FakeLLM:
         self.output = output
         self.error = error
 
-    def chat_json(self, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         if self.error is not None:
             raise self.error
-        return self.output
+        if isinstance(self.output, str):
+            return self.output
+        return json.dumps(self.output, ensure_ascii=False)
 
 
 _GOOD = {
@@ -163,7 +166,8 @@ class TestScenesEndpoint:
         assert resp.status_code == 404
         assert "不存在" in resp.json()["error"]
 
-    def test_scenes_llm_failure_502(self, client, monkeypatch, isolated_ecos_db):
+    def test_scenes_parse_failure_degrades_200(self, client, monkeypatch, isolated_ecos_db):
+        """1-D-3: 解析失败重试耗尽 → 200 + degraded scene (学生端不空白)."""
         monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
         outline_id = client.post(
             "/api/presentation/outline", json={"student_id": "stu_http"}
@@ -171,6 +175,25 @@ class TestScenesEndpoint:
         monkeypatch.setattr(
             "web.api.llm.get_llm",
             lambda: FakeLLM(error=ValueError("LLM 输出无法解析为 JSON")),
+        )
+        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        assert resp.status_code == 200
+        scenes = resp.json()
+        assert len(scenes) == 2
+        for scene in scenes:
+            assert scene["degraded"] is True
+            assert scene["warnings"]  # warning 留痕, 不静默
+            assert "简化讲解" in scene["title"]
+
+    def test_scenes_transport_failure_502(self, client, monkeypatch, isolated_ecos_db):
+        """传输层失败 (client 内部重试耗尽) 不降级 → 502 (不伪装成内容)."""
+        monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
+        outline_id = client.post(
+            "/api/presentation/outline", json={"student_id": "stu_http"}
+        ).json()["outline_id"]
+        monkeypatch.setattr(
+            "web.api.llm.get_llm",
+            lambda: FakeLLM(error=RuntimeError("LLM 调用失败（重试 3 次后仍失败）")),
         )
         resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
         assert resp.status_code == 502

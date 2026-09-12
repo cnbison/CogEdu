@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
 # 共享 fixtures
 import pytest
 
-
 # ─── DB 隔离 (v0.98.5, 防御性自检 [8] 同类模式收口) ──────────────────────────
 #
 # 根因: get_db() / get_dual_agent_store() / get_lca_store() / belief._get_db()

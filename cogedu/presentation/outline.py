@@ -1,15 +1,15 @@
-"""1-B-2 (Phase 1, 13.3): 大纲生成器 OutlineGenerator.
+"""1-B-2 (Phase 1, 13.3) / 1-D (13.5): 大纲生成器 OutlineGenerator.
 
 依赖注入（1-A-5）：LLM client 由调用方注入，本模块只声明最小 Protocol
-（有 ``chat_json`` 方法即可），不绑定 ``ECOSLLMClient`` 具体类型、不依赖
-web 层。
+（有 ``chat`` 方法即可），不绑定 ``ECOSLLMClient`` 具体类型、不依赖 web 层。
 
-解析校验策略（13.3 的"字段缺失/越界的处理策略"）：
-- LLM 输出经注入 client 的 ``chat_json`` 解析（已带 think 块剥离 + 围栏
-  清理 + JSON 解析失败抛 ValueError）；解析失败的原样上抛——重试与降级
-  是 1-D 的职责，这里不吞。
-- 结构校验不通过（缺 steps / steps 空 / 字段类型不对）→ 抛
+解析校验策略：
+- ``chat`` 拿原始文本 → ``parse_llm_json``（1-D-1: think 块剥离 + 围栏
+  清理 + json-repair 容错修复）→ 结构校验。
+- 结构不合规（缺 steps / steps 空 / 字段类型不对）→ 抛
   ``OutlineGenerationError``，message 含原始输出（不静默吞）。
+- ``policy`` 传入时对解析失败做生成层重试（1-D-2，仅 ValueError；
+  传输层 RuntimeError 由 client 内部重试后原样上抛，此处不重复重试）。
 - LLM 给的 step_id 不可信：解析后统一重新分配，保证唯一。
 """
 from __future__ import annotations
@@ -17,13 +17,15 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from cogedu.presentation import prompts
+from cogedu.presentation.json_repair import parse_llm_json
+from cogedu.presentation.retry import RetryPolicy, call_with_retry
 from cogedu.presentation.types import GenerationContext, Outline, OutlineStep
 
 
-class SupportsChatJson(Protocol):
+class SupportsChat(Protocol):
     """生成器对 LLM client 的最小要求（结构化类型，方便 mock）."""
 
-    def chat_json(self, messages: list[dict[str, str]], **kwargs: Any) -> Any: ...
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str: ...
 
 
 class OutlineGenerationError(Exception):
@@ -38,7 +40,7 @@ class OutlineGenerator:
     ``pdf_images`` 为预留可选参数（Phase 5 前不传）。
     """
 
-    def __init__(self, llm_client: SupportsChatJson) -> None:
+    def __init__(self, llm_client: SupportsChat) -> None:
         self._llm = llm_client
 
     def generate(
@@ -47,23 +49,35 @@ class OutlineGenerator:
         kb_snippets: list[str] | None = None,
         pdf_text: str | None = None,
         pdf_images: list[str] | None = None,
+        policy: RetryPolicy | None = None,
     ) -> Outline:
-        """调 LLM 生成大纲并校验，失败抛 OutlineGenerationError/ValueError."""
+        """调 LLM 生成大纲并校验.
+
+        policy=None 时单次尝试（严格模式）；传入 policy 时对解析失败
+        重试（1-D-2）。传输层失败（RuntimeError）原样上抛。
+        """
         messages = prompts.build_outline_messages(
             ctx,
             kb_snippets=kb_snippets,
             pdf_text=pdf_text,
             pdf_images=pdf_images,
         )
-        raw = self._llm.chat_json(messages)
+
+        def _call() -> Any:
+            return parse_llm_json(self._llm.chat(messages))
+
+        raw = (
+            call_with_retry(_call, policy, what="outline 生成")
+            if policy is not None
+            else _call()
+        )
         return self.parse_outline(raw, ctx)
 
     @staticmethod
     def parse_outline(raw: Any, ctx: GenerationContext) -> Outline:
         """解析 + schema 校验 LLM 输出为 Outline.
 
-        独立成方法：1-D 的容错解析（json-repair）在重试时对同一输入
-        复用这条校验路径。
+        独立成方法：1-D 的容错解析在重试时对同一输入复用这条校验路径。
         """
         if not isinstance(raw, dict):
             raise OutlineGenerationError(

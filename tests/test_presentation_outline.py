@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -26,11 +27,13 @@ class FakeLLM:
         self.error = error
         self.calls: list[list[dict[str, str]]] = []
 
-    def chat_json(self, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         self.calls.append(messages)
         if self.error is not None:
             raise self.error
-        return self.output
+        if isinstance(self.output, str):
+            return self.output
+        return json.dumps(self.output, ensure_ascii=False)
 
 
 def _ctx(**overrides: Any) -> GenerationContext:

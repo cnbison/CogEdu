@@ -480,10 +480,14 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.5 1-D：生成健壮性（借鉴 OpenMAIC 的 json-repair.ts + generation-retry.ts，1-C 基本流程跑通后补）
 
-- [ ] **1-D-1** 评估 PyPI `json-repair`（license/维护状况），合适直接用，不合适则参考 OpenMAIC `json-repair.ts` 思路用 Python 自写 `cogedu/presentation/json_repair.py`
-- [ ] **1-D-2** 重试策略：次数上限/超时/退避，参数进配置，封装在生成入口
-- [ ] **1-D-3** 降级行为：重试耗尽 → 模板化 degraded scene，带 `degraded: true` 标记 + **warning 留痕不静默**（对齐 v0.47.5 "宁可明确失败信号也不静默吞异常"的仓库约定），学生端可感知但不空白
-- [ ] **1-D-4** 测试：坏 JSON 修复 / 重试耗尽 → 降级标记 + warning 留痕
+- [x] **1-D-1** 评估 PyPI `json-repair`（license/维护状况），合适直接用，不合适则参考 OpenMAIC `json-repair.ts` 思路用 Python 自写 `cogedu/presentation/json_repair.py`
+  - ✅ 2026-09-12 完成：**直接采用**（MIT、纯 Python 无传递依赖、活跃维护）。`parse_llm_json` 流水线 = `clean_llm_output`（复用 `cogedu/llm_client.py` 既有清理，think 块+围栏）→ `json.loads` → 失败 `json_repair.repair_json`（warning 留痕）→ 彻底修不了 ValueError 含原文。**连带**：生成器 Protocol 从 `chat_json` 改为 `chat`（raw text 拿在生成层手里才能修复，不从异常 message 反解）；pyproject 加 `json-repair>=0.61`
+- [x] **1-D-2** 重试策略：次数上限/超时/退避，参数进配置，封装在生成入口
+  - ✅ 2026-09-12 完成：`cogedu/presentation/retry.py` `RetryPolicy`（from_env：`COGEDU_PRESENTATION_MAX_ATTEMPTS`/`_BACKOFF_SEC`，非法值 warning 兜底）+ `call_with_retry(retry_on=...)`。**职责切分**：传输层失败 client 内部已重试（max_retries=3 指数退避 + timeout 30s），生成层只重试解析失败（ValueError/结构不合规）；RuntimeError 立即上抛不重复重试
+- [x] **1-D-3** 降级行为：重试耗尽 → 模板化 degraded scene，带 `degraded: true` 标记 + **warning 留痕不静默**（对齐 v0.47.5 "宁可明确失败信号也不静默吞异常"的仓库约定），学生端可感知但不空白
+  - ✅ 2026-09-12 完成：`_degraded_scene`（模板内容引用大纲 step 的 title/key_points/objective，不依赖失败的 LLM 输出；`degraded=True` + `warnings` 留痕 + 落库 `degraded` 列可统计降级率）；**传输层失败不降级**（网络问题不伪装成"内容生成好了"，上抛 502）。`policy=None` 保留 1-C 严格模式（任一步失败整体上抛）
+- [x] **1-D-4** 测试：坏 JSON 修复 / 重试耗尽 → 降级标记 + warning 留痕
+  - ✅ 2026-09-12 完成：`tests/test_presentation_robustness.py` 17 用例（修复/重试/降级/strict 对照/传输层不降级）+ HTTP 语义更新（解析失败→200 degraded scenes；传输失败→502）。**教训记录**：`ruff --fix` 误扫全仓波及 136 文件，已按范围外 revert——autofix 永远不带目录白名单之外的路径。全量 **1714 用例通过**；mypy python_version 3.11→3.12（numpy 新存根 type 语句经 json_repair→llm_client 链路暴露）
 
 ### 13.6 1-E：前端渲染
 

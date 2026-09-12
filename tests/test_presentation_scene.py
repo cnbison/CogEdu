@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -23,13 +24,16 @@ class FakeLLM:
         self.error = error
         self.calls: list[list[dict[str, str]]] = []
 
-    def chat_json(self, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         self.calls.append(messages)
         if self.error is not None:
             raise self.error
         if not self.outputs:
             raise AssertionError("FakeLLM 输出耗尽")
-        return self.outputs.pop(0)
+        out = self.outputs.pop(0)
+        if isinstance(out, str):
+            return out
+        return json.dumps(out, ensure_ascii=False)
 
 
 def _ctx() -> GenerationContext:
@@ -119,7 +123,7 @@ class TestGenerateForOutline:
 
 class TestParseFailures:
     def test_non_dict_rejected(self):
-        llm = FakeLLM(["nope"])
+        llm = FakeLLM(['["a", "b"]'])  # 合法 JSON 但不是对象
         with pytest.raises(SceneGenerationError, match="不是 JSON 对象"):
             SceneGenerator(llm).generate_for_outline(_outline(), _ctx())
 
@@ -164,11 +168,11 @@ class TestOutlineContextRoundTrip:
         from cogedu.presentation.outline import OutlineGenerator as _OG
 
         class _LLM:
-            def chat_json(self, messages, **kwargs):
-                return {
-                    "title": "t",
-                    "steps": [{"title": "a"}, {"title": "b"}],
-                }
+            def chat(self, messages, **kwargs):
+                return json.dumps(
+                    {"title": "t", "steps": [{"title": "a"}, {"title": "b"}]},
+                    ensure_ascii=False,
+                )
 
         outline = _OG(_LLM()).generate(_ctx())
         assert outline.outline_id

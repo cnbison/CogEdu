@@ -28,6 +28,7 @@ from cogedu.presentation.types import GenerationContext, Outline, RuntimeContrac
 from cogedu.runtime.api import plan
 from web.api import llm as llm_service
 from web.api.presentation_service import (
+    _RETRY_POLICY,
     generate_scenes_for_outline,
     persist_outline,
 )
@@ -67,7 +68,9 @@ def generate_outline(req: OutlineRequest):
             evidence_id=req.evidence_id,
         )
         generator = OutlineGenerator(llm_service.get_llm())
-        outline = generator.generate(ctx, kb_snippets=req.kb_snippets)
+        outline = generator.generate(
+            ctx, kb_snippets=req.kb_snippets, policy=_RETRY_POLICY
+        )
         # 生成上下文随大纲落库: 第二阶段 (/scenes) 从持久化层恢复后
         # 需要同一份 pedagogy 字段重建 prompt (见 Outline.context 注记)
         outline.context = ctx
@@ -82,8 +85,8 @@ def generate_outline(req: OutlineRequest):
         # 与内核的契约不符 — 本服务侧问题, 500 (区别于上游 LLM 的 502)
         _log.error("outline runtime contract error (sid=%s): %s", req.student_id, e)
         return JSONResponse({"error": str(e)}, status_code=500)
-    except (OutlineGenerationError, ValueError) as e:
-        # LLM 输出不合规/解析失败 — 上游问题, 502 + warning 留痕 (不静默吞)
+    except (OutlineGenerationError, ValueError, RuntimeError) as e:
+        # LLM 输出不合规/解析失败/传输层耗尽 — 上游问题, 502 + warning 留痕 (不静默吞)
         _log.warning(
             "outline generation failed (sid=%s): %s", req.student_id, e
         )
@@ -102,7 +105,9 @@ def generate_scenes(req: ScenesRequest):
         return generate_scenes_for_outline(req.outline_id)
     except LookupError as e:
         return JSONResponse({"error": str(e)}, status_code=404)
-    except (SceneGenerationError, ValueError) as e:
+    except (SceneGenerationError, ValueError, RuntimeError) as e:
+        # 解析失败 (重试耗尽也不该到这——service 层已降级) / 传输层耗尽:
+        # 均为上游问题, 502 + warning 留痕 (不静默吞)
         _log.warning("scene generation failed (outline=%s): %s", req.outline_id, e)
         return JSONResponse({"error": f"场景生成失败: {e}"}, status_code=502)
     except Exception as e:
