@@ -39,6 +39,7 @@ dependencies = [
     "openai>=1.0",  # OpenAI-Compatible Protocol：MiniMax-M3 / Moonshot Kimi 共用
     "fastapi>=0.115",  # 0-C (12.4): 新 Web 框架, 迁移完成后替换 flask
     "uvicorn>=0.30",   # fastapi 的 ASGI server
+    "psycopg[binary,pool]>=3.2",  # 0-D (12.5): PostgreSQL 驱动 + 连接池
     "scikit-learn>=1.3",  # ECE 计算 + Isotonic Regression 校准 (metrics/ece.py + dual_agent/calibration.py 用)
 ]
 

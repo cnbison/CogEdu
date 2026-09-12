@@ -389,10 +389,16 @@ Phase 0 是三件事合并施工：① 补齐状态入口的几处具体缺口�
 
 ### 12.5 0-D：SQLite → PostgreSQL
 
-- [ ] 依据现有 9 张表（`event_log`/`evidence_log`/`students`/`interventions`/`calibration_log`/`bloom_goals`/`trajectory_snapshots`/`misconception_evidence`/`judge_audit_log`）设计对应的 PostgreSQL schema，注意 SQLite 里可能存在的"用 TEXT 字段存 JSON"的模式，迁移时评估是否改用 `JSONB`（更好的查询能力）
-- [ ] `ecos/persistence/db.py` 目前是原生 `sqlite3` + 手写 SQL，迁移时建议顺带引入一层轻量的数据库适配（比如统一的参数化 SQL 执行封装），不需要上重型 ORM，但要让"换数据库"这件事以后不用再触碰业务逻辑代码
-- [ ] 写一个一次性的数据迁移脚本（导出现有 SQLite 数据 → 灌入 PostgreSQL），本地/测试环境先跑一遍验证数据完整性
-- [ ] 补充 PostgreSQL 连接池、事务边界相关的测试（SQLite 是单文件单写锁，PostgreSQL 引入了新的并发行为，这部分原来的测试可能没覆盖到）
+- [x] 依据现有 9 张表（`event_log`/`evidence_log`/`students`/`interventions`/`calibration_log`/`bloom_goals`/`trajectory_snapshots`/`misconception_evidence`/`judge_audit_log`）设计对应的 PostgreSQL schema，注意 SQLite 里可能存在的"用 TEXT 字段存 JSON"的模式，迁移时评估是否改用 `JSONB`（更好的查询能力）
+  - ✅ 2026-09-12 完成：`cogedu/persistence/pg_schema.py`，9 张表 + 2 状态表 DDL（AUTOINCREMENT→IDENTITY、REAL→DOUBLE PRECISION、BLOB→BYTEA、主键自增 ID 用 RETURNING 统一取）。**JSONB 评估结论：Phase 0 维持 TEXT**——全仓确认 JSON 列全部整存整取、无 SQL 级查询需求，且 5 个持久化写入口统一传 JSON 字符串（JSONB 会因 text→jsonb 无隐式赋值转换导致全部写失败），跨后端行为一致性优先；无损升级 ALTER 语句已在 pg_schema.py 头部备档。布尔语义列维持 INTEGER 0/1、时间戳维持 TEXT ISO，同理。
+- [x] `ecos/persistence/db.py` 目前是原生 `sqlite3` + 手写 SQL，迁移时建议顺带引入一层轻量的数据库适配（比如统一的参数化 SQL 执行封装），不需要上重型 ORM，但要让"换数据库"这件事以后不用再触碰业务逻辑代码
+  - ✅ `cogedu/persistence/adapter.py`（~200 行）：占位符翻译（`:name`/`?` → psycopg 格式）、行值归一化（BYTEA memoryview→bytes）、DSN scheme 识别（`ECOS_DB_PATH` 可直接填 `postgres://...` 无缝切库）、executescript 分句、`open_connection` 工厂。业务方法 SQL 全部双后端通用（`RETURNING` 统一取代 `lastrowid`、`INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`、upsert 限定列名——PG 的 `AmbiguousColumn` 教训）。**接入面 = 全部 5 个持久化模块**：db.py Database + DualAgentStore + LCAStore + EventLog.from_sqlite + evidence_engine（比原计划的 db.py 单点多覆盖了 4 个，否则 12.6 灰度必炸）。SQLite 原路径零行为变化（含 Database 专属的 FK pragma 历史语义）。
+- [x] 写一个一次性的数据迁移脚本（导出现有 SQLite 数据 → 灌入 PostgreSQL），本地/测试环境先跑一遍验证数据完整性
+  - ✅ `scripts/migrate_sqlite_to_pg.py`：FK 依赖序写入、`ON CONFLICT DO NOTHING` 幂等重跑、IDENTITY 序列拨到 max(id)。端到端实测通过：9 张表造数 → 迁移 → 校验（行数逐表核对 / JSON 抽检 / FK 孤儿行 / BYTEA 字节抽检）→ 幂等重跑 → 迁移后继续写入不撞主键。
+- [x] 补充 PostgreSQL 连接池、事务边界相关的测试（SQLite 是单文件单写锁，PostgreSQL 引入了新的并发行为，这部分原来的测试可能没覆盖到）
+  - ✅ `tests/test_pg_backend.py`（11 用例，无 PG 服务器时 skip）：双后端 CRUD 奇偶校验（同一序列两后端结果一致，时间戳易变字段除外）、事务回滚/提交（SQLite 原语义零回归）、20 线程并发写 + 读写混合并发（PG 共享连接 tx 串行语义，对齐 SQLite 单写者）、psycopg_pool 连接池并发验证、EventLog/双 store/evidence_engine PG 走通。开发机 PostgreSQL 17.11（Homebrew）实测全过。
+
+**环境注记**：PG 连接方式 = `ECOS_DB_PATH` 或 `DatabaseConfig(dsn=...)` 填 `postgres://...` DSN；本地测试库由 fixture 每模块自动创建/删除（admin DSN 可用 `COGEDU_TEST_PG_ADMIN_DSN` 覆盖）。
 
 ### 12.6 0-E：回归与灰度
 

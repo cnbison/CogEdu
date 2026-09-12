@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### 2026-09-12 — Phase 0 / 12.5 SQLite → PostgreSQL（完成，双后端化）
+
+**轻量适配层**（`cogedu/persistence/adapter.py`）：占位符翻译 / 行值归一化 / DSN scheme 识别 / executescript 分句 / 连接工厂。不上 ORM，"换数据库不触碰业务逻辑"落到全部 5 个持久化模块（db.py Database + DualAgentStore + LCAStore + EventLog.from_sqlite + evidence_engine，比原计划 db.py 单点多覆盖 4 个）。
+
+**PostgreSQL schema**（`pg_schema.py`）：9 表 + 2 状态表 DDL。JSONB 评估结论：Phase 0 维持 TEXT（整存整取无 SQL 级查询需求 + 5 写入口统一 JSON 字符串契约优先，升级 ALTER 已备档）；布尔语义列 INTEGER 0/1、时间戳 TEXT ISO。
+
+**双后端行为统一**：`RETURNING` 统一取代 `lastrowid`（SQLite ≥3.35）、`INSERT OR IGNORE` → `ON CONFLICT DO NOTHING`、upsert 限定目标表列名（PG AmbiguousColumn 教训）、PG 事务 = autocommit 连接 + `transaction()` 块 + RLock 串行（对齐 SQLite 单写者语义）。
+
+**数据迁移脚本**（`scripts/migrate_sqlite_to_pg.py`）：FK 依赖序写入、幂等重跑、IDENTITY 序列对齐；四重校验（行数逐表 / JSON 抽检 / FK 孤儿行 / BYTEA 字节）。端到端实测通过。
+
+**PG 集成测试**（`tests/test_pg_backend.py`，11 用例，无 PG 服务器 skip）：双后端 CRUD 奇偶校验、事务回滚/提交（SQLite 原语义零回归）、20 线程并发写 + 读写混合、psycopg_pool 连接池并发验证、全部持久化模块 PG 走通。
+
+**验证**：SQLite 路径全量 **1651 用例通过**（零回归）；开发机 PostgreSQL 17.11 实测 PG 用例全过。
+
 ### 2026-09-12 — Phase 0 / 12.4 Flask → FastAPI（完成，Flask 删除）
 
 **迁移策略**：过渡期 FastAPI 与 Flask 并存（`web/api/fastapi_app.py` + `web/api/routers/`），按方案文档 12.4 建议顺序分 4 个 commit 递进（每步全量测试绿），最后一步翻转：`fastapi_app.py` 更名 `app.py` 替换 Flask 版，剥离 teacher/parent/event_stub 的 Blueprint 路由层（helpers 保留），pyproject 移除 flask 依赖。

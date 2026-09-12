@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**Phase 0 进行中**（2026-09-12）：12.2「建立安全网」+ 12.3「补齐状态入口缺口」+ 12.4「Flask → FastAPI」已完成——内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点，响应契约与 Flask 版逐字段一致，前端零改动），全量 **1640 个测试用例通过**。下一步：12.5「SQLite → PostgreSQL」。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
+**Phase 0 进行中**（2026-09-12）：12.2「建立安全网」+ 12.3「补齐状态入口缺口」+ 12.4「Flask → FastAPI」+ 12.5「SQLite → PostgreSQL」已完成——内核已从 ECOS v0.99.4 复制（包名改为 `cogedu`，仅 import 重命名）；**Web 层已全量迁移 FastAPI**（Flask 已删除，含 SSE 流式端点）；**持久化层已双后端化**（SQLite 原路径零改动，PostgreSQL 经 DSN 启用，含一次性数据迁移脚本），全量 **1651 个测试用例通过**。下一步：12.6「回归与灰度」。进展明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 开发环境（克隆后一次性）
 
@@ -19,6 +19,10 @@ bash scripts/install-hooks.sh   # 启用 git hooks（pre-commit 零 mutation 扫
 ```bash
 python -m web.api.app    # FastAPI 后端, 端口 5173 (前端 API base 沿用)
 ```
+
+### 数据库切换（SQLite → PostgreSQL）
+
+`ECOS_DB_PATH` 环境变量填 SQLite 文件路径（默认行为不变）或 `postgres://...` DSN 即可切换后端；存量数据迁移用 `python scripts/migrate_sqlite_to_pg.py --sqlite web/ecos.db --pg-dsn "postgres:///cogedu"`（自带行数/JSON/FK/BYTEA 四重校验）。
 
 ## 文档索引
 
