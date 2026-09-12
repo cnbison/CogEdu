@@ -9,8 +9,13 @@
   参考 OpenMAIC scene-types.ts）按 Phase 需要扩展 discriminator union。
 - 数学公式以 LaTeX 文本内嵌在 text block 里（``$...$`` 行内 /
   ``$$...$$`` 独立行），由前端 KaTeX 渲染（1-E-2），后端不做二次处理。
-- Phase 3 扩展点：``Scene.actions`` 字段已预留（白板/语音动作序列），
-  Phase 1 恒为 None，不产出。
+- Phase 3（3-A）动作序列：``Scene.actions`` 落成正式 schema（五种动作
+  discriminator union，参考 OpenMAIC ``@openmaic/dsl`` action.ts 的 payload
+  定义），Phase 1 存量场景 ``actions=None`` 继续合法（schema_version 区分）。
+  生成侧产出动作序列在 3-F 实现，本文件只定义契约。
+- schema_version（3-A-4）：v1 = Phase 1 纯翻页（无 actions）；v2 = 引入
+  动作序列。Scene 上由 after-validator 在 actions 非空时自动升 v2，
+  避免生成侧忘记赋值造成版本漂移。
 - 为什么用 Pydantic 而不是 dataclass：schema 同时服务三处校验——
   LLM JSON 输出的结构校验（1-B-2）、HTTP 响应模型（1-B-4）、落库
   payload 的一致性检查。仓库已依赖 fastapi（连带 pydantic），
@@ -22,7 +27,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RuntimeContractError(Exception):
@@ -125,6 +130,133 @@ class GenerationContext(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 3（3-A）：白板/语音动作模型与协议
+# ---------------------------------------------------------------------------
+
+# 白板虚拟画布（3-A-2）：固定像素坐标，原点左上，宽 1000、16:9 高 562.5。
+# 非归一化/百分比——OpenMAIC whiteboard 同款语义；前端按容器等比缩放。
+WB_CANVAS_WIDTH = 1000.0
+WB_CANVAS_HEIGHT = 562.5
+
+# schema 版本（3-A-4）：v1 = Phase 1 纯翻页（无 actions）；v2 = 引入动作序列
+SCHEMA_VERSION_V1 = 1
+SCHEMA_VERSION_V2 = 2
+
+# 动作白名单（v0.6 范围重申：四动作 + wb_draw_line，其余 OpenMAIC 动作类型
+# ——spotlight/laser/widget_*/wb_clear 等——明确排除在 v1 外）。3-F 生成侧
+# 解析 LLM 输出时据此过滤：白名单外动作丢弃 + warning 留痕，不拒绝整场。
+ALLOWED_ACTION_TYPES: tuple[str, ...] = (
+    "wb_draw_text",
+    "wb_draw_shape",
+    "wb_draw_line",
+    "wb_draw_latex",
+    "speech",
+)
+
+
+def is_allowed_action_type(type_name: object) -> bool:
+    """动作白名单判定（3-F 生成侧过滤 + 测试穷尽性校验用）."""
+    return type_name in ALLOWED_ACTION_TYPES
+
+
+def clamp_canvas_point(x: float, y: float) -> tuple[float, float]:
+    """把一个画布坐标点 clamp 进虚拟画布（3-A-2）.
+
+    生成侧（3-F）解析 LLM 动作时调用：越界值收进画布并由调用方留
+    warning，不拒绝整场。纯函数，不做任何 IO/日志。
+    """
+    return (
+        min(max(x, 0.0), WB_CANVAS_WIDTH),
+        min(max(y, 0.0), WB_CANVAS_HEIGHT),
+    )
+
+
+class ActionBase(BaseModel):
+    """动作公共字段（3-A-1/3-A-3）.
+
+    - ``action_id`` 由生成侧统一重分配（LLM 给的 id 不可信，对齐
+      Phase 1 ``step_id`` 惯例）；字段存在是为幂等键（如 TTS
+      ``tts_{scene_id}_{action_id}``）与前端定位。
+    - ``estimated_duration_ms`` 由生成侧按 3-E 时间常量估算回填，
+      调度侧不做绝对时间轴（顺序事件驱动），预计时长只服务时间轴
+      预览与未来导出。None = 尚未估算。
+    """
+
+    action_id: str = Field(default_factory=_new_id)
+    estimated_duration_ms: int | None = None
+
+
+class WbDrawTextAction(ActionBase):
+    """白板文字：content 为纯文本（LLM 文本前端一律 textContent 渲染）."""
+
+    type: Literal["wb_draw_text"] = "wb_draw_text"
+    content: str
+    x: float
+    y: float
+    width: float = 400.0
+    font_size: float = 18.0
+    color: str = "#333333"
+
+
+class WbDrawShapeAction(ActionBase):
+    """白板图形：v1 仅 rectangle/circle/triangle 三种（OpenMAIC 同款）."""
+
+    type: Literal["wb_draw_shape"] = "wb_draw_shape"
+    shape: Literal["rectangle", "circle", "triangle"]
+    x: float
+    y: float
+    width: float = 200.0
+    height: float = 200.0
+    fill_color: str = "#5b9bd5"
+
+
+class WbDrawLineAction(ActionBase):
+    """白板线段（v0.6 增补）：两点式；数理化画坐标轴/数轴/辅助线的刚需."""
+
+    type: Literal["wb_draw_line"] = "wb_draw_line"
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    color: str = "#333333"
+    stroke_width: float = 2.0
+
+
+class WbDrawLatexAction(ActionBase):
+    """白板公式：LaTeX 串，前端复用 scene 页的 KaTeX 渲染函数（3-B-2）."""
+
+    type: Literal["wb_draw_latex"] = "wb_draw_latex"
+    latex: str
+    x: float
+    y: float
+    width: float = 400.0
+    color: str = "#000000"
+
+
+class SpeechAction(ActionBase):
+    """语音讲解：audio_id 由 3-F 异步预生成后回填（tts_{scene_id}_{action_id}），
+    播放侧无 audio_id 时走估算计时器静音降级（3-D-5）。"""
+
+    type: Literal["speech"] = "speech"
+    text: str
+    voice: str | None = None
+    speed: float = 1.0
+    audio_id: str | None = None
+
+
+# 动作 union：LLM JSON 输出 / HTTP 响应 / 落库 payload 三处共用同一校验
+# （对齐 SceneBlock 的 discriminator 模式；Pydantic union 即运行时穷尽性校验）
+SceneAction = Annotated[
+    WbDrawTextAction
+    | WbDrawShapeAction
+    | WbDrawLineAction
+    | WbDrawLatexAction
+    | SpeechAction,
+    Field(discriminator="type"),
+]
+
+
+# ---------------------------------------------------------------------------
 # Outline（第一阶段输出）
 # ---------------------------------------------------------------------------
 
@@ -154,6 +286,8 @@ class Outline(BaseModel):
     title: str
     steps: list[OutlineStep]
     created_at: str = Field(default_factory=_utcnow_iso)
+    # schema 版本（3-A-4）：随 payload 落库，前端/查询方可据此区分新旧结构
+    schema_version: int = SCHEMA_VERSION_V1
     # 生成上下文随 Outline 落库：第二阶段（场景生成）从持久化层恢复
     # outline 后需要同一份 pedagogy 字段重建 prompt——不存的话
     # difficulty/clt_level 等会丢，场景与大纲的针对性就脱节了
@@ -217,6 +351,17 @@ class Scene(BaseModel):
 
     created_at: str = Field(default_factory=_utcnow_iso)
 
-    # Phase 3 扩展点（白板/语音动作序列 wb_draw_text/speech 等），
-    # Phase 1 恒为 None，不产出——留字段位置只为免将来 schema 破坏性变更
-    actions: list[dict[str, Any]] | None = None
+    # schema 版本（3-A-4）：v1 = Phase 1 纯翻页；v2 = 含动作序列。
+    # actions 非空时由 after-validator 自动升 v2——版本号是派生事实，
+    # 单点维护在模型内，生成侧无需（也不能）手动指定
+    schema_version: int = SCHEMA_VERSION_V1
+
+    # Phase 3（3-A）动作序列：白板/语音动作，按数组顺序执行（顺序事件
+    # 驱动调度，见 15.4 3-C）。Phase 1 存量恒 None，继续合法（纯翻页渲染）
+    actions: list[SceneAction] | None = None
+
+    @model_validator(mode="after")
+    def _sync_schema_version(self) -> Scene:
+        if self.actions is not None and self.schema_version < SCHEMA_VERSION_V2:
+            self.schema_version = SCHEMA_VERSION_V2
+        return self

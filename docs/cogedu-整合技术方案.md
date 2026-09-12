@@ -685,10 +685,14 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.2 3-A：动作模型与协议设计
 
-- [ ] **3-A-1** 动作 schema：`Scene.actions` 从 `list[dict]` 落成 Pydantic discriminator union（参照 `SceneBlock` 的 `Annotated[..., Field(discriminator=...)]` 模式）：`WbDrawTextAction`（`content`/`x`/`y`/`width=400`/`font_size=18`/`color`）、`WbDrawShapeAction`（`shape ∈ rectangle|circle|triangle`/`x`/`y`/`width`/`height`/`fill_color`）、`WbDrawLineAction`（`x1`/`y1`/`x2`/`y2`/`color`/线宽）、`WbDrawLatexAction`（`latex`/`x`/`y`/`width`/`color`）、`SpeechAction`（`text`/`voice`/`speed=1.0`/`audio_id` 回填位）。字段与默认值对齐 OpenMAIC `packages/@openmaic/dsl/src/action.ts` 的 payload 定义。**action_id 由生成侧统一重分配**（LLM 给的 id 不可信，对齐 Phase 1 `step_id` 惯例）；`ALLOWED_ACTION_TYPES` 白名单常量 + 穷尽性校验（Pydantic union 天然获得运行时版本，对齐 OpenMAIC `isActionType` + 编译期穷尽检查的意图）
-- [ ] **3-A-2** 坐标系统：固定虚拟画布宽 1000、高 562.5（16:9），原点左上，数值用像素（OpenMAIC 同款，非归一化/百分比）。LLM 输出越界值 **clamp 进画布 + warning 留痕**，不拒绝整场
-- [ ] **3-A-3** 时序模型修正（对 15.2 原文）：每个动作带 `estimated_duration_ms`（生成侧按 3-E 常量估算），**不做绝对时间轴**——调度是顺序事件驱动（3-C-2），预计时长只服务时间轴预览与未来导出
-- [ ] **3-A-4** schema 版本机制：`Outline`/`Scene` 顶层加 `schema_version: int`（Phase 1 存量 = 1，含 actions = 2），随 payload 自动落库；前端按版本/`actions` 是否为空分支——**`actions=None` 的 Phase 1 旧场景必须继续以纯翻页模式可渲染**（回归锁定）
+- [x] **3-A-1** 动作 schema：`Scene.actions` 从 `list[dict]` 落成 Pydantic discriminator union（参照 `SceneBlock` 的 `Annotated[..., Field(discriminator=...)]` 模式）：`WbDrawTextAction`（`content`/`x`/`y`/`width=400`/`font_size=18`/`color`）、`WbDrawShapeAction`（`shape ∈ rectangle|circle|triangle`/`x`/`y`/`width`/`height`/`fill_color`）、`WbDrawLineAction`（`x1`/`y1`/`x2`/`y2`/`color`/线宽）、`WbDrawLatexAction`（`latex`/`x`/`y`/`width`/`color`）、`SpeechAction`（`text`/`voice`/`speed=1.0`/`audio_id` 回填位）。字段与默认值对齐 OpenMAIC `packages/@openmaic/dsl/src/action.ts` 的 payload 定义。**action_id 由生成侧统一重分配**（LLM 给的 id 不可信，对齐 Phase 1 `step_id` 惯例）；`ALLOWED_ACTION_TYPES` 白名单常量 + 穷尽性校验（Pydantic union 天然获得运行时版本，对齐 OpenMAIC `isActionType` + 编译期穷尽检查的意图）
+  - ✅ 2026-09-13 完成：`cogedu/presentation/types.py` 新增动作模型段（`ActionBase` 公共字段 + 五动作 + `SceneAction` union + `ALLOWED_ACTION_TYPES`/`is_allowed_action_type`）；五动作统一继承 `ActionBase`；坐标为必填（LLM 不给坐标宁可失败走 retry，不出幽灵位置）；测试锁定 union 成员 ↔ 白名单一一对应
+- [x] **3-A-2** 坐标系统：固定虚拟画布宽 1000、高 562.5（16:9），原点左上，数值用像素（OpenMAIC 同款，非归一化/百分比）。LLM 输出越界值 **clamp 进画布 + warning 留痕**，不拒绝整场
+  - ✅ 2026-09-13 完成：`WB_CANVAS_WIDTH=1000`/`WB_CANVAS_HEIGHT=562.5` 常量 + `clamp_canvas_point` 纯函数；warning 留痕由 3-F 解析侧负责（本层只提供纯助手，不做 IO/日志）
+- [x] **3-A-3** 时序模型修正（对 15.2 原文）：每个动作带 `estimated_duration_ms`（生成侧按 3-E 常量估算），**不做绝对时间轴**——调度是顺序事件驱动（3-C-2），预计时长只服务时间轴预览与未来导出
+  - ✅ 2026-09-13 完成：`estimated_duration_ms: int | None` 进 `ActionBase`（None = 尚未估算，3-F/3-E 估算回填）
+- [x] **3-A-4** schema 版本机制：`Outline`/`Scene` 顶层加 `schema_version: int`（Phase 1 存量 = 1，含 actions = 2），随 payload 自动落库；前端按版本/`actions` 是否为空分支——**`actions=None` 的 Phase 1 旧场景必须继续以纯翻页模式可渲染**（回归锁定）
+  - ✅ 2026-09-13 完成：`SCHEMA_VERSION_V1=1`/`V2=2`；Scene 的 after-validator 在 actions 非空时自动升 v2（版本号是派生事实，单点维护在模型内，生成侧手动传 v1 也被纠正）；无 `schema_version` 字段的 Phase 1 存量 payload 读回走默认值 v1（回归锁定）；store round-trip（SQLite）验证 actions 类型化恢复。新增 `tests/test_presentation_actions.py` 21 用例，全量 **1828 通过**
 
 ### 15.3 3-B：白板渲染组件（技术路线已拍板：DOM + SVG path）
 
