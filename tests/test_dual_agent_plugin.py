@@ -68,7 +68,7 @@ class TestLearningEventTypeRequestCalibration:
         """REQUEST_CALIBRATION = 'request_calibration'."""
         assert LearningEventType.REQUEST_CALIBRATION.value == "request_calibration"
         # 10 values total
-        assert len(LearningEventType) == 10
+        assert len(LearningEventType) == 12  # Phase 1 (1-F): +2 scene_viewed/scene_completed
 
 
 # ── from_request_calibration factory (3 tests) ─────────────────────────────
@@ -201,7 +201,7 @@ class TestStartRegisters2Subscribers:
             lca_engine_factory=lambda: None,
         )
         runtime.start()
-        assert runtime.subscription_count == 8  # v0.85.0-c: 3 + v0.91.0-b: 4 frontend stub + v0.93.0-b: 1 diagnostic
+        assert runtime.subscription_count == 10  # v0.85.0-c: 3 + v0.91.0-b: 4 + v0.93.0-b: 1 + 1-F (Phase 1): 2 scene
         assert bus.get_topic_count("response_submitted") == 1
         assert bus.get_topic_count("request_calibration") == 1
         assert bus.get_topic_count("request_intervention") == 1

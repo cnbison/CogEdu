@@ -498,10 +498,14 @@ Phase 0 做完之后，建议按同样的细化方式处理 Phase 1（呈现引�
 
 ### 13.7 1-F：回写事件闭环（这一步是验证"整合真正生效"的关键）
 
-- [ ] **1-F-1** 定义场景行为事件类型（`scene_next`/`scene_dwell`/`scene_question` 之类，对齐现有 LearningEvent 命名约定）
-- [ ] **1-F-2** Plugin 形式接入：学生端埋点 + HTTP 端点 → publish 事件 → 事件总线订阅者 → `Runtime.update_belief`（**零 mutation**，复用 12.3 验证过的 `response_submitted` 模式）——走通才算验证"呈现引擎是内核的下游消费方，不是另起一套状态"（第 2 章原则）
-- [ ] **1-F-3** 事件落库复用现有 event_log 路径（12.6 灰度已验证 hint/reflection 落库）
-- [ ] **1-F-4** HTTP 全链路测试：埋点 → 总线 → belief 变化断言（对齐 12.4 `/api/answer` 全链路测试风格）
+- [x] **1-F-1** 定义场景行为事件类型（对齐现有 LearningEvent 命名约定）
+  - ✅ 2026-09-12 完成：`scene_viewed`（翻离场景页，payload 含 dwell_sec）+ `scene_completed`（看完）。**语义决策（偏离原案，已记录）**：不伪造作答 Observation 进 `update_belief`——那会污染 CTA 的 MIRT/BKT 推断；走内核 v0.91.0-b 确立的 human feedback 通道（`LearningEvent` → `PluginRuntime` 订阅者 → `HumanFeedbackEntry` → `LCAEngine.append_human_feedback` → 影响后续 `plan()`）。内核 additive 扩展（enum +2 / 白名单 +2 / 新 factory，算法零改动），记录进 `kernel-baseline-notes.md` §8 + `presentation-runtime-map.md` §6。"belief 再次更新" 由端到端链路中"看完讲解后重新答题"实现
+- [x] **1-F-2** Plugin 形式接入：学生端埋点 + HTTP 端点 → publish 事件 → 事件总线订阅者 → 内核（**零 mutation**，复用 12.3 验证过的事件驱动模式）——走通才算验证"呈现引擎是内核的下游消费方，不是另起一套状态"（第 2 章原则）
+  - ✅ 2026-09-12 完成：`POST /api/presentation/event`（复用 `event_stub._emit_event`）+ `PluginRuntime._handle_scene_viewed/_handle_scene_completed` + `scene.js trackSceneEvent`（best-effort，keepalive 保证跳转前送达，console.warn 不静默）+ 前端接线 grep 契约测试
+- [x] **1-F-3** 事件落库复用现有 event_log 路径（12.6 灰度已验证 hint/reflection 落库）
+  - ✅ 2026-09-12 完成：`_emit_event` 内含 event_log 持久化（F-11 fail-open + warning 语义原样复用），全链路测试断言落库
+- [x] **1-F-4** HTTP 全链路测试：埋点 → 总线 → 内核消费断言（对齐 12.4 `/api/answer` 全链路测试风格）
+  - ✅ 2026-09-12 完成：`tests/test_presentation_events.py` 11 用例——真实 PluginRuntime + 真实 LCAEngine，断言 `twin.human_feedback.count_by_type("scene_viewed") == 1` + event_log 落库 + 非法 event_type 400。既有 `len(LearningEventType)==10` / `subscription_count==8` 断言随 additive 扩展更新为 12/10（6 个测试文件）。全量 **1727 用例通过**
 
 ### 13.8 1-G：端到端验证
 

@@ -6,7 +6,7 @@
     - PluginRuntime.__init__ accepts plugin_registry_factory kwarg (DI)
     - PluginRuntime.start() triggers PluginRegistry.subscribe_all
     - PluginRuntime.stop() triggers PluginRegistry.unsubscribe_all
-    - subscription_count maintained at 8 (built-in) — Plugin registry is additional layer
+    - subscription_count maintained at 10 (built-in) — Plugin registry is additional layer
     - DI: custom plugin_registry_factory overrides default
 """
 
@@ -144,7 +144,7 @@ def test_plugin_runtime_subscription_count_maintained_at_8():
     runtime.start()
 
     # subscription_count 仍 = 8 (built-in), 不含 PluginRegistry 挂载的 first-party plugin
-    assert runtime.subscription_count == 8
+    assert runtime.subscription_count == 10  # 1-F (Phase 1): 8 + 2 scene 事件
 
     runtime.stop()
     assert runtime.subscription_count == 0  # 全部 unsubscribe

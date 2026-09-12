@@ -14,10 +14,11 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, Dict
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from cogedu.presentation.outline import OutlineGenerationError, OutlineGenerator
 from cogedu.presentation.scene import SceneGenerationError
@@ -55,6 +56,20 @@ class ScenesRequest(BaseModel):
     """POST /api/presentation/scenes 请求体."""
 
     outline_id: str
+
+
+class SceneEventRequest(BaseModel):
+    """POST /api/presentation/event 请求体 (1-F 场景行为回写)."""
+
+    student_id: str
+    outline_id: str
+    event_type: str  # "scene_viewed" | "scene_completed"
+    scene_id: str | None = None
+    step_id: str | None = None
+    dwell_sec: float = Field(default=0.0, ge=0)
+    index: int = Field(default=0, ge=0)
+    scene_count: int = Field(default=0, ge=0)
+    total_dwell_sec: float = Field(default=0.0, ge=0)
 
 
 @router.post("/outline", response_model=Outline)
@@ -116,3 +131,44 @@ def generate_scenes(req: ScenesRequest):
             req.outline_id, exc_info=True,
         )
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/event")
+def scene_event(req: SceneEventRequest) -> Dict[str, Any]:
+    """1-F (13.7): 场景行为回写 — 埋点 → LearningEvent → bus + event_log.
+
+    Plugin SDK 原则: 端点不写 state, 只产生 event (PluginRuntime subscriber
+    → human feedback 通道消费, 见映射表 §6)。emit/落库复用 event_stub 的
+    _emit_event (fail-open + warning 留痕, 与 hint/reflection 端点同语义)。
+    """
+    from cogedu.cta.event_log import LearningEvent
+
+    if req.event_type == "scene_viewed":
+        payload: Dict[str, Any] = {
+            "outline_id": req.outline_id,
+            "scene_id": req.scene_id,
+            "step_id": req.step_id,
+            "dwell_sec": req.dwell_sec,
+            "index": req.index,
+        }
+    elif req.event_type == "scene_completed":
+        payload = {
+            "outline_id": req.outline_id,
+            "scene_count": req.scene_count,
+            "total_dwell_sec": req.total_dwell_sec,
+        }
+    else:
+        return JSONResponse(
+            {"error": "event_type 必须是 scene_viewed / scene_completed"},
+            status_code=400,
+        )
+
+    event = LearningEvent.from_scene_behavior(
+        event_type=req.event_type,
+        student_id=req.student_id,
+        payload=payload,
+    )
+    # 复用 event_stub 的 emit + 落库 helper (bus publish + event_log 持久化)
+    from web.api.event_stub import _emit_event
+
+    return _emit_event(req.student_id, event)

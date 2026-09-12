@@ -62,7 +62,7 @@ class TestLearningEventTypeJudgeCompleted:
         """JUDGE_COMPLETED = 'judge_completed'."""
         assert LearningEventType.JUDGE_COMPLETED.value == "judge_completed"
         # 10 values total (v0.84.0-a 7 + v0.85.0-a/b/c 3)
-        assert len(LearningEventType) == 10
+        assert len(LearningEventType) == 12  # Phase 1 (1-F): +2 scene_viewed/scene_completed
 
 
 # ── from_judge_completed factory (3 tests) ─────────────────────────────────

@@ -47,3 +47,27 @@ ECOS 用原生 `sqlite3`（标准库，无 ORM）+ 手写 SQL，9 张表：`even
 ## 7. 与 SelfLab / CogMirror 的关系
 
 ECOS 自己的文档里提到过和一个叫 SelfLab 的项目、以及一个叫 CogMirror 的兄弟项目（面向成年自学者、无 LLM 依赖，用作确定性算法的低成本试验场）的关系。**按已经确认的决定，CogMirror 不纳入 CogEdu 的整合范围**，这里验证过的内容视为已经吸收进当前的 ECOS 内核里，不需要再单独去查 CogMirror 的代码或文档。
+
+## 8. CogEdu Phase 1 内核 additive 变更记录（2026-09-12, 1-F）
+
+**变更**：场景行为回写闭环（方案文档 13.7）需要新增事件类型，对内核做了
+**纯 additive 扩展**（算法零改动）：
+
+- `cogedu/cta/event_log.py`：`LearningEventType` 枚举追加
+  `SCENE_VIEWED` / `SCENE_COMPLETED`（枚举设计本身就是 forward-compat
+  的，"event_type 字段是 TEXT, 兼容任意 string"）；新增 factory
+  `LearningEvent.from_scene_behavior()`（严格校验 event_type 与 payload 类型）。
+- `cogedu/cta/cognitive_twin.py`：`HUMAN_FEEDBACK_EVENT_TYPES` 白名单追加
+  同两值（`HumanFeedbackEntry.__post_init__` 校验依赖此常量）。
+
+**为什么走 human feedback 通道而不是 13.7 字面的 `update_belief`**：
+行为事件（翻页/停留）不是作答证据，伪造 graded Observation 塞进
+`update_belief` 会把 correct/score 语义错误的信号喂给 MIRT/BKT，污染
+CTA 推断。内核 v0.91.0-b 已为 hint/idle/goal/reflection 四类行为事件
+确立了 human feedback 通道（→ `CognitiveTwinAgent.append_human_feedback`
+→ 影响后续 `plan()` 的干预选择），场景事件与之同类。完整契约见
+`docs/presentation-runtime-map.md` §6。
+
+**防线确认**：变更后零 mutation AST 扫描通过；全量测试通过；既有
+`len(LearningEventType) == 10` / `subscription_count == 8` 断言随扩展
+更新为 12 / 10（测试文件，非内核）。

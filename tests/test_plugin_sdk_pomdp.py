@@ -3,7 +3,7 @@
 对应设计: discussions/2026-08-12-v093-design.md §3.
 
 测试范围 (3 tests):
-  1. PluginRuntime.start() 注册 8 subscriber (1 test): subscription_count == 8
+  1. PluginRuntime.start() 注册 subscriber (1 test): subscription_count == 10 (8 + CogEdu 1-F 2 scene)
   2. PluginRuntime._handle_pomdp_diagnostic_updated (1 test): 调 Runtime.diagnose_pomdp + 写结果
   3. PluginRuntime.get_last_diagnostic_result (1 test): Plugin 读 _diagnostic_results[student_id]
 """
@@ -20,7 +20,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_plugin_runtime_start_registers_8_subscribers():
+def test_plugin_runtime_start_registers_10_subscribers():
     """PluginRuntime.start() 注册 8 subscriber (含 pomdp_diagnostic_updated).
 
     7 subscribers (v0.91.0-b): response_submitted, request_calibration,
@@ -34,7 +34,7 @@ def test_plugin_runtime_start_registers_8_subscribers():
     runtime = PluginRuntime(bus=get_default_bus())
     try:
         runtime.start()
-        assert runtime.subscription_count == 8
+        assert runtime.subscription_count == 10  # 8 + CogEdu 1-F 2 scene 事件
         assert runtime.is_started is True
     finally:
         runtime.stop()

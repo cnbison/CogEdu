@@ -16,6 +16,20 @@ let sid = '';
 let outline = null;
 let scenes = [];
 let currentIndex = 0;
+let pageEnteredAt = 0;      // 当前页进入时间戳 (dwell 埋点)
+let totalDwellMs = 0;       // 全部页面累计停留
+let completedReported = false;
+
+// 1-F: 场景行为回写 (best-effort, 失败 console.warn 不静默, 不阻塞翻页)
+function trackSceneEvent(eventType, extra) {
+  const body = Object.assign({ student_id: sid, outline_id: outline ? outline.outline_id : '' }, extra);
+  fetch('/api/presentation/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true, // 最后一条 (scene_completed) 在跳转前发出也能送达
+  }).catch((e) => console.warn('场景行为事件发送失败:', e));
+}
 
 // ─── 启动 ────────────────────────────────────────────────────────────────
 
@@ -50,6 +64,7 @@ async function boot() {
 
 function showScene(i) {
   currentIndex = i;
+  pageEnteredAt = Date.now();
   const scene = scenes[i];
   const card = document.getElementById('scene-content');
   card.innerHTML = ''; // 容器清空: 内容块由 DOM API 构建, 不拼 HTML 字符串
@@ -152,10 +167,27 @@ function prevScene() {
 }
 
 function nextScene() {
+  const dwellSec = (Date.now() - pageEnteredAt) / 1000;
+  totalDwellMs += Date.now() - pageEnteredAt;
+  const scene = scenes[currentIndex];
+  // 1-F-2: 翻页即回写 scene_viewed (dwell 埋点)
+  trackSceneEvent('scene_viewed', {
+    scene_id: scene.scene_id,
+    step_id: scene.step_id,
+    dwell_sec: Math.round(dwellSec * 10) / 10,
+    index: currentIndex,
+  });
   if (currentIndex < scenes.length - 1) {
     showScene(currentIndex + 1);
   } else {
-    // 最后一页: 1-F 接入"完成学习"回写事件后, 此处跳回学习页
+    // 最后一页: 回写 scene_completed (完成信号) 后跳回学习页
+    if (!completedReported) {
+      completedReported = true;
+      trackSceneEvent('scene_completed', {
+        scene_count: scenes.length,
+        total_dwell_sec: Math.round((totalDwellMs / 1000) * 10) / 10,
+      });
+    }
     window.location.href = '/student/';
   }
 }

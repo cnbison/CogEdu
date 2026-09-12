@@ -127,6 +127,10 @@ class PluginRuntime:
             ("idle_detected", self._handle_idle_detected),
             ("goal_changed", self._handle_goal_changed),
             ("reflection_completed", self._handle_reflection_completed),
+            # CogEdu Phase 1 (1-F): 呈现引擎场景行为事件 (13.7 回写闭环),
+            # 与 hint/reflection 同 human feedback 通道
+            ("scene_viewed", self._handle_scene_viewed),
+            ("scene_completed", self._handle_scene_completed),
         ):
             sub_id = bus.subscribe(event_type, handler)
             self._subscription_ids.append(sub_id)
@@ -417,6 +421,24 @@ class PluginRuntime:
         Student 完成反思 → LCA 后续 select 时 ExperimentDesigner 可 PRACTICE 巩固 + reward boost (c 阶段).
         """
         return self._handle_human_feedback_event(event, "reflection_completed")
+
+    # ── CogEdu Phase 1 (1-F): 呈现引擎场景行为事件 ──
+
+    def _handle_scene_viewed(self, event: Any) -> Any:
+        """1-F: scene_viewed → CognitiveTwinAgent.append_human_feedback.
+
+        学生翻到某讲解场景页 (含 dwell_sec) — 行为信号经 human feedback
+        通道进内核, 影响 LCA 后续 select; 不伪造作答 Observation 进
+        update_belief (见 docs/presentation-runtime-map.md §6).
+        """
+        return self._handle_human_feedback_event(event, "scene_viewed")
+
+    def _handle_scene_completed(self, event: Any) -> Any:
+        """1-F: scene_completed → CognitiveTwinAgent.append_human_feedback.
+
+        学生看完整份讲解 — 与 reflection_completed 类似的完成信号.
+        """
+        return self._handle_human_feedback_event(event, "scene_completed")
 
     # ── v0.93.0-b: 第 8 subscriber — pomdp_diagnostic_updated (POMDP T/R 后验可视化) ──
 

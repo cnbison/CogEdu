@@ -245,7 +245,7 @@ class TestPluginRuntimeHumanFeedbackSubscribers:
     """PluginRuntime 4 subscriber (hint / idle / goal / reflection) + handler defensive."""
 
     def test_subscription_count_is_7(self):
-        """start() registers 7 subscribers (3 v0.85 + 4 v0.91)."""
+        """start() registers 10 subscribers (3 v0.85 + 4 v0.91 + 1 v0.93 + 2 CogEdu 1-F scene)."""
         reset_plugin_runtime()
         bus = EventBus()
         runtime = PluginRuntime(
@@ -254,7 +254,7 @@ class TestPluginRuntimeHumanFeedbackSubscribers:
             lca_engine_factory=lambda: None,
         )
         runtime.start()
-        assert runtime.subscription_count == 8
+        assert runtime.subscription_count == 10  # 1-F (Phase 1): +2 scene 事件
         # 4 frontend stub endpoint 都有 subscriber
         assert bus.get_topic_count("hint_requested") == 1
         assert bus.get_topic_count("idle_detected") == 1

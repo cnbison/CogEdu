@@ -55,7 +55,7 @@ class TestLearningEventType:
         assert LearningEventType.JUDGE_COMPLETED.value == "judge_completed"
         assert LearningEventType.REQUEST_CALIBRATION.value == "request_calibration"
         assert LearningEventType.REQUEST_INTERVENTION.value == "request_intervention"
-        assert len(LearningEventType) == 10
+        assert len(LearningEventType) == 12  # Phase 1 (1-F): +2 scene_viewed/scene_completed
 
     def test_from_value_string_roundtrip(self):
         """from_value accepts strings matching enum values."""

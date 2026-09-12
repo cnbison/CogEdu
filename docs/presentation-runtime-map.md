@@ -118,12 +118,35 @@ CREATE TABLE presentation_scenes (
   JSON 解析失败抛 ValueError（含原始文本），1-D 的容错解析在其之上
   补"格式不完全合规 JSON"的修复层。
 
-## 6. 回写路径（1-F 预告，Phase 1 后半实现）
+## 6. 回写路径（1-F，已实现）
 
-场景行为（翻页/停留/提问）→ `LearningEvent` publish 到进程内事件总线 →
-Plugin 订阅者 → `Runtime.update_belief`。零 mutation：呈现引擎不改任何
-内核状态，只发事件（复用 12.3 验证的 `response_submitted` 模式）。
-实现时在本节补事件类型与 payload 契约。
+**语义决策（偏离 13.7 字面的 `update_belief`，2026-09-12）**：场景行为是
+行为信号不是作答证据——伪造 graded Observation 塞进
+`Runtime.update_belief` 会污染 CTA 的 MIRT/BKT 推断（Observation 的
+correct/score 语义会被误读）。因此走内核 v0.91.0-b 已确立的行为事件
+通道：`LearningEvent` → 事件总线 → `PluginRuntime` 订阅者 →
+`HumanFeedbackEntry` → `LCAEngine.append_human_feedback`（影响后续
+`plan()` 的干预选择）。零 mutation 原则不变：呈现引擎只发事件。
+
+事件类型（内核 additive 扩展，`cogedu/cta/event_log.py` +
+`cognitive_twin.HUMAN_FEEDBACK_EVENT_TYPES`，见 kernel-baseline-notes.md）：
+
+| event_type | payload | 触发 |
+|---|---|---|
+| `scene_viewed` | `{outline_id, scene_id, step_id, dwell_sec, index}` | 学生翻离某场景页（含停留时长） |
+| `scene_completed` | `{outline_id, scene_count, total_dwell_sec}` | 看完全部场景 |
+
+链路与契约：
+- 端点 `POST /api/presentation/event`（`web/api/routers/presentation.py`），
+  构造 `LearningEvent.from_scene_behavior(...)`，复用 `event_stub._emit_event`
+  （bus publish + event_log 落库，fail-open + warning 留痕）。
+- 订阅者 `PluginRuntime._handle_scene_viewed/_handle_scene_completed` →
+  `_handle_human_feedback_event`（与 hint/reflection 同 helper）。
+- 前端埋点 `web/student/scene.js trackSceneEvent`（best-effort，
+  `keepalive: true` 保证最后一条事件在跳转前发出，失败 `console.warn` 不静默）。
+- 13.7 "belief 再次更新" 在端到端链路中由**答题**路径实现
+  （学生看完讲解后重新答题 → `response_submitted` → `update_belief`），
+  行为事件本身不改 belief——这是刻意的，见上方语义决策。
 
 ## 7. 防线
 

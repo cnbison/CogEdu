@@ -56,6 +56,11 @@ HUMAN_FEEDBACK_EVENT_TYPES = frozenset({
     "idle_detected",
     "goal_changed",
     "reflection_completed",
+    # CogEdu Phase 1 (1-F) additive: 呈现引擎场景行为事件 (13.7 回写闭环),
+    # 与上面 4 类同通道消费 (CognitiveTwinAgent.append_human_feedback),
+    # 不进 CTA 作答观测 — 见 docs/presentation-runtime-map.md §6.
+    "scene_viewed",
+    "scene_completed",
 })
 
 # v0.92.0-a: 5 事件类型 (LCA 自动记录, 跟前 3 维度 human_feedback 主动注入 pattern 不同)

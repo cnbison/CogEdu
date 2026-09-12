@@ -68,6 +68,11 @@ class LearningEventType(Enum):
     REFLECTION_COMPLETED = "reflection_completed"
     JUDGE_COMPLETED = "judge_completed"
     REQUEST_CALIBRATION = "request_calibration"
+    # CogEdu Phase 1 (1-F) additive: 呈现引擎场景行为事件 (13.7 回写闭环).
+    # 走 human feedback 通道 (v0.91.0-b 同款), 不伪造作答 Observation 进
+    # update_belief — 见 docs/presentation-runtime-map.md §6.
+    SCENE_VIEWED = "scene_viewed"
+    SCENE_COMPLETED = "scene_completed"
     REQUEST_INTERVENTION = "request_intervention"
 
     @classmethod
@@ -461,6 +466,46 @@ class LearningEvent:
         )
 
     # ── v0.85.0-d: frontend stub factories (4) ──────────────────────────────
+
+    @classmethod
+    def from_scene_behavior(
+        cls,
+        event_type: str,
+        student_id: str,
+        payload: Dict[str, Any],
+        source: str = "frontend_scene",
+        event_id: Optional[str] = None,
+    ) -> "LearningEvent":
+        """CogEdu Phase 1 (1-F): 呈现引擎场景行为事件 factory.
+
+        event_type 限 SCENE_VIEWED / SCENE_COMPLETED (值 "scene_viewed" /
+        "scene_completed")。payload 契约见 docs/presentation-runtime-map.md §6：
+          - scene_viewed:   {outline_id, scene_id, step_id, dwell_sec, index}
+          - scene_completed:{outline_id, scene_count, total_dwell_sec}
+
+        消费通道与 hint/idle/goal/reflection 相同 (human feedback →
+        CognitiveTwinAgent), 不伪造作答 Observation 进 update_belief。
+        """
+        if event_type not in (
+            LearningEventType.SCENE_VIEWED.value,
+            LearningEventType.SCENE_COMPLETED.value,
+        ):
+            raise ValueError(
+                f"from_scene_behavior: event_type 必须是 scene_viewed / scene_completed, "
+                f"got={event_type!r}"
+            )
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"from_scene_behavior: payload 必须是 dict, got type={type(payload).__name__}"
+            )
+        return cls(
+            event_id=event_id or _make_event_id(),
+            student_id=str(student_id),
+            timestamp=datetime.now(),
+            source=source,
+            event_type=event_type,
+            payload=payload,
+        )
 
     @classmethod
     def from_hint_requested(
