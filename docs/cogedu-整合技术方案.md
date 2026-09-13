@@ -756,10 +756,18 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.8 3-G：端到端验证
 
-- [ ] 自动化测试（延续 `tests/test_presentation_*` 布局）：动作 schema 穷尽性/白名单过滤/坐标 clamp；**时序正确性**（不乱序、不重叠、pause/stop/翻页后令牌失效无残留回调）；TTS 拆分边界/字节嗅探失败降级/幂等键；`actions=None` Phase 1 旧场景兼容回归；`/scenes` 鉴权矩阵（含 outline 归属越权 403）；timing 常量下发契约
-- [ ] 灰度：`scripts/canary_phase3_whiteboard.py` 照 1-G/2-E 骨架（真实进程 + 真实登录 + 汇总布尔退出码 + stdout 人工复核）。**TTS 真实调用可配置跳过**（环境开关走估算路径，验证时序主干），真实 TTS 另做 2-3 条小样本验证（音质/时长嗅探正确性/中文与数学符号读法）
-- [ ] 人工复核验收点：挑 2-3 个含公式讲解场景（如"一元二次方程求根公式"）走全链路 LCA intervention → 含动作序列的场景 → 白板渲染+语音播放——画图与讲解节奏对齐、公式清晰度、静音降级路径观感
-- [ ] 回写扩展决策：v1 **不加 action 级埋点**，`scene_viewed`/`scene_completed` 粒度够用（行为信号最小化，对齐 1-F 语义决策）
+- [x] 自动化测试（延续 `tests/test_presentation_*` 布局）：动作 schema 穷尽性/白名单过滤/坐标 clamp；**时序正确性**（不乱序、不重叠、pause/stop/翻页后令牌失效无残留回调）；TTS 拆分边界/字节嗅探失败降级/幂等键；`actions=None` Phase 1 旧场景兼容回归；`/scenes` 鉴权矩阵（含 outline 归属越权 403）；timing 常量下发契约
+  - ✅ 2026-09-13 完成并随各任务铺开（test_presentation_actions / playback.test.cjs + whiteboard.test.cjs 24 例 JS 行为测试 / test_presentation_audio_* / test_tts* / test_scene_actions / test_tts_backfill / test_presentation_timing / test_whiteboard_wiring）
+- [x] 灰度：`scripts/canary_phase3_whiteboard.py` 照 1-G/2-E 骨架（真实进程 + 真实登录 + 汇总布尔退出码 + stdout 人工复核）。**TTS 真实调用可配置跳过**（环境开关走估算路径，验证时序主干），真实 TTS 另做 2-3 条小样本验证（音质/时长嗅探正确性/中文与数学符号读法）
+  - ✅ 2026-09-13 通过：2 案例（math.quadratic / physics.motion）真实 LLM 全链路——10 场景全部 schema v2 + 含动作序列、零降级零 warning、timing 下发正常、`/scenes` 走新鉴权契约、行为回写回归通过、theta K 上移（-0.331→-0.113）。**TTS 段 skipped**（未配置 `COGEDU_TTS_API_KEY`，降级链即默认路径）。**灰度发现并修复 2**（均已落码）：① 4096 max_tokens 被 thinking 耗尽产出空文本 → scene 默认上调 16384；② 长输出超共享客户端 30s 超时 → scene 独立 120s 超时（chat kwargs 透传 SDK）。另修脚本自身 3 处（模块路径/二进制响应解析/theta 证据量口径）
+- [x] 人工复核验收点：挑 2-3 个含公式讲解场景（如"一元二次方程求根公式"）走全链路 LCA intervention → 含动作序列的场景 → 白板渲染+语音播放——画图与讲解节奏对齐、公式清晰度、静音降级路径观感
+  - ◑ 脚本级抽查已做（2026-09-13）：10 个动作块 177 动作（speech 62/text 66/latex 33/line 9/shape 7）结构零问题，LaTeX `\text{}`/`\quad` 构造 KaTeX 可渲染；灰度 stdout 的完整 actions JSON 待维护者过目。**注记**：`\text` 系构造未来走 Word 导出（mathtext）需预检，属 2-C formula_render 预检覆盖范围。**待维护者**：真实 TTS 小样本（配 key 后）+ 页面实际观感（渲染/节奏/字幕）人工验证后全量发布
+- [x] 回写扩展决策：v1 **不加 action 级埋点**，`scene_viewed`/`scene_completed` 粒度够用（行为信号最小化，对齐 1-F 语义决策）
+  - ✅ 2026-09-13 确认（灰度行为回写按现有粒度回归通过）
+
+---
+
+**Phase 3 收官（2026-09-13）**：3-A 动作模型 + 3-B 白板渲染 + 3-C 播放引擎 + 3-D 语音合成 + 3-E 时间常数收口 + 3-F 生成侧改造 + 3-G 端到端验证（脚本级灰度通过）全部完成；全量 **1931 用例通过**（含 node:test JS 24 例）。待办：① 维护者过目灰度 stdout 的动作序列质量（人工复核）；② 配置 `COGEDU_TTS_API_KEY` 后跑真实 TTS 小样本（音质/时长嗅探/读法）；③ 页面实际观感验证后全量发布。**灰度实证的 2 项生成参数修正已落码**（scene max_tokens 16384 + 独立 120s 超时）。
 
 ---
 

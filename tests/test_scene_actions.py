@@ -21,6 +21,7 @@ from cogedu.presentation.scene import (
     _degraded_scene,
     _parse_actions,
     _scene_max_tokens,
+    _scene_timeout,
 )
 from cogedu.presentation.types import (
     GenerationContext,
@@ -197,9 +198,11 @@ class TestSceneWithActions:
 
 
 class TestSceneMaxTokens:
-    def test_default_falls_back_to_global(self, monkeypatch: pytest.MonkeyPatch):
+    def test_default_is_elevated(self, monkeypatch: pytest.MonkeyPatch):
+        """3-G 灰度实证: 4096 被 thinking 耗尽产出空文本, 默认上调 16384."""
         monkeypatch.delenv("COGEDU_PRESENTATION_SCENE_MAX_TOKENS", raising=False)
-        assert _scene_max_tokens() == GENERATION_MAX_TOKENS
+        assert _scene_max_tokens() == 16384
+        assert _scene_max_tokens() != GENERATION_MAX_TOKENS
 
     def test_env_override(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("COGEDU_PRESENTATION_SCENE_MAX_TOKENS", "8192")
@@ -207,4 +210,18 @@ class TestSceneMaxTokens:
 
     def test_bogus_value_falls_back(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("COGEDU_PRESENTATION_SCENE_MAX_TOKENS", "bogus")
-        assert _scene_max_tokens() == GENERATION_MAX_TOKENS
+        assert _scene_max_tokens() == 16384
+
+
+class TestSceneTimeout:
+    def test_default_120s(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC", raising=False)
+        assert _scene_timeout() == 120.0
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC", "240")
+        assert _scene_timeout() == 240.0
+
+    def test_bogus_value_falls_back(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC", "bogus")
+        assert _scene_timeout() == 120.0

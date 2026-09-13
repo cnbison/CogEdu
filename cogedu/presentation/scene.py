@@ -68,28 +68,57 @@ ImageProvider = Callable[[GenerationContext, Outline, OutlineStep], ImageBlock]
 # 降级 warning 里截断 reason, 防止把原始 LLM 输出整段塞进 warnings
 _REASON_TRUNCATE = 200
 
+# 3-F-4 / 3-G 灰度实证（2026-09-13）：thinking 推理计入 max_tokens，
+# 动作序列让 scene 输出显著变长——4096 被推理耗尽产出空文本，上调至 16384；
+# 长输出下单次调用可超共享客户端默认 30s，scene 走独立超时（经 chat
+# kwargs 透传 SDK per-request timeout）
+SCENE_MAX_TOKENS_DEFAULT = 16384
+SCENE_TIMEOUT_SEC_DEFAULT = 120.0
+
 # 动作 union 的解析入口（Annotated 别名无 model_validate，走 TypeAdapter）
 _ACTION_ADAPTER: TypeAdapter[Any] = TypeAdapter(SceneAction)
 
 
 def _scene_max_tokens() -> int:
-    """scene 生成 max_tokens（3-F-4）: 独立 env 可配，默认沿用全局值.
+    """scene 生成 max_tokens（3-F-4）: 独立 env 可配.
 
-    动作序列让 scene 输出显著变长；默认值 = GENERATION_MAX_TOKENS，
-    env ``COGEDU_PRESENTATION_SCENE_MAX_TOKENS`` 覆盖（非法值 warning
-    + 兜底，对齐 RetryPolicy.from_env 口径）。
+    默认 16384（3-G 灰度实证 2026-09-13：thinking 模型的推理 token 计入
+    max_tokens，动作序列 + 300~600 字正文在原全局 4096 下被推理耗尽，
+    返回空文本 → 解析必失败）。env ``COGEDU_PRESENTATION_SCENE_MAX_TOKENS``
+    可覆盖（非法值 warning + 兜底，对齐 RetryPolicy.from_env 口径）。
     """
     raw = os.environ.get("COGEDU_PRESENTATION_SCENE_MAX_TOKENS", "").strip()
     if not raw:
-        return GENERATION_MAX_TOKENS
+        return SCENE_MAX_TOKENS_DEFAULT
     try:
         return int(raw)
     except ValueError:
         _log.warning(
             "COGEDU_PRESENTATION_SCENE_MAX_TOKENS 非法 (%r), 回退 %s",
-            raw, GENERATION_MAX_TOKENS,
+            raw, SCENE_MAX_TOKENS_DEFAULT,
         )
-        return GENERATION_MAX_TOKENS
+        return SCENE_MAX_TOKENS_DEFAULT
+
+
+def _scene_timeout() -> float:
+    """scene 生成的单次请求超时秒数（3-G 灰度实证新增）.
+
+    thinking + 长输出下单次调用可超共享客户端默认 30s（超时 → 空响应/
+    Request timed out → 重试耗尽 502）。默认 120s，env
+    ``COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC`` 可配。经 chat(**kwargs)
+    透传 openai SDK 的 per-request timeout，不改共享客户端。
+    """
+    raw = os.environ.get("COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC", "").strip()
+    if not raw:
+        return SCENE_TIMEOUT_SEC_DEFAULT
+    try:
+        return float(raw)
+    except ValueError:
+        _log.warning(
+            "COGEDU_PRESENTATION_SCENE_TIMEOUT_SEC 非法 (%r), 回退 %s",
+            raw, SCENE_TIMEOUT_SEC_DEFAULT,
+        )
+        return SCENE_TIMEOUT_SEC_DEFAULT
 
 
 class SceneGenerationError(Exception):
@@ -196,7 +225,12 @@ class SceneGenerator:
         """单步生成（1-D 重试/降级复用的最小单元）."""
         messages = prompts.build_scene_messages(ctx, outline.title, step)
         raw = parse_llm_json(
-            self._llm.chat(messages, max_tokens=_scene_max_tokens())  # 3-F-4
+            # 3-F-4/3-G: 独立 max_tokens 与超时（thinking + 动作序列长输出）
+            self._llm.chat(
+                messages,
+                max_tokens=_scene_max_tokens(),
+                timeout=_scene_timeout(),
+            )
         )
         scene = self._parse_scene(raw, outline=outline, ctx=ctx, step=step)
         if self._image_provider is not None:
