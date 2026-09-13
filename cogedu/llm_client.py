@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 
 class LLMProvider(Enum):
@@ -324,7 +324,9 @@ class ECOSLLMClient:
         self.stats = LLMStats()
         # 延迟导入 openai（避免在无 key 的环境 import 失败）
         try:
-            from openai import OpenAI  # type: ignore
+            # 延迟导入仅为运行时容错（openai 包缺失时给出明确指引）；
+            # 类型层面 openai 自带存根可正常解析，无需 type: ignore
+            from openai import OpenAI
 
             self._client = OpenAI(
                 base_url=config.base_url,
@@ -425,7 +427,10 @@ class ECOSLLMClient:
             try:
                 response = self._client.chat.completions.create(
                     model=self.config.model,
-                    messages=messages,
+                    # 公开契约是宽松的 list[dict[str, str]]（role 为 str），
+                    # SDK 侧要求字面量 role 的 TypedDict 联合——运行时合法
+                    # （role 只会是 system/user/assistant），此处 cast 收口
+                    messages=cast(Any, messages),
                     temperature=temperature,
                     max_tokens=max_tokens,
                     **kwargs,
