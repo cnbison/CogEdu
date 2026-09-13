@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**Phase 1 完成**（2026-09-12）：**呈现引擎最小可用版本上线**——两阶段生成（Runtime `plan()` → 结构化大纲 → 讲解场景），学生端 `/student/scene.html` 翻页式播放（KaTeX 公式渲染），场景行为回写内核（human feedback 通道，影响后续干预选择）；生成健壮性（json-repair 容错 + 重试 + 模板化降级）；真实进程灰度 3 案例全通过。Phase 0 基础（FastAPI Web 层 / 双后端持久化 / 内核复制）见 [CHANGELOG.md](CHANGELOG.md)。全量 **1728 个测试用例通过**。下一步：Phase 2（家长端重新设计 + 导出能力）。
+**Phase 3 收官**（2026-09-13）：**白板与语音**——讲解场景从"翻页阅读"升级为"白板讲解播放"：LLM 生成的动作序列（文字标注 / 图形 / 线段 / LaTeX 公式 / 语音讲解词）由播放引擎（三态状态机 + 代数令牌，支持暂停/重播本页）驱动白板渲染（虚拟画布 1000×562.5 等比缩放，DOM + SVG，公式与场景文字共享同一 KaTeX 封装）；语音经 MiniMax TTS 后台异步补齐，无音频时静音降级、字幕同步推进；时间常数单一数据源（Python 权威源经 API 下发，JS 兜底镜像测试锁定）；动作级容错（白名单外丢弃 / 坐标 clamp / 超长语音三级拆分）。真实进程灰度通过（2 案例 10 场景全部含动作序列）。Phase 2（账号体系 / 家长端 / Word 报告导出）与 Phase 0/1 基础见 [CHANGELOG.md](CHANGELOG.md)。全量 **1931 个测试用例通过**（含 24 个 node:test JS 行为测试）。**待办**：真实 TTS 小样本验证 + 页面观感人工确认后全量发布。下一步：Phase 4（证据链可视化增强）。
 
 ### 开发环境（克隆后一次性）
 
@@ -20,9 +20,9 @@ bash scripts/install-hooks.sh   # 启用 git hooks（pre-commit 零 mutation 扫
 python -m web.api.app    # FastAPI 后端, 端口 5173 (前端 API base 沿用)
 ```
 
-### 讲解场景（Phase 1）
+### 讲解场景（Phase 1 + Phase 3 白板语音）
 
-登录学生端后点"讲解"标签（或直接访问 `/student/scene.html?sid=<学生ID>`）：系统按当前认知状态选干预 → LLM 生成大纲 → 逐步生成讲解场景，翻页式播放（KaTeX 公式渲染）；翻页/看完行为回写内核，影响后续干预选择。场景生成需要 LLM API key（MiniMax 主/Moonshot 备，同 ECOS 约定）。
+登录学生端后点"讲解"标签（或直接访问 `/student/scene.html?sid=<学生ID>`）：系统按当前认知状态选干预 → LLM 生成大纲 → 逐步生成讲解场景（含白板动作序列），翻页阅读 + 白板讲解播放（播放/暂停/重播，KaTeX 公式渲染，语音字幕同步）；翻页/看完行为回写内核，影响后续干预选择。场景生成需要 LLM API key（MiniMax 主/Moonshot 备，同 ECOS 约定）；语音合成需要 `COGEDU_TTS_API_KEY`（未配置时字幕静音推进，不影响使用）。
 
 ### 数据库切换（SQLite → PostgreSQL）
 

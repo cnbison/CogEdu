@@ -6,6 +6,48 @@
 
 ## [Unreleased]
 
+### 2026-09-13 — Phase 3 收官 / 3-G 端到端灰度（通过）
+
+`scripts/canary_phase3_whiteboard.py`（真实进程 + 真实登录 + 真实 LLM）2 案例全链路通过：10 场景全部 schema v2 且含动作序列、零降级零 warning、timing 下发正常、`/scenes` 新鉴权契约生效、行为回写回归通过、theta K 上移（-0.331→-0.113）。动作质量抽查：177 动作（speech 62 / text 66 / latex 33 / line 9 / shape 7）结构零问题。
+
+**灰度实证修正 2**（均落码 + 测试）：① scene `max_tokens` 默认上调 **16384**——thinking 模型推理 token 计入 max_tokens，动作序列 + 正文在 4096 下被推理耗尽产出空文本（解析必失败）；② scene 独立 **120s 超时**——长输出超共享客户端 30s 默认，经 `chat(**kwargs)` 透传 openai SDK per-request timeout，不动共享客户端。全量 **1931 用例通过**（含 node:test JS 24 例）。**待维护者**：过目灰度 stdout 动作序列质量 → 配 `COGEDU_TTS_API_KEY` 跑真实 TTS 小样本 → 页面观感验证后全量发布。
+
+### 2026-09-13 — Phase 3 / 3-F 生成侧改造（3-F-5 已随 3-D 落地）
+
+**prompt 扩展**（3-F-1）：scene system prompt 增加 `actions` 输出段——五动作字段口径（snake_case 对齐 3-A schema）、虚拟画布坐标系（1000×562.5 原点左上）、禁输出 action_id / estimated_duration_ms / audio_id（服务端统管）、求根公式 few-shot 完整示例。
+
+**动作级容错管线**（3-F-2，`_parse_actions`）：白名单外丢弃 + warning（不整场失败）→ TypeAdapter 校验失败丢弃 → 坐标越界 clamp + warning（3-A-2）→ action_id 统一重分配 `f"{scene_id}_a{n}"` → 时长按 timing.py 权威源估算 → 超长 speech 三级拆分（子动作时长逐段重估）；warning 全部进 `scene.warnings` 留痕；整体 parse 失败仍走 retry → `_degraded_scene`（降级场景不带动作）。
+
+**TTS 异步补齐**（3-F-3，`backfill_scene_audio` + 后台 daemon 线程）：幂等键已存在跳过合成 / 合成失败该动作保持 None 不中断 / 落库失败不回填 / `save_scene` 幂等覆盖回填。实现注记：计划为 asyncio task，但 `/scenes` 是同步端点（线程池无事件循环），daemon 线程语义等价。未配置 `COGEDU_TTS_API_KEY` 时 `get_tts()` 返回 None 静默跳过。**max_tokens 拆分**（3-F-4）：`COGEDU_PRESENTATION_SCENE_MAX_TOKENS` env 可配。
+
+### 2026-09-13 — Phase 3 / 3-E 时间常数单一数据源
+
+`cogedu/presentation/timing.py` 纯模块（不依赖 web/fastapi，对齐 OpenMAIC timing.ts 边界纪律）：7 常量（`WB_DRAW_MS=800` / 入场 450 / stagger 50 / 语音下限 2000 / CJK 150ms·字 / 英文 240ms·词 / CJK 占比阈值 0.3）+ `estimate_speech_duration_ms`（播放兜底与生成侧 `estimated_duration_ms` 同源）+ `estimate_action_duration_ms`。前端经 `GET /api/presentation/timing` 下发，scene.js 注入播放引擎与白板；**JS 兜底镜像被 pytest drift-lock 测试与 Python 权威值逐一锁定**（允许镜像，不允许漂移）。测试 17 用例，全量 1904 通过。
+
+### 2026-09-13 — Phase 3 / 3-D 语音合成集成（含 /scenes 鉴权缺口修复）
+
+**MiniMax TTS 单供应商**（3-D-1，`cogedu/presentation/tts.py`）：`SupportsTTS` Protocol（对齐 SupportsChat 注入模式）+ T2A v2 客户端（hex 音频解码，httpx transport 可注入测试）+ 长文本三级拆分（句级 → 子句级 → 硬切，子动作独立合成）；限长默认 2000 字符 env 可配（官方限长未在线核实，3-G 灰度核实——注记保留）。
+
+**时长字节嗅探**（3-D-2，`audio_duration.py`）：WAV RIFF 走查 / MP3 Xing 帧数优先 + CBR 兜底 / ID3 跳过；截断与垃圾输入返回 None 不猜数；入库时测一次存库（播放调度不消费，3-C ended 事件驱动）。
+
+**存储与端点**（3-D-4）：`presentation_audio` 表（BLOB 列按后端翻译 SQLite BLOB / PG BYTEA）+ 幂等键 `tts_{scene_id}_{action_id}`；`GET /api/presentation/audio/{audio_id}` 按 audio→scene.student_id 权威校验。前端 `createSpeechPlayer`（blob 会话缓存 + `<audio>` ended 驱动，失败回落估算计时器）；Web Speech API 按 v0.6 拍板不引入（3-D-5）。
+
+**3-F-5 提前落地**：核实 `require_student_access` 发现 `/scenes` 缺口比 v0.6 记录的更严重——不止"只验已认证"，**真实学生 UI 会 403**（scene.js body 不带 student_id，灰度脚本恰好带了才没暴露）。修复：`ScenesRequest.student_id` 必填 + outline 归属校验（他人 outline → 403）+ scene.js 补带字段，real_auth 测试锁定越权矩阵。
+
+### 2026-09-13 — Phase 3 / 3-C 播放引擎 + 3-B 白板渲染
+
+**播放引擎**（3-C，`web/student/playback.js`，无 DOM 依赖）：三态 idle/playing/paused（live 排除）+ 顺序事件驱动调度 + **generation 代数令牌**（照抄 OpenMAIC playbackGeneration，stop/replay 后旧异步回调全部失效）+ pause 剩余时间语义；语音三级路径（音频 ended 优先 / 播放失败估算兜底 / 无 audio_id 估算，`estimateSpeechDurationMs` 对齐 OpenMAIC timing.ts）；重播本页；renderer/speechPlayer/scheduler 全部依赖注入。**测试基建新决策**：时序正确性用 node:test 零依赖真测试锁定（FakeClock 手动时钟，14 用例），pytest 包装进 pre-push 门禁（无 node skip）——仓库首个 JS 行为测试；写测试暴露并修复 3 个真实卡死/错序路径（ended 后忘推进 / 暂停中 promise 定局 / 音频暂停期 ended）。
+
+**白板渲染**（3-B，`web/student/whiteboard.js`）：DOM + SVG path 路线（v0.6 拍板，OpenMAIC 实证），虚拟画布 1000×562.5 transform scale 等比缩放；实现 renderer 接口（clear/execute）；`elementSpec` 纯函数与 DOM 组装分离（node 可测）；渲染侧坐标 clamp 二道兜底。**formula.js 共享模块**（3-B-2）：`appendFormula` 从 scene.js 提取，scene 文字块与白板公式共用同一 KaTeX 封装（"同一能力只写一次"，grep 契约锁定 renderToString 全仓前端唯一）。**scene 页接线**：白板讲解区（仅 actions 非空显示，Phase 1 旧场景纯翻页不变）+ 播放/暂停/重播控件 + 语音字幕 + 翻页联动（`showScene` 开头 `stopPlayback()`，3-C-4 落地）；播放组件缺失守卫退回纯翻页。
+
+### 2026-09-13 — Phase 3 / 3-A 动作模型与协议设计
+
+`Scene.actions` 从预留裸 `list[dict]` 落成 Pydantic discriminator union：`WbDrawTextAction` / `WbDrawShapeAction`（仅矩形/圆/三角）/ `WbDrawLineAction`（v0.6 增补的两点式线段）/ `WbDrawLatexAction` / `SpeechAction`（含 audio_id 回填位），统一继承 `ActionBase`（action_id 生成侧重分配 + `estimated_duration_ms` 预留）。坐标系统：虚拟画布 1000×562.5（16:9，OpenMAIC 同款）+ `clamp_canvas_point` 纯函数。**schema 版本机制**：`SCHEMA_VERSION_V1/V2`，Scene after-validator 在 actions 非空时自动升 v2（版本号单点维护在模型内）；Phase 1 存量 payload（无版本字段）读回走 v1，兼容回归锁定。新增 `tests/test_presentation_actions.py` 21 用例。顺手修复 `llm_client.py` 两处存量 mypy 错误（失效 type: ignore + messages cast 收口）。
+
+### 2026-09-12 — Phase 3 任务清单细化（方案文档 v0.6 第 15 章）
+
+动笔前对 OpenMAIC 参考实现与 CogEdu 现状做双份代码勘察，**修正 v0.5 两处凭印象表述**：① 白板渲染并非"SVG vs Canvas"二选一（OpenMAIC 实际是 DOM 绝对定位 + shape 内嵌 SVG path）；② 播放调度不消费音频时长（ended 事件驱动，时长仅入库时字节嗅探供导出用）。四项决策落档（维护者拍板）：DOM+SVG 渲染路线；增补 `wb_draw_line`（第 3/8 章动作集结论同步修订）；砍撤销/重做换"重播本页"；TTS 异步补齐 + 播放端降级。15.1–15.8 展开为编号子任务。
+
 ### 2026-09-12 — Phase 2 / 2-D 前端页面 + 2-E 灰度（完成，Phase 2 收官）
 
 **家长端**（`web/parent/index.html` 从占位页重写）：「我的孩子」roster 卡片 + 学习概览下钻（5D theta/Bloom 表，家长视角简化汇总——学生端可视化是内联 JS 非组件，未强行抽象共享）+ 报告下载（authFetch blob 下载带 Authorization）；「授权管理」发起申请（权限勾选）/状态列表/撤回撤销。
