@@ -1,8 +1,9 @@
-"""1-C-3 (Phase 1, 13.4): 呈现引擎持久化 — Outline/Scene 双后端存储.
+"""1-C-3 (Phase 1, 13.4) + 3-D-4 (Phase 3): 呈现引擎持久化 — 双后端存储.
 
 契约见 docs/presentation-runtime-map.md §4（1-A-4 定义，本文件是实现）：
   - 表 presentation_outlines / presentation_scenes, payload 全文 JSON,
     追溯列 (student_id/intervention_id/goal_id/evidence_id) 只做索引不解析
+  - 表 presentation_audio (3-D-4): speech 动作预生成音频, audio_id 幂等键
   - 索引含 idx_scenes_evidence (错因→场景反查, 第 11 章可视化入口)
   - 失败语义: 写失败返回 False + warning 留痕 (不静默吞, 不抛断呈现);
     读失败返回 None/[] + warning
@@ -17,6 +18,7 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any
 
 from cogedu.presentation.types import Outline, Scene
@@ -28,6 +30,20 @@ from .adapter import (
 )
 
 _log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AudioRecord:
+    """presentation_audio 行 (3-D-4). duration_ms 可空 — 字节嗅探失败
+    (measure_audio_duration → None) 时落 NULL, 不猜数不报错。"""
+
+    audio_id: str
+    scene_id: str
+    action_id: str
+    audio: bytes
+    duration_ms: int | None
+    format: str
+    created_at: str
 
 
 # ─── Schema SQL (双后端兼容: TEXT/INTEGER + ON CONFLICT, 见 adapter 约束) ────
@@ -71,7 +87,29 @@ CREATE INDEX IF NOT EXISTS idx_scenes_evidence
     ON presentation_scenes(evidence_id);
 CREATE INDEX IF NOT EXISTS idx_scenes_degraded
     ON presentation_scenes(student_id, degraded);
+
+-- Phase 3 (3-D-4): speech 动作的预生成音频。audio_id = tts_{scene_id}_{action_id}
+-- 幂等键 (split 长文本拆出的子动作各有独立 audio)。BLOB 直存双后端
+-- (SQLite BLOB / PG bytea, adapter 统一); 单条几百 KB 量级可接受。
+CREATE TABLE IF NOT EXISTS presentation_audio (
+    audio_id    TEXT PRIMARY KEY,
+    scene_id    TEXT NOT NULL,
+    action_id   TEXT NOT NULL,
+    audio       BLOB NOT NULL,
+    duration_ms INTEGER,
+    format      TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audio_scene
+    ON presentation_audio(scene_id);
 """
+
+
+def _schema_sql(backend: str) -> str:
+    """按后端翻译 BLOB 列类型 (SQLite BLOB / PG BYTEA); 其余两方言通用."""
+    blob_type = "BYTEA" if backend == BACKEND_POSTGRES else "BLOB"
+    return PRESENTATION_SCHEMA_SQL.replace("BLOB NOT NULL", f"{blob_type} NOT NULL")
 
 
 class PresentationStore:
@@ -110,7 +148,7 @@ class PresentationStore:
     def _init_schema(self) -> None:
         try:
             with self._tx():
-                self.conn.executescript(PRESENTATION_SCHEMA_SQL)
+                self.conn.executescript(_schema_sql(self.backend))
         except Exception:
             # 防御性自检 [1]: schema init 失败必须 warning, 不能 silent pass
             _log.warning(
@@ -244,6 +282,87 @@ class PresentationStore:
         except Exception:
             _log.warning("list_scenes 失败 (db=%s)", self.db_path, exc_info=True)
             return []
+
+    def get_scene(self, scene_id: str) -> Scene | None:
+        """按 ID 取单个 Scene (3-D 音频归属校验 / 反查用)."""
+        try:
+            row = self.conn.execute(
+                "SELECT payload FROM presentation_scenes WHERE scene_id = ?",
+                (scene_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            return Scene.model_validate_json(_payload(row))
+        except Exception:
+            _log.warning(
+                "get_scene 失败 (scene=%s)", scene_id, exc_info=True
+            )
+            return None
+
+    # ─── 音频 (3-D-4): presentation_audio 读写 ────────────────────────────
+
+    def save_audio(self, record: AudioRecord) -> bool:
+        """保存音频 (audio_id 幂等键, 重复写入覆盖 — 对齐 save_scene 口径).
+        失败 False + warning。"""
+        try:
+            with self._tx():
+                self.conn.execute(
+                    """
+                    INSERT INTO presentation_audio
+                        (audio_id, scene_id, action_id, audio,
+                         duration_ms, format, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(audio_id) DO UPDATE SET
+                        audio = excluded.audio,
+                        duration_ms = excluded.duration_ms,
+                        format = excluded.format
+                    """,
+                    (
+                        record.audio_id,
+                        record.scene_id,
+                        record.action_id,
+                        record.audio,
+                        record.duration_ms,
+                        record.format,
+                        record.created_at,
+                    ),
+                )
+            return True
+        except Exception:
+            _log.warning(
+                "save_audio 失败 (audio=%s, db=%s)",
+                record.audio_id, self.db_path, exc_info=True,
+            )
+            return False
+
+    def get_audio(self, audio_id: str) -> AudioRecord | None:
+        """按 ID 取音频 (含 bytes)。不存在/失败 → None + warning."""
+        try:
+            row = self.conn.execute(
+                """
+                SELECT audio_id, scene_id, action_id, audio,
+                       duration_ms, format, created_at
+                FROM presentation_audio WHERE audio_id = ?
+                """,
+                (audio_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            # 行为 adapter 归一的 dict (memoryview → bytes 已在 normalize_value)
+            return AudioRecord(
+                audio_id=row["audio_id"],
+                scene_id=row["scene_id"],
+                action_id=row["action_id"],
+                audio=bytes(row["audio"]),
+                duration_ms=row["duration_ms"],
+                format=row["format"],
+                created_at=row["created_at"],
+            )
+        except Exception:
+            _log.warning(
+                "get_audio 失败 (audio=%s)", audio_id, exc_info=True
+            )
+            return None
 
 
 def _payload(row: Any) -> str:

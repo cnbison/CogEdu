@@ -720,11 +720,18 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.5 3-D：语音合成集成
 
-- [ ] **3-D-1** 供应商：**MiniMax TTS 单供应商**（事实依据：OpenMAIC 注册表内已有 `minimax-tts`，speech-2.8-hd 等模型；CogEdu LLM 已用 MiniMax，**零新增供应商**）。封装 Protocol 接口（对齐 presentation 包 LLM 注入同款模式，不绑具体 SDK）：`generate(text, *, voice, speed) -> TTSResult{audio_bytes, format}`——**不含时长**（OpenMAIC 同款，理由见 3-D-2）；v1 不做多供应商注册表
-- [ ] **3-D-2** 时长获取：入库时**字节嗅探测一次**（WAV RIFF chunk 走查 / MP3 Xing/Info 帧数优先 + CBR 估算兜底；靠 magic bytes 不信任 format 声明；失败返回 `None` 优雅降级——OpenMAIC `audio-duration.ts` 约 330 行的思路，Python 重写），存库供记录/未来导出；播放调度不消费（3-C-2）
-- [ ] **3-D-3** 长文本拆分：MiniMax 单次合成限长查官方文档后定常量；超限按 `。！？!?；;：:\n` → `，,、` → 硬切三级降级，拆成多个连续 speech 动作（`{action_id}_{i}`，各自独立音频、不做字节拼接，OpenMAIC `splitLongSpeechActions` 同款）
-- [ ] **3-D-4** 存储与幂等：`presentation_audio` 表（`audio_id` PK、`scene_id`、`action_id`、`audio` BLOB、`duration_ms` 可空、`format`、`created_at`，双后端模式入 `presentation_store.py` + `pg_schema.py`）；`audio_id = tts_{scene_id}_{action_id}` 幂等键，已存在跳过（留 force 重生成口）
-- [ ] **3-D-5** 降级链（对齐"宁可明确降级不静默"约定）：无音频 → **静音 + 估算计时器**（字幕推进，UI 明示"语音生成中/不可用"）；**v1 不做浏览器 Web Speech API 兜底**——OpenMAIC 为此写了约 350 行（Chrome 15s 截断需分句、`voiceschanged` 竞态、Firefox 暂停恢复），K12 校园设备兼容性参差，收益不抵复杂度
+- [x] **3-D-1** 供应商：**MiniMax TTS 单供应商**（事实依据：OpenMAIC 注册表内已有 `minimax-tts`，speech-2.8-hd 等模型；CogEdu LLM 已用 MiniMax，**零新增供应商**）。封装 Protocol 接口（对齐 presentation 包 LLM 注入同款模式，不绑具体 SDK）：`generate(text, *, voice, speed) -> TTSResult{audio_bytes, format}`——**不含时长**（OpenMAIC 同款，理由见 3-D-2）；v1 不做多供应商注册表
+  - ✅ 2026-09-13 完成：`cogedu/presentation/tts.py`（`TTSConfig.from_env`（COGEDU_TTS_API_KEY/BASE_URL/MODEL/VOICE）+ `SupportsTTS` Protocol + `MiniMaxTTSClient`（T2A v2，hex 回传解码，httpx transport 可注入供 MockTransport 测试）；API 形态参考 OpenMAIC `tts-providers.ts` generateMiniMaxTTS，Python 重写零运行时引用）
+- [x] **3-D-2** 时长获取：入库时**字节嗅探测一次**（WAV RIFF chunk 走查 / MP3 Xing/Info 帧数优先 + CBR 估算兜底；靠 magic bytes 不信任 format 声明；失败返回 `None` 优雅降级——OpenMAIC `audio-duration.ts` 约 330 行的思路，Python 重写），存库供记录/未来导出；播放调度不消费（3-C-2）
+  - ✅ 2026-09-13 完成：`cogedu/presentation/audio_duration.py`（`measure_audio_duration(bytes) -> int|None`；WAV 截断/空 data 不猜数返回 None）；测试样本全合成（struct 拼 RIFF / 手工 MP3 帧头 + Xing tag），无音频资产依赖
+- [x] **3-D-3** 长文本拆分：MiniMax 单次合成限长查官方文档后定常量；超限按 `。！？!?；;：:\n` → `，,、` → 硬切三级降级，拆成多个连续 speech 动作（`{action_id}_{i}`，各自独立音频、不做字节拼接，OpenMAIC `splitLongSpeechActions` 同款）
+  - ✅ 2026-09-13 完成：`split_speech_text` + `split_speech_action`；限长常量默认 2000 字符（`COGEDU_TTS_MAX_TEXT_CHARS` 可配，**官方限长未在线核实**——保守值 + env 口径，3-G 灰度时以真实长文本核实修正）
+- [x] **3-D-4** 存储与幂等：`presentation_audio` 表（`audio_id` PK、`scene_id`、`action_id`、`audio` BLOB、`duration_ms` 可空、`format`、`created_at`，双后端模式入 `presentation_store.py` + `pg_schema.py`）；`audio_id = tts_{scene_id}_{action_id}` 幂等键，已存在跳过（留 force 重生成口）
+  - ✅ 2026-09-13 完成：表入 `PRESENTATION_SCHEMA_SQL`（BLOB 列经 `_schema_sql(backend)` 按后端翻译 SQLite BLOB / PG BYTEA——两方言通用其余不动）；`AudioRecord` dataclass + `save_audio`（幂等覆盖，对齐 save_scene 口径）/`get_audio`（adapter dict 行取值）/`get_scene`（归属校验数据链）；store 双后端奇偶测试通过。**端点同步落地**：`GET /api/presentation/audio/{audio_id}`（async，audio→scene.student_id → `require_student_access` 单一入口权威校验；孤儿音频 404；media type 映射 mp3→audio/mpeg）
+  - ✅ 前端半环（3-D 播放侧）：scene.js `createSpeechPlayer()`（audio_id → 带 Bearer + student_id 的 GET → blob 会话内缓存 → `<audio>` ended 事件驱动；失败 reject → 引擎回落估算计时器）注入 3-C 引擎
+- [x] **3-D-5** 降级链（对齐"宁可明确降级不静默"约定）：无音频 → **静音 + 估算计时器**（字幕推进，UI 明示"语音生成中/不可用"）；**v1 不做浏览器 Web Speech API 兜底**——OpenMAIC 为此写了约 350 行（Chrome 15s 截断需分句、`voiceschanged` 竞态、Firefox 暂停恢复），K12 校园设备兼容性参差，收益不抵复杂度
+  - ✅ 2026-09-13 完成：引擎三级路径（3-C）+ 前端 speechPlayer 失败回落 + 字幕位（3-B）齐备，Web Speech API 未引入
+  - ✅ **3-F-5 提前落地（2026-09-13，随 3-D 一并提交）**：实施中查 `require_student_access` 实现发现 `/scenes` 缺口比 v0.6 记录的更严重——不止"只验已认证"，**真实学生 UI 会 403**（scene.js 的 body 不带 student_id，dependency 拿不到 target 即拒绝；灰度脚本恰好带了才没暴露）。已修：`ScenesRequest.student_id` 必填 + 端点内 outline 归属校验（outline.student_id ≠ 请求者 → 403）+ scene.js 补带 student_id；real_auth 测试锁定（本人 200 / 他人 outline 403 / 身份不一致 403）
 
 ### 15.6 3-E：时间常数单一数据源（借鉴 OpenMAIC `choreography/timing.ts` 模式）
 
@@ -737,7 +744,8 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 - [ ] **3-F-2** 容错：整体 parse 失败走现有 `call_with_retry` → `_degraded_scene` 路径不变；**动作级容错新增**——白名单外动作类型丢弃 + warning 留痕（不整场失败）、坐标 clamp（3-A-2）、`audio_id` 回填不参与重试比对。`parse_llm_json`（json_repair 管线）对内嵌数组同样生效，直接复用
 - [ ] **3-F-3** TTS 异步补齐编排（已拍板）：`generate_scenes_for_outline` 返回后，对含 speech 的 scene 起**进程内后台任务**（asyncio task，低并发逐条）预生成回填 `audio_id` 并更新落库。**诚实注记**：进程重启丢任务 = 该场景永久走降级路径，v1 接受（播放端降级兜底完整）；不做持久化任务队列
 - [ ] **3-F-4** `GENERATION_MAX_TOKENS` 拆分：scene 生成器独立常量 + env 可配（动作序列让输出显著变长，4096 共享值需重估）
-- [ ] **3-F-5** 顺手补鉴权缺口：`POST /scenes` 改为按 outline 归属校验（取 outline 的 `student_id` 过 `require_student_access` 同款语义），消除"任何已登录用户可为任意 outline 生成场景"的越权面
+- [x] **3-F-5** 顺手补鉴权缺口：`POST /scenes` 改为按 outline 归属校验（取 outline 的 `student_id` 过 `require_student_access` 同款语义），消除"任何已登录用户可为任意 outline 生成场景"的越权面
+  - ✅ 2026-09-13 已提前落地（随 3-D 一并提交，实施中发现真实学生 UI 403 问题，见 15.5 3-D-5 注记）
 
 ### 15.8 3-G：端到端验证
 

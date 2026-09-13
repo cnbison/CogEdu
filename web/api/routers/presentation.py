@@ -1,8 +1,10 @@
-"""Phase 1 (1-B-4 / 1-C): 呈现引擎路由.
+"""Phase 1 (1-B-4 / 1-C) + Phase 3 (3-D): 呈现引擎路由.
 
 端点:
   POST /api/presentation/outline — intervention → 大纲 (两阶段生成第一阶段, 落库)
   POST /api/presentation/scenes  — outline_id → 场景列表 (第二阶段, 落库)
+  POST /api/presentation/event   — 场景行为回写 (1-F)
+  GET  /api/presentation/audio/{audio_id} — speech 动作音频 (3-D, 按 scene 归属鉴权)
 
 调用链 (docs/presentation-runtime-map.md §1/§2):
   plan(student_id) → GenerationContext.from_lca_result → OutlineGenerator
@@ -16,8 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from cogedu.presentation.outline import OutlineGenerationError, OutlineGenerator
@@ -32,6 +34,7 @@ from web.api.auth import require_student_access
 from web.api.presentation_service import (
     _RETRY_POLICY,
     generate_scenes_for_outline,
+    get_store,
     persist_outline,
 )
 
@@ -60,8 +63,16 @@ class OutlineRequest(BaseModel):
 
 
 class ScenesRequest(BaseModel):
-    """POST /api/presentation/scenes 请求体."""
+    """POST /api/presentation/scenes 请求体.
 
+    student_id 必填 (3-F-5 鉴权缺口修复, 2026-09-13 提前落地): 原请求体
+    只有 outline_id, require_student_access 拿不到目标 — 学生角色被 403
+    (真实 UI 的 scene.js 就没带), 任意已登录用户却可为任意 outline 生成。
+    现为双保险: 本字段供 router 级 dependency 校验调用者身份, 端点内再
+    校验 outline 归属 (outline.student_id 必须一致)。
+    """
+
+    student_id: str
     outline_id: str
 
 
@@ -123,6 +134,13 @@ def generate_outline(req: OutlineRequest):
 @router.post("/scenes", response_model=list[Scene])
 def generate_scenes(req: ScenesRequest):
     """两阶段生成第二阶段: outline_id → 每步一个 Scene → 落库 → 返回."""
+    # 3-F-5: outline 归属校验 (router 级 dependency 已验调用者身份,
+    # 此处补齐"调用者是否有权操作这个 outline")
+    outline = get_store().get_outline(req.outline_id)
+    if outline is not None and outline.student_id != req.student_id:
+        return JSONResponse(
+            {"error": "无权为该学生的大纲生成场景"}, status_code=403
+        )
     try:
         return generate_scenes_for_outline(req.outline_id)
     except LookupError as e:
@@ -179,3 +197,34 @@ def scene_event(req: SceneEventRequest) -> dict[str, Any]:
     from web.api.event_stub import _emit_event
 
     return _emit_event(req.student_id, event)
+
+
+# 音频格式 → HTTP media type (未知格式降级 octet-stream, 前端 <audio> 仍可播)
+_AUDIO_MEDIA_TYPES = {"mp3": "audio/mpeg", "wav": "audio/wav"}
+
+
+@router.get("/audio/{audio_id}")
+async def get_audio_bytes(audio_id: str, request: Request) -> Response:
+    """3-D: speech 动作音频 (3-F 预生成回填 audio_id 后前端经此播放).
+
+    鉴权: router 级 dependency 验已认证 (GET 无 body, 查询串可选带
+    student_id 供其放行学生角色); 端点内按**音频归属**做权威校验 —
+    audio → scene.student_id → require_student_access (单一校验入口)。
+    音频/所属场景缺失 → 404 (audio_id 不可枚举, 存在性泄漏面可忽略);
+    非本人且非 staff → 403。
+    """
+    store = get_store()
+    record = store.get_audio(audio_id)
+    if record is None:
+        return JSONResponse({"error": "音频不存在"}, status_code=404)
+    scene = store.get_scene(record.scene_id)
+    if scene is None:
+        # 音频在场景不在: 孤儿数据, 按不存在处理 (warning 留痕)
+        _log.warning("audio %s 所属 scene %s 缺失", audio_id, record.scene_id)
+        return JSONResponse({"error": "音频不存在"}, status_code=404)
+    await require_student_access(request, student_id=scene.student_id)
+    return Response(
+        content=record.audio,
+        media_type=_AUDIO_MEDIA_TYPES.get(record.format, "application/octet-stream"),
+        headers={"Content-Disposition": f'inline; filename="{audio_id}.{record.format}"'},
+    )

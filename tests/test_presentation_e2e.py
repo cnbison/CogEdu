@@ -94,6 +94,7 @@ class TestPresentationEndToEnd:
 
         # 3. 场景 (追溯字段 + degraded=false)
         resp = client.post("/api/presentation/scenes", json={
+            "student_id": sid,
             "outline_id": outline["outline_id"],
         })
         assert resp.status_code == 200, resp.text

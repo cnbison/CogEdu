@@ -148,7 +148,10 @@ class TestScenesEndpoint:
             "web.api.llm.get_llm",
             lambda: FakeLLM(dict(_SCENE_LLM_OUTPUT)),  # output 不消耗, 每步同款
         )
-        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        resp = client.post(
+            "/api/presentation/scenes",
+            json={"student_id": "stu_http", "outline_id": outline_id},
+        )
         assert resp.status_code == 200
         scenes = resp.json()
         assert len(scenes) == 2  # 场景数 = 大纲步数
@@ -161,7 +164,8 @@ class TestScenesEndpoint:
     def test_scenes_unknown_outline_404(self, client, monkeypatch, isolated_ecos_db):
         monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
         resp = client.post(
-            "/api/presentation/scenes", json={"outline_id": "no_such"}
+            "/api/presentation/scenes",
+            json={"student_id": "stu_http", "outline_id": "no_such"},
         )
         assert resp.status_code == 404
         assert "不存在" in resp.json()["error"]
@@ -176,7 +180,10 @@ class TestScenesEndpoint:
             "web.api.llm.get_llm",
             lambda: FakeLLM(error=ValueError("LLM 输出无法解析为 JSON")),
         )
-        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        resp = client.post(
+            "/api/presentation/scenes",
+            json={"student_id": "stu_http", "outline_id": outline_id},
+        )
         assert resp.status_code == 200
         scenes = resp.json()
         assert len(scenes) == 2
@@ -195,7 +202,10 @@ class TestScenesEndpoint:
             "web.api.llm.get_llm",
             lambda: FakeLLM(error=RuntimeError("LLM 调用失败（重试 3 次后仍失败）")),
         )
-        resp = client.post("/api/presentation/scenes", json={"outline_id": outline_id})
+        resp = client.post(
+            "/api/presentation/scenes",
+            json={"student_id": "stu_http", "outline_id": outline_id},
+        )
         assert resp.status_code == 502
         assert "场景生成失败" in resp.json()["error"]
 

@@ -73,7 +73,12 @@ async function boot() {
       // 从学习页进入时可带 evidence_id (1-A-4 追溯), v1 直达入口不带
     });
     setStatus('正在生成讲解场景…');
-    scenes = await api('/api/presentation/scenes', { outline_id: outline.outline_id });
+    // 3-F-5: student_id 必带 — require_student_access 按它校验学生本人,
+    // 服务端再验 outline 归属 (outline.student_id 必须一致)
+    scenes = await api('/api/presentation/scenes', {
+      student_id: sid,
+      outline_id: outline.outline_id,
+    });
     document.getElementById('scene-outline-title').textContent = outline.title || '讲解';
     document.getElementById('scene-view').style.display = '';
     document.getElementById('scene-status').style.display = 'none';
@@ -171,6 +176,61 @@ function makePlaceholder(block) {
   return ph;
 }
 
+// ─── 音频播放器 (Phase 3, 3-D) ───────────────────────────────────────────
+
+// 引擎 (3-C) speechPlayer 接口的实现体: audio_id → 服务端音频 → <audio>。
+// - 播放失败 (HTTP 404/起播失败) → reject → 引擎回落估算计时器, 字幕静音
+//   推进 (3-D-5 降级链, UI 已有字幕位); 不做浏览器 Web Speech API (v0.6 拍板)
+// - GET 带 student_id 查询串 (router 级 dependency 放行学生角色所需);
+//   服务端按音频归属 (audio→scene.student_id) 做权威校验
+// - blob 按 audioId 会话内缓存: 重播/回看不重复下载
+function createSpeechPlayer() {
+  const blobCache = new Map();   // audioId → blob
+  let audio = null;
+
+  function fetchBlob(audioId) {
+    if (blobCache.has(audioId)) return Promise.resolve(blobCache.get(audioId));
+    const headers = {};
+    const token = (window.CogEduAuth && window.CogEduAuth.getToken()) || '';
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return fetch(
+      `/api/presentation/audio/${encodeURIComponent(audioId)}`
+      + `?student_id=${encodeURIComponent(sid)}`,
+      { headers },
+    ).then((resp) => {
+      if (!resp.ok) throw new Error('audio HTTP ' + resp.status);
+      return resp.blob();
+    }).then((blob) => {
+      blobCache.set(audioId, blob);
+      return blob;
+    });
+  }
+
+  return {
+    play(audioId) {
+      return new Promise((resolve, reject) => {
+        fetchBlob(audioId).then((blob) => {
+          audio = new Audio(URL.createObjectURL(blob));
+          audio.onended = () => resolve(true);
+          audio.onerror = () => reject(new Error('audio 播放失败'));
+          audio.play().catch(() => reject(new Error('audio 起播失败')));
+        }).catch((e) => reject(e));
+      });
+    },
+    pause() { if (audio) audio.pause(); },
+    resume() { if (audio) audio.play().catch(() => {}); },
+    stop() {
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+        audio.src = '';
+        audio = null;
+      }
+    },
+  };
+}
+
 // ─── 白板播放接线 (Phase 3, 3-B/3-C) ─────────────────────────────────────
 
 // 3-C-4 翻页联动: 翻页/重进页前必须 stop — 令牌失效 + 音频停止 + UI 复位。
@@ -199,6 +259,7 @@ function setupPlayback(scene) {
   engine = window.CogEduPlayback.createPlaybackEngine({
     actions: scene.actions,
     renderer: wb.renderer,
+    speechPlayer: createSpeechPlayer(),   // 3-D: 音频 ended 驱动, 失败回落估算
     // 字幕同步 (3-C-3): speech 动作开始时展示讲解词 — 有音频时随音频走,
     // 无音频 (3-D 未接/生成失败) 时随估算计时器静音推进
     onActionStart: function (action) {
