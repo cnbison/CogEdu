@@ -735,8 +735,10 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.6 3-E：时间常数单一数据源（借鉴 OpenMAIC `choreography/timing.ts` 模式）
 
-- [ ] **3-E-1** **跨语言单一数据源**（OpenMAIC 没有的问题，CogEdu 特有）：Python 生成侧要算 `estimated_duration_ms`，JS 播放端要用同一套数字，两份手抄常量必然漂移。方案：常量定义在 `cogedu/presentation/timing.py` 纯模块（不 import web/fastapi，对齐 `timing.ts` "不依赖 React/DOM" 的边界纪律），随 `POST /scenes` 响应（或 `/api/presentation/timing` 端点）下发给前端，**JS 侧不硬编码**。这同时为未来"导出可播放的视频版课堂"保留正确起点（OpenMAIC 的设计动机：app 运行时与导出器必须同一组数字，否则导出视频静默漂移）
-- [ ] **3-E-2** 常量初值（参考 OpenMAIC `timing.ts` 实测值，收口时可调）：`WB_DRAW_MS=800`、元素入场 450ms / stagger 50ms、`estimate_speech_duration_ms`（CJK 占比 >0.3 → `max(2000, 字数×150)`；否则按词 240ms/词）等；纯常量与按内容长度计算的函数型常量分列
+- [x] **3-E-1** **跨语言单一数据源**（OpenMAIC 没有的问题，CogEdu 特有）：Python 生成侧要算 `estimated_duration_ms`，JS 播放端要用同一套数字，两份手抄常量必然漂移。方案：常量定义在 `cogedu/presentation/timing.py` 纯模块（不 import web/fastapi，对齐 `timing.ts` "不依赖 React/DOM" 的边界纪律），随 `POST /scenes` 响应（或 `/api/presentation/timing` 端点）下发给前端，**JS 侧不硬编码**。这同时为未来"导出可播放的视频版课堂"保留正确起点（OpenMAIC 的设计动机：app 运行时与导出器必须同一组数字，否则导出视频静默漂移）
+  - ✅ 2026-09-13 完成：`cogedu/presentation/timing.py` 纯模块（权威源）+ `GET /api/presentation/timing` 端点下发（snake_case payload）+ scene.js `fetchTiming()` 注入 engine/whiteboard（失败 console.warn 不阻塞讲解）。**JS 兜底镜像的取舍**：下发失败时页面仍需可用，playback.js/whiteboard.js 保留内置默认值，但镜像数值被 `test_presentation_timing.py` 与 Python 权威值逐一锁定（drift-lock）——允许镜像，不允许漂移
+- [x] **3-E-2** 常量初值（参考 OpenMAIC `timing.ts` 实测值，收口时可调）：`WB_DRAW_MS=800`、元素入场 450ms / stagger 50ms、`estimate_speech_duration_ms`（CJK 占比 >0.3 → `max(2000, 字数×150)`；否则按词 240ms/词）等；纯常量与按内容长度计算的函数型常量分列
+  - ✅ 2026-09-13 完成：7 常量 + `estimate_speech_duration_ms`（与 3-C 引擎 JS 侧同口径，node 测试与 pytest 测试断言同一组期望值）+ `estimate_action_duration_ms`（3-F 填 `estimated_duration_ms` 的直接入口；wb_* → WB_DRAW_MS，speech → 估算）；测试 17 用例（payload 契约/估算口径/镜像漂移锁定/端点/前端接线 grep）。全量 **1904 用例通过**
 
 ### 15.7 3-F：生成侧改造（扩展 Phase 1 的呈现引擎）
 

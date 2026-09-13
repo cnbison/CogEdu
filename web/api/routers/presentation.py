@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from cogedu.presentation.outline import OutlineGenerationError, OutlineGenerator
 from cogedu.presentation.scene import SceneGenerationError
+from cogedu.presentation.timing import timing_payload
 from cogedu.presentation.types import GenerationContext, Outline, RuntimeContractError, Scene
 
 # patch 面约定: 测试 monkeypatch 本模块命名空间的 plan
@@ -228,3 +229,13 @@ async def get_audio_bytes(audio_id: str, request: Request) -> Response:
         media_type=_AUDIO_MEDIA_TYPES.get(record.format, "application/octet-stream"),
         headers={"Content-Disposition": f'inline; filename="{audio_id}.{record.format}"'},
     )
+
+
+@router.get("/timing")
+def get_timing() -> dict[str, Any]:
+    """3-E: 时间常数下发 — 跨语言单一数据源的前端半环.
+
+    权威源是 cogedu/presentation/timing.py; JS 侧仅保留下发失败时的
+    兜底镜像, 镜像数值被 pytest 契约测试与 Python 值逐一锁定 (防漂移)。
+    """
+    return timing_payload()

@@ -28,6 +28,9 @@ let completedReported = false;
 let wb = null;        // whiteboard.js 实例 (renderer 提供方)
 let engine = null;    // playback.js 引擎
 let wbStarted = false;  // 本页是否已开播 (区分"播放讲解"/"重新播放"按钮态)
+// 3-E: 服务端下发的时间常数 (cogedu/presentation/timing.py 权威源);
+// null = 下发失败, JS 兜底镜像顶上 (镜像值被 pytest 契约测试锁定)
+let timing = null;
 
 // 1-F: 场景行为回写 (best-effort, 失败 console.warn 不静默, 不阻塞翻页)
 // 2-0-4: 回写携带学生身份 (Authorization Bearer) — 服务端校验
@@ -79,6 +82,7 @@ async function boot() {
       student_id: sid,
       outline_id: outline.outline_id,
     });
+    await fetchTiming();   // 3-E: 时间常数注入 engine/whiteboard (失败用兜底镜像)
     document.getElementById('scene-outline-title').textContent = outline.title || '讲解';
     document.getElementById('scene-view').style.display = '';
     document.getElementById('scene-status').style.display = 'none';
@@ -255,11 +259,20 @@ function setupPlayback(scene) {
   }
   const section = document.getElementById('wb-section');
   const container = document.getElementById('wb-container');
-  wb = window.CogEduWhiteboard.createWhiteboard(container);
+  wb = window.CogEduWhiteboard.createWhiteboard(container, {
+    timing: timing ? { enterMs: timing.wb_enter_ms, staggerMs: timing.wb_stagger_ms } : undefined,
+  });
   engine = window.CogEduPlayback.createPlaybackEngine({
     actions: scene.actions,
     renderer: wb.renderer,
     speechPlayer: createSpeechPlayer(),   // 3-D: 音频 ended 驱动, 失败回落估算
+    timing: timing ? {   // 3-E: 服务端下发的时序常数 (权威源 timing.py)
+      wbDrawMs: timing.wb_draw_ms,
+      speechMinMs: timing.speech_min_ms,
+      cjkMsPerChar: timing.cjk_ms_per_char,
+      latinMsPerWord: timing.latin_ms_per_word,
+      cjkRatioThreshold: timing.cjk_ratio_threshold,
+    } : undefined,
     // 字幕同步 (3-C-3): speech 动作开始时展示讲解词 — 有音频时随音频走,
     // 无音频 (3-D 未接/生成失败) 时随估算计时器静音推进
     onActionStart: function (action) {
@@ -351,16 +364,27 @@ function nextScene() {
 // ─── 工具 ────────────────────────────────────────────────────────────────
 
 async function api(url, body) {
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const opts = { headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) {           // 无 body → GET (3-E /timing)
+    opts.method = 'POST';
+    opts.body = JSON.stringify(body);
+  }
+  const resp = await fetch(url, opts);
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     throw new Error(data.error || '请求失败 (HTTP ' + resp.status + ')');
   }
   return data;
+}
+
+// 3-E: 时间常数下发 (带 student_id 供 router 级 dependency 放行学生角色);
+// 失败不阻塞讲解 — JS 兜底镜像顶上 (镜像值被 pytest 契约测试锁定防漂移)
+async function fetchTiming() {
+  try {
+    timing = await api('/api/presentation/timing?student_id=' + encodeURIComponent(sid));
+  } catch (e) {
+    console.warn('时间常数下发失败, 使用内置兜底值:', e);
+  }
 }
 
 function setStatus(text, showError) {
