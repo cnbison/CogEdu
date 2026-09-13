@@ -696,10 +696,15 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.3 3-B：白板渲染组件（技术路线已拍板：DOM + SVG path）
 
-- [ ] **3-B-1** 画布组件 `web/student/whiteboard.js`（新文件，与 scene.js 解耦）：虚拟坐标 1000×562.5 → 屏幕的等比缩放（ResizeObserver 测容器 + `containerScale = min(cw/1000, ch/562.5)`，参考 OpenMAIC `whiteboard-canvas.tsx`；它的 456 行里视口交互占大头，CogEdu v1 是观众场景，**滚轮缩放/拖拽平移/双击复位不做**，只做自适应等比缩放）。元素按 actions 数组顺序渲染，单层平面无图层模型（OpenMAIC 同款）。LLM 文本一律 `textContent`/受控节点构建（沿用 scene 页安全约定；KaTeX 产出的 HTML 是唯一例外——来源是本地渲染不是 LLM 原文）
-- [ ] **3-B-2** `wb_draw_latex` 公式渲染复用：把 `appendFormula`（`scene.js:130`）提为 `web/student/formula.js` 共享模块，scene 文字块与白板公式动作共用同一函数（"同一能力只写一次"的落点；KaTeX 暂维持 CDN，vendor 本地化可顺带做掉 scene.html 里既有的 TODO）。`throwOnError: false` + 渲染失败降级等宽原文
-- [ ] **3-B-3** 交互 = 播放/暂停/重播本页（已拍板砍掉撤销/重做）。OpenMAIC `whiteboard-history.tsx` 的快照栈设计**记录在案不实现**——未来若做教师端编辑场景再启用
-- [ ] **3-B-4** 元素入场动画：CSS transition（参考 OpenMAIC 的 450ms 入场 + 50ms stagger 级联），参数进 3-E 常量
+- [x] **3-B-1** 画布组件 `web/student/whiteboard.js`（新文件，与 scene.js 解耦）：虚拟坐标 1000×562.5 → 屏幕的等比缩放（ResizeObserver 测容器 + `containerScale = min(cw/1000, ch/562.5)`，参考 OpenMAIC `whiteboard-canvas.tsx`；它的 456 行里视口交互占大头，CogEdu v1 是观众场景，**滚轮缩放/拖拽平移/双击复位不做**，只做自适应等比缩放）。元素按 actions 数组顺序渲染，单层平面无图层模型（OpenMAIC 同款）。LLM 文本一律 `textContent`/受控节点构建（沿用 scene 页安全约定；KaTeX 产出的 HTML 是唯一例外——来源是本地渲染不是 LLM 原文）
+  - ✅ 2026-09-13 完成：`createWhiteboard(container)` 返回 3-C 引擎的 renderer 接口（`clear()`/`execute(action)`）；虚拟层固定 1000×562.5 + `transform: scale()` 等比缩放（字号/线宽随画布缩放）；wb_draw_line 用整幅虚拟画布 SVG 覆盖层（两点式坐标即画布坐标）；`elementSpec` 纯函数（动作→元素规格，node 可测）与 DOM 组装分离；渲染侧坐标 clamp 兜底（3-F 解析侧之外的第二道）
+- [x] **3-B-2** `wb_draw_latex` 公式渲染复用：把 `appendFormula`（`scene.js:130`）提为 `web/student/formula.js` 共享模块，scene 文字块与白板公式动作共用同一函数（"同一能力只写一次"的落点；KaTeX 暂维持 CDN，vendor 本地化可顺带做掉 scene.html 里既有的 TODO）。`throwOnError: false` + 渲染失败降级等宽原文
+  - ✅ 2026-09-13 完成：`formula.js`（`renderFormulaInto`）双通道导出（window.global + node）；scene.js 私有 `appendFormula` 已删除，grep 契约锁定 `renderToString` 全仓前端只在 formula.js 出现。**vendor 本地化未做**（涉及 CDN 资产落库与字体文件，独立小任务），TODO 留在 scene.html
+- [x] **3-B-3** 交互 = 播放/暂停/重播本页（已拍板砍掉撤销/重做）。OpenMAIC `whiteboard-history.tsx` 的快照栈设计**记录在案不实现**——未来若做教师端编辑场景再启用
+  - ✅ 2026-09-13 完成：scene 页白板区「播放讲解/暂停/继续/重新播放」单按钮 + 「重播本页」按钮（开播后出现）；3-C 引擎的 `stop()`/`pause()`/`resume()`/`replay()` 全部接上；**3-C-4 翻页联动同步落地**（`showScene` 开头 `stopPlayback()`：引擎 stop + 令牌失效 + 字幕复位，grep 契约锁定）；静态资源缺失时守卫退回纯翻页（Phase 1 行为兜底）
+- [x] **3-B-4** 元素入场动画：CSS transition（参考 OpenMAIC 的 450ms 入场 + 50ms stagger 级联），参数进 3-E 常量
+  - ✅ 2026-09-13 完成：keyframes 在 scene.css，duration/delay 由 whiteboard.js 按时序常量内联设置（当前 450/50ms 对齐 OpenMAIC，JS 侧镜像标注 3-E 收口）
+  - ✅ **测试**：`tests/js/whiteboard.test.cjs` 10 用例（常量镜像/clamp/图形 path/缩放/四类动作规格映射/非法动作拒绝——DOM 组装不进 node 单测，行为由 3-G 灰度人工复核）；`tests/test_whiteboard_wiring.py` 9 用例 grep 契约（脚本加载顺序/翻页联动/共享公式/LLM 文本安全约定）。全量 **1838 用例通过**
 
 ### 15.4 3-C：播放引擎/状态机
 
@@ -710,7 +715,7 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 - [x] **3-C-3** 语音同步优先级（对齐 OpenMAIC）：有 `audio_id` 且加载成功 → `ended` 事件驱动；否则估算计时器（字幕同步推进）。**音频时长不参与调度**（15.5 原文已修正）
   - ✅ 2026-09-13 完成：三级路径 = audio_id 且 play 成功 → ended 驱动 / play 失败或显式 false → 估算兜底 / 无 audio_id → 估算；`estimateSpeechDurationMs` 内置（CJK 占比>0.3 → max(2000, 字数×150)，否则按词 240ms，除以 speed，对齐 OpenMAIC timing.ts）——3-E 收口后由服务端下发同源常量覆盖，JS 内置值标注为过渡态
 - [x] **3-C-4** 翻页联动：actions 是 scene 级，翻页 = stop + 令牌失效 + 音频停止；重播本页 = stop 后从头重放
-  - ✅ 2026-09-13 完成：引擎侧 `stop()`/`replay()`（replay = stop + start + renderer.clear）已就绪并测试锁定；**scene.js 的翻页接线（showScene 前调 engine.stop()）随 3-B 集成落地**——引擎尚未被页面创建前无联动对象
+  - ✅ 2026-09-13 完成：引擎侧 `stop()`/`replay()`（replay = stop + start + renderer.clear）已就绪并测试锁定；scene.js 翻页接线已在 3-B 落地（`showScene` 开头 `stopPlayback()`）
   - ✅ **测试基建（本任务新增决策）**：时序正确性用 **node:test 零依赖真测试**锁定（`tests/js/playback.test.cjs` 14 用例：乱序/重叠/令牌失效/剩余时间暂停恢复/语音三级路径/重播/渲染失败跳过/估算函数），`tests/test_playback_engine_js.py` pytest 包装进 pre-push 门禁（无 node skip，对齐 PG 集成测试惯例）——grep 契约测试锁不了行为，这是仓库首个 JS 行为测试
 
 ### 15.5 3-D：语音合成集成

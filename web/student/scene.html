@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>讲解场景 - CogEdu 学生端</title>
-<link rel="stylesheet" href="/student/scene.css?v=1.0.0">
+<link rel="stylesheet" href="/student/scene.css?v=1.1.0">
 <!-- KaTeX (1-E-2): 公式渲染. CDN 引入 + 运行时 feature-detect (scene.js),
      加载失败时公式降级为等宽文本展示, 不阻塞页面.
      TODO(Phase 2+): 本地 vendor KaTeX dist, 去掉 CDN 依赖 -->
@@ -13,7 +13,13 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
         integrity="sha384-7zU0VVGyoGqdF8L1G7BcjN0UsR+KZBTNzk9AbBtFOlWrB4G9u+WoDxb/PPdBkD/t" crossorigin="anonymous"></script>
 <script src="/auth.js?v=2.0.0"></script>
-<script src="/student/scene.js?v=1.0.1" defer></script>
+<!-- Phase 3 (3-B/3-C): 公式共享模块 → 播放引擎 → 白板组件 → 场景页.
+     defer 按文档顺序执行, 依赖方必须在前; 任何一环加载失败 scene.js
+     均有守卫退回纯翻页模式 (Phase 1 行为) -->
+<script src="/student/formula.js?v=1.0.0" defer></script>
+<script src="/student/playback.js?v=1.0.0" defer></script>
+<script src="/student/whiteboard.js?v=1.0.0" defer></script>
+<script src="/student/scene.js?v=1.1.0" defer></script>
 </head>
 <body>
 
@@ -48,6 +54,18 @@
     <article id="scene-content" class="scene-card">
       <!-- blocks 由 scene.js 渲染: text (KaTeX) + image (懒加载/占位) -->
     </article>
+
+    <!-- Phase 3 (3-B): 白板讲解区 — 仅 scene.actions 非空时显示
+         (schema_version 2; Phase 1 旧场景 actions=None 保持纯翻页) -->
+    <div id="wb-section" style="display:none;">
+      <div id="wb-controls" class="wb-controls">
+        <button id="wb-play" class="btn btn-primary" onclick="togglePlay()">▶ 播放讲解</button>
+        <button id="wb-replay" class="btn" style="display:none;" onclick="replayPage()">↻ 重播本页</button>
+      </div>
+      <div id="wb-container" class="wb-container"><!-- 白板由 whiteboard.js 挂载 --></div>
+      <!-- 语音字幕 (3-C-3): 无音频时估算计时器静音推进, 字幕同步展示讲解词 -->
+      <div id="wb-subtitle" class="wb-subtitle" style="display:none;"></div>
+    </div>
 
     <footer class="scene-pager">
       <button id="scene-prev" class="btn" onclick="prevScene()" disabled>← 上一页</button>

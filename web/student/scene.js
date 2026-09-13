@@ -1,10 +1,14 @@
-/* 讲解场景页 (Phase 1, 1-E) — 翻页式渲染.
+/* 讲解场景页 (Phase 1, 1-E — Phase 3 3-B/3-C 扩展白板播放) — 翻页式渲染.
  *
  * 数据链: POST /api/presentation/outline {student_id}
  *       → POST /api/presentation/scenes {outline_id} → scenes[]
  *
+ * Phase 3 扩展 (3-B/3-C): scene.actions 非空时显示白板讲解区
+ * (播放/暂停/重播 + 字幕), 由 playback.js 引擎驱动 whiteboard.js 渲染;
+ * actions 为 null (Phase 1 旧场景 / 无动作) 时保持纯翻页, 行为不变。
+ *
  * 安全约定 (1-E-2): LLM 文本内容一律 textContent 进 DOM, 不用 innerHTML;
- * 公式段经 KaTeX renderToString (trust=false 默认, 内嵌 HTML 被转义)。
+ * 公式段经 formula.js 的 KaTeX 封装渲染 (3-B-2 共享模块, 白板公式同源)。
  * KaTeX 未加载成功时公式降级为等宽文本, 不阻塞讲解阅读。
  *
  * 1-F 回写事件 (scene_next/dwell/question) 的学生端埋点随后续任务接入,
@@ -19,6 +23,11 @@ let currentIndex = 0;
 let pageEnteredAt = 0;      // 当前页进入时间戳 (dwell 埋点)
 let totalDwellMs = 0;       // 全部页面累计停留
 let completedReported = false;
+
+// Phase 3: 白板播放状态 (3-B/3-C 接线; 每页重建)
+let wb = null;        // whiteboard.js 实例 (renderer 提供方)
+let engine = null;    // playback.js 引擎
+let wbStarted = false;  // 本页是否已开播 (区分"播放讲解"/"重新播放"按钮态)
 
 // 1-F: 场景行为回写 (best-effort, 失败 console.warn 不静默, 不阻塞翻页)
 // 2-0-4: 回写携带学生身份 (Authorization Bearer) — 服务端校验
@@ -79,6 +88,7 @@ async function boot() {
 function showScene(i) {
   currentIndex = i;
   pageEnteredAt = Date.now();
+  stopPlayback();   // 3-C-4 翻页联动: 离开本页前必须 stop (令牌失效+音频停止)
   const scene = scenes[i];
   const card = document.getElementById('scene-content');
   card.innerHTML = ''; // 容器清空: 内容块由 DOM API 构建, 不拼 HTML 字符串
@@ -94,6 +104,11 @@ function showScene(i) {
   for (const block of scene.blocks || []) {
     if (block.type === 'text') renderTextBlock(card, block.content);
     else if (block.type === 'image') renderImageBlock(card, block);
+  }
+
+  // Phase 3: 含动作序列的场景 → 白板讲解区 (3-B); 无动作 = 纯翻页不变
+  if (scene.actions && scene.actions.length) {
+    setupPlayback(scene);
   }
 
   document.getElementById('scene-prev').disabled = i === 0;
@@ -115,33 +130,15 @@ function renderTextBlock(container, content) {
       if (part.startsWith('$$') && part.endsWith('$$')) {
         const div = document.createElement('div');
         div.className = 'formula-display';
-        appendFormula(div, part.slice(2, -2), true);
+        window.CogEduFormula.renderFormulaInto(div, part.slice(2, -2), true);
         p.appendChild(div);
       } else if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
-        appendFormula(p, part.slice(1, -1), false);
+        window.CogEduFormula.renderFormulaInto(p, part.slice(1, -1), false);
       } else {
         p.appendChild(document.createTextNode(part));
       }
     }
     container.appendChild(p);
-  }
-}
-
-function appendFormula(el, tex, displayMode) {
-  if (window.katex) {
-    const span = document.createElement('span');
-    // KaTeX 输出自身生成的标记; trust 默认 false, 输入中的 HTML 会被转义
-    span.innerHTML = window.katex.renderToString(tex, {
-      throwOnError: false,
-      displayMode: displayMode,
-    });
-    el.appendChild(span);
-  } else {
-    // CDN 加载失败的降级: 等宽原文展示 (1-E-2 注记)
-    const code = document.createElement('code');
-    code.className = 'formula-error';
-    code.textContent = displayMode ? '$$' + tex + '$$' : '$' + tex + '$';
-    el.appendChild(code);
   }
 }
 
@@ -172,6 +169,90 @@ function makePlaceholder(block) {
   ph.appendChild(icon);
   ph.appendChild(label);
   return ph;
+}
+
+// ─── 白板播放接线 (Phase 3, 3-B/3-C) ─────────────────────────────────────
+
+// 3-C-4 翻页联动: 翻页/重进页前必须 stop — 令牌失效 + 音频停止 + UI 复位。
+// 引擎/白板均为每页重建, 不跨页复用。
+function stopPlayback() {
+  if (engine) {
+    engine.stop();
+    engine = null;
+  }
+  wb = null;
+  wbStarted = false;
+  hideSubtitle();
+  const section = document.getElementById('wb-section');
+  if (section) section.style.display = 'none';
+}
+
+// 含动作序列的场景: 挂白板 + 建引擎。静态资源缺失时守卫退回纯翻页。
+function setupPlayback(scene) {
+  if (!window.CogEduPlayback || !window.CogEduWhiteboard) {
+    console.warn('播放组件未加载, 本页退回纯翻页模式');
+    return;
+  }
+  const section = document.getElementById('wb-section');
+  const container = document.getElementById('wb-container');
+  wb = window.CogEduWhiteboard.createWhiteboard(container);
+  engine = window.CogEduPlayback.createPlaybackEngine({
+    actions: scene.actions,
+    renderer: wb.renderer,
+    // 字幕同步 (3-C-3): speech 动作开始时展示讲解词 — 有音频时随音频走,
+    // 无音频 (3-D 未接/生成失败) 时随估算计时器静音推进
+    onActionStart: function (action) {
+      if (action.type === 'speech') showSubtitle(action.text);
+    },
+    onStateChange: updatePlayButton,
+    onDone: function () { updatePlayButton(engine.getState()); },
+  });
+  section.style.display = '';
+  updatePlayButton('idle');
+}
+
+function updatePlayButton(state) {
+  const playBtn = document.getElementById('wb-play');
+  const replayBtn = document.getElementById('wb-replay');
+  if (!playBtn) return;
+  if (state === 'playing') playBtn.textContent = '⏸ 暂停';
+  else if (state === 'paused') playBtn.textContent = '▶ 继续播放';
+  else playBtn.textContent = wbStarted ? '▶ 重新播放' : '▶ 播放讲解';
+  // 重播按钮: 开播过才出现 (3-B-3: v1 砍撤销/重做, 重播是唯一的"再来一遍")
+  replayBtn.style.display = wbStarted ? '' : 'none';
+}
+
+function togglePlay() {
+  if (!engine) return;
+  const s = engine.getState();
+  if (s === 'idle') {
+    wbStarted = true;
+    engine.start();
+  } else if (s === 'playing') {
+    engine.pause();
+  } else if (s === 'paused') {
+    engine.resume();
+  }
+  updatePlayButton(engine.getState());
+}
+
+function replayPage() {
+  if (!engine) return;
+  engine.replay();   // stop + start + renderer.clear (3-C: 从头确定性重放)
+}
+
+function showSubtitle(text) {
+  const el = document.getElementById('wb-subtitle');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = '';
+}
+
+function hideSubtitle() {
+  const el = document.getElementById('wb-subtitle');
+  if (!el) return;
+  el.style.display = 'none';
+  el.textContent = '';
 }
 
 // ─── 翻页 (1-E-1) ────────────────────────────────────────────────────────

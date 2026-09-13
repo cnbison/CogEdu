@@ -122,6 +122,58 @@ body {
 }
 .scene-image .img-placeholder .icon { font-size: 28px; }
 
+/* ─── 白板讲解区 (Phase 3, 3-B) ─── */
+.wb-controls {
+  display: flex;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0 var(--sp-3);
+}
+/* 外层容器带边框; 视口撑满宽度并锁定 16:9 (虚拟画布比例) */
+.wb-container {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-subtle);
+  overflow: hidden;
+}
+.wb-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+/* 虚拟画布层: 固定 1000×562.5, whiteboard.js 按 viewport 宽等比 scale,
+   字号/线宽随之缩放 (3-A-2 坐标系统的前端落点) */
+.wb-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1000px;
+  height: 562.5px;
+  transform-origin: 0 0;
+}
+.wb-el { position: absolute; }
+.wb-el.wb-text { white-space: pre-wrap; line-height: 1.5; }
+.wb-el.wb-shape svg { display: block; width: 100%; height: 100%; }
+.wb-el.wb-line { pointer-events: none; }
+.wb-el.wb-line svg { display: block; width: 100%; height: 100%; }
+/* 入场动画 (3-B-4): duration/delay 由 whiteboard.js 按时序常量内联设置 */
+.wb-el.wb-enter {
+  animation-name: wb-enter;
+  animation-fill-mode: both;
+  animation-timing-function: ease-out;
+}
+@keyframes wb-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+/* 语音字幕 (3-C-3): 讲解词随动作推进同步展示 */
+.wb-subtitle {
+  margin-top: var(--sp-3);
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 14px;
+  min-height: 1.5em;
+}
+
 /* 翻页 */
 .scene-pager {
   display: flex;
