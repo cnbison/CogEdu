@@ -742,10 +742,15 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.7 3-F：生成侧改造（扩展 Phase 1 的呈现引擎）
 
-- [ ] **3-F-1** prompt 扩展：`build_scene_messages` 增加动作序列输出段——LLM 在 Scene JSON 内输出 `actions` 数组，few-shot 给含 `wb_draw_latex`/`wb_draw_line` 的完整示例（参考 OpenMAIC `system.md` 的 "MUST output JSON array + 完整示例" 模式）；动作类型说明独立成 prompt snippet 便于迭代
-- [ ] **3-F-2** 容错：整体 parse 失败走现有 `call_with_retry` → `_degraded_scene` 路径不变；**动作级容错新增**——白名单外动作类型丢弃 + warning 留痕（不整场失败）、坐标 clamp（3-A-2）、`audio_id` 回填不参与重试比对。`parse_llm_json`（json_repair 管线）对内嵌数组同样生效，直接复用
-- [ ] **3-F-3** TTS 异步补齐编排（已拍板）：`generate_scenes_for_outline` 返回后，对含 speech 的 scene 起**进程内后台任务**（asyncio task，低并发逐条）预生成回填 `audio_id` 并更新落库。**诚实注记**：进程重启丢任务 = 该场景永久走降级路径，v1 接受（播放端降级兜底完整）；不做持久化任务队列
-- [ ] **3-F-4** `GENERATION_MAX_TOKENS` 拆分：scene 生成器独立常量 + env 可配（动作序列让输出显著变长，4096 共享值需重估）
+- [x] **3-F-1** prompt 扩展：`build_scene_messages` 增加动作序列输出段——LLM 在 Scene JSON 内输出 `actions` 数组，few-shot 给含 `wb_draw_latex`/`wb_draw_line` 的完整示例（参考 OpenMAIC `system.md` 的 "MUST output JSON array + 完整示例" 模式）；动作类型说明独立成 prompt snippet 便于迭代
+  - ✅ 2026-09-13 完成：system prompt 增加五动作字段口径 + 坐标系（1000×562.5 原点左上）+ 禁输出 action_id/estimated_duration_ms/audio_id（服务端统管）+ 求根公式 few-shot 示例；speech 按 50~150 字讲述节奏分段
+- [x] **3-F-2** 容错：整体 parse 失败走现有 `call_with_retry` → `_degraded_scene` 路径不变；**动作级容错新增**——白名单外动作类型丢弃 + warning 留痕（不整场失败）、坐标 clamp（3-A-2）、`audio_id` 回填不参与重试比对。`parse_llm_json`（json_repair 管线）对内嵌数组同样生效，直接复用
+  - ✅ 2026-09-13 完成：`_parse_actions` 管线（白名单过滤 → TypeAdapter 校验失败丢弃 → 坐标 clamp+warning → action_id 重分配 `f"{scene_id}_a{n}"` → duration 按 timing.py 估算 → 超长 speech 三级拆分（拆出子动作 `_0/_1` 时长逐段重估））——管线内 warning 全部进 `scene.warnings` 留痕；降级场景不带动作（模板路径不受影响）；`text` 为空仍整场失败走 retry
+- [x] **3-F-3** TTS 异步补齐编排（已拍板）：`generate_scenes_for_outline` 返回后，对含 speech 的 scene 起**进程内后台任务**（asyncio task，低并发逐条）预生成回填 `audio_id` 并更新落库。**诚实注记**：进程重启丢任务 = 该场景永久走降级路径，v1 接受（播放端降级兜底完整）；不做持久化任务队列
+  - ✅ 2026-09-13 完成：`presentation_service.backfill_scene_audio`（幂等键已存在跳过合成 / 合成失败该动作保持 None 不中断 / 落库失败不回填 / `save_scene` 幂等覆盖回填 payload）+ `_maybe_spawn_tts_backfill`。**实现注记**：计划写 asyncio task，但 `/scenes` 是同步端点（线程池无事件循环），改用 daemon 线程——语义等价（进程内/逐条/重启丢失可接受），已记录。未配置 `COGEDU_TTS_API_KEY` 时 `get_tts()` 返回 None 静默跳过（speech 走降级链）。端到端集成测试：POST /scenes 响应后轮询到 audio 落库 + scene payload 回填
+- [x] **3-F-4** `GENERATION_MAX_TOKENS` 拆分：scene 生成器独立常量 + env 可配（动作序列让输出显著变长，4096 共享值需重估）
+  - ✅ 2026-09-13 完成：`_scene_max_tokens()`（`COGEDU_PRESENTATION_SCENE_MAX_TOKENS` 覆盖，默认沿用全局 4096；非法值 warning+兜底对齐 RetryPolicy 口径）。默认值是否上调留 3-G 灰度实测输出长度后决定
+  - ✅ 测试：`tests/test_scene_actions.py` 17 用例 + `tests/test_tts_backfill.py` 7 用例。全量 **1928 用例通过**
 - [x] **3-F-5** 顺手补鉴权缺口：`POST /scenes` 改为按 outline 归属校验（取 outline 的 `student_id` 过 `require_student_access` 同款语义），消除"任何已登录用户可为任意 outline 生成场景"的越权面
   - ✅ 2026-09-13 已提前落地（随 3-D 一并提交，实施中发现真实学生 UI 403 问题，见 15.5 3-D-5 注记）
 

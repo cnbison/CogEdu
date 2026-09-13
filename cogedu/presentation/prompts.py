@@ -100,11 +100,16 @@ def build_scene_messages(
     """组装单步场景生成 messages.
 
     Phase 1 范围约束（13.4）：
-    - 每个场景只产出讲解文字（text block）+ 配图意图（image block，
+    - 每个场景产出讲解文字（text block）+ 配图意图（image block，
       v1 为占位图，``image_concept`` 作为配图说明/alt）
     - 公式一律 LaTeX（$...$ 行内 / $$...$$ 独立），渲染归前端 KaTeX
     - **单一讲解视角**：多角色讨论 / AI 同学插话是 v1 范围外
       （方案文档第 3/8 章），prompt 里显式禁止，防止 LLM 自作主张
+
+    Phase 3 (3-F-1)：新增 ``actions`` 动作序列输出段——LLM 在 Scene JSON
+    内输出白板/语音动作数组（参考 OpenMAIC system.md 的 "MUST output +
+    完整示例" 模式），边讲边画；坐标/字段口径与 3-A schema 一致，
+    动作类型说明独立成段便于迭代。
     """
     system = (
         "你是一位面向中国 K12 学生（初中/高中）的数理化学习教练，"
@@ -116,9 +121,36 @@ def build_scene_messages(
         "- 只用单一的讲解者视角，不要写多角色对话，不要虚构 AI 同学插话。\n"
         "- 讲解要口语化、有引导性，贴合给定难度和支持程度。\n"
         "- 只输出 JSON，不要输出任何其他文字或代码围栏。\n"
-        '- JSON 格式：{"title": str, "text": str, "image_concept": str}。\n'
-        "- text 为讲解正文（300~600 字），image_concept 为一句话的配图意图"
-        "（说明这幅图应该画什么，用于生成/检索配图）。"
+        '- JSON 格式：{"title": str, "text": str, "image_concept": str, '
+        '"actions": [动作, ...]}。\n'
+        "- text 为讲解正文（300~600 字），image_concept 为一句话的配图意图。\n"
+        "\n"
+        "actions 是白板讲解的动作序列（按数组顺序播放，与讲解词配合，边讲边画）。\n"
+        "动作类型只有以下五种，字段如下：\n"
+        '- speech：{"type": "speech", "text": str} —— 一段讲解词；把本页讲解'
+        "按讲述节奏拆成多个 speech 动作，每个 50~150 字。\n"
+        '- wb_draw_text：{"type": "wb_draw_text", "content": str, "x": int, '
+        '"y": int, "width": int, "font_size": int} —— 画一段文字标注。\n'
+        '- wb_draw_shape：{"type": "wb_draw_shape", "shape": "rectangle" | '
+        '"circle" | "triangle", "x": int, "y": int, "width": int, "height": int}'
+        " —— 画一个图形。\n"
+        '- wb_draw_line：{"type": "wb_draw_line", "x1": int, "y1": int, '
+        '"x2": int, "y2": int} —— 画一条线段（坐标轴、数轴、辅助线）。\n'
+        '- wb_draw_latex：{"type": "wb_draw_latex", "latex": str, "x": int, '
+        '"y": int, "width": int} —— 画一条公式（LaTeX 串）。\n'
+        "坐标系：虚拟画布宽 1000、高 562.5，原点在左上角，单位为像素；"
+        "所有 x/y 都要在画布内。\n"
+        "不要输出 action_id / estimated_duration_ms / audio_id 字段"
+        "（服务端统一分配、估算和回填）。\n"
+        "示例（一元二次方程求根公式的讲解片段）：\n"
+        '{"actions": ['
+        '{"type": "speech", "text": "我们先来看一元二次方程的求根公式。"}, '
+        '{"type": "wb_draw_latex", "latex": "$$x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$$", '
+        '"x": 120, "y": 200, "width": 600}, '
+        '{"type": "speech", "text": "其中判别式 b 平方减 4ac 决定根的个数。"}, '
+        '{"type": "wb_draw_line", "x1": 60, "y1": 480, "x2": 940, "y2": 480}, '
+        '{"type": "wb_draw_text", "content": "判别式 > 0：两个不相等的实根", '
+        '"x": 120, "y": 380, "width": 500, "font_size": 20}]}'
     )
 
     user_parts: list[str] = [
@@ -139,7 +171,7 @@ def build_scene_messages(
     user_parts.append(f"支持程度（0~1，越高铺垫越多）：{ctx.scaffolding_level:.2f}")
     user_parts.append(f"认知层次目标：{ctx.bloom_target}")
 
-    user_parts.append("请输出本步骤的讲解场景 JSON。")
+    user_parts.append("请输出本步骤的讲解场景 JSON（含 actions 动作序列）。")
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": "\n".join(user_parts)},
