@@ -703,10 +703,15 @@ Phase 2 做完后，按同样方式细化 Phase 3（白板与语音）。
 
 ### 15.4 3-C：播放引擎/状态机
 
-- [ ] **3-C-1** 状态机**三态 `idle`/`playing`/`paused`**（纯 JS 模块，不依赖框架）——OpenMAIC 第四态 `live`（discussion/AI 同学追问）不在 Phase 3 范围。转移：start（idle→playing）/ pause / resume / stop（任意→idle）
-- [ ] **3-C-2** 调度：**事件驱动 + setTimeout，不用 rAF**（OpenMAIC 同款）：speech 动作等音频 `ended`（无音频 → `estimate_speech_duration_ms` 估算计时器）；`wb_*` 动作执行（含 `WB_DRAW_MS` 级动画等待）后推进下一个。**核心并发机制照抄 `playbackGeneration` 代数令牌**：pause/stop/翻页使令牌失效，所有旧异步回调先查令牌再执行——没有它，"暂停后旧 setTimeout 又画出下一个图形"这类 bug 必现
-- [ ] **3-C-3** 语音同步优先级（对齐 OpenMAIC）：有 `audio_id` 且加载成功 → `ended` 事件驱动；否则估算计时器（字幕同步推进）。**音频时长不参与调度**（15.5 原文已修正）
-- [ ] **3-C-4** 翻页联动：actions 是 scene 级，翻页 = stop + 令牌失效 + 音频停止；重播本页 = stop 后从头重放
+- [x] **3-C-1** 状态机**三态 `idle`/`playing`/`paused`**（纯 JS 模块，不依赖框架）——OpenMAIC 第四态 `live`（discussion/AI 同学追问）不在 Phase 3 范围。转移：start（idle→playing）/ pause / resume / stop（任意→idle）
+  - ✅ 2026-09-13 完成：`web/student/playback.js`（`createPlaybackEngine`，无 DOM 依赖，renderer/speechPlayer/scheduler/now 全部依赖注入——3-B 白板与 3-D 音频未就位也能独立测试）
+- [x] **3-C-2** 调度：**事件驱动 + setTimeout，不用 rAF**（OpenMAIC 同款）：speech 动作等音频 `ended`（无音频 → `estimate_speech_duration_ms` 估算计时器）；`wb_*` 动作执行（含 `WB_DRAW_MS` 级动画等待）后推进下一个。**核心并发机制照抄 `playbackGeneration` 代数令牌**：pause/stop/翻页使令牌失效，所有旧异步回调先查令牌再执行——没有它，"暂停后旧 setTimeout 又画出下一个图形"这类 bug 必现
+  - ✅ 2026-09-13 完成：代数令牌（generation）贯穿全部异步续点；wait 记录 startedAt/durationMs 支持 pause 剩余时间语义（不重播已播动作、不跳动作）；三个"promise 在暂停期间定局"的边界显式建模——音频 ended/失败于暂停中（settled/outcome 状态，resume 接管推进）、wb execute 于暂停中 resolve（inFlightExecute 标志，resume 补 0 等待）；未知动作类型告警跳过（引擎侧白名单镜像，3-F 过滤的兜底）
+- [x] **3-C-3** 语音同步优先级（对齐 OpenMAIC）：有 `audio_id` 且加载成功 → `ended` 事件驱动；否则估算计时器（字幕同步推进）。**音频时长不参与调度**（15.5 原文已修正）
+  - ✅ 2026-09-13 完成：三级路径 = audio_id 且 play 成功 → ended 驱动 / play 失败或显式 false → 估算兜底 / 无 audio_id → 估算；`estimateSpeechDurationMs` 内置（CJK 占比>0.3 → max(2000, 字数×150)，否则按词 240ms，除以 speed，对齐 OpenMAIC timing.ts）——3-E 收口后由服务端下发同源常量覆盖，JS 内置值标注为过渡态
+- [x] **3-C-4** 翻页联动：actions 是 scene 级，翻页 = stop + 令牌失效 + 音频停止；重播本页 = stop 后从头重放
+  - ✅ 2026-09-13 完成：引擎侧 `stop()`/`replay()`（replay = stop + start + renderer.clear）已就绪并测试锁定；**scene.js 的翻页接线（showScene 前调 engine.stop()）随 3-B 集成落地**——引擎尚未被页面创建前无联动对象
+  - ✅ **测试基建（本任务新增决策）**：时序正确性用 **node:test 零依赖真测试**锁定（`tests/js/playback.test.cjs` 14 用例：乱序/重叠/令牌失效/剩余时间暂停恢复/语音三级路径/重播/渲染失败跳过/估算函数），`tests/test_playback_engine_js.py` pytest 包装进 pre-push 门禁（无 node skip，对齐 PG 集成测试惯例）——grep 契约测试锁不了行为，这是仓库首个 JS 行为测试
 
 ### 15.5 3-D：语音合成集成
 
