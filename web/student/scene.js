@@ -70,18 +70,37 @@ async function boot() {
   document.getElementById('scene-sid').textContent = sid;
 
   try {
-    setStatus('正在根据你的学习状态选择讲解内容…');
-    outline = await api('/api/presentation/outline', {
-      student_id: sid,
-      // 从学习页进入时可带 evidence_id (1-A-4 追溯), v1 直达入口不带
-    });
-    setStatus('正在生成讲解场景…');
-    // 3-F-5: student_id 必带 — require_student_access 按它校验学生本人,
-    // 服务端再验 outline 归属 (outline.student_id 必须一致)
-    scenes = await api('/api/presentation/scenes', {
-      student_id: sid,
-      outline_id: outline.outline_id,
-    });
+    const replayOutlineId = params.get('outline_id');
+    if (replayOutlineId) {
+      // 复看模式 (2026-09-14): 走只读端点加载已落库的大纲+场景, 不触发
+      // 生成——生成耗时数分钟且计费, 生成结果已在库里的直接复看
+      setStatus('正在加载已生成的讲解…');
+      outline = await api(
+        '/api/presentation/outline/' + encodeURIComponent(replayOutlineId)
+        + '?student_id=' + encodeURIComponent(sid),
+      );
+      scenes = await api(
+        '/api/presentation/scenes/' + encodeURIComponent(replayOutlineId)
+        + '?student_id=' + encodeURIComponent(sid),
+      );
+      if (!scenes.length) {
+        setStatus('该大纲还没有已生成的场景 (生成可能未完成), 请重新点击讲解生成。', true);
+        return;
+      }
+    } else {
+      setStatus('正在根据你的学习状态选择讲解内容…');
+      outline = await api('/api/presentation/outline', {
+        student_id: sid,
+        // 从学习页进入时可带 evidence_id (1-A-4 追溯), v1 直达入口不带
+      });
+      setStatus('正在生成讲解场景…');
+      // 3-F-5: student_id 必带 — require_student_access 按它校验学生本人,
+      // 服务端再验 outline 归属 (outline.student_id 必须一致)
+      scenes = await api('/api/presentation/scenes', {
+        student_id: sid,
+        outline_id: outline.outline_id,
+      });
+    }
     await fetchTiming();   // 3-E: 时间常数注入 engine/whiteboard (失败用兜底镜像)
     document.getElementById('scene-outline-title').textContent = outline.title || '讲解';
     document.getElementById('scene-view').style.display = '';

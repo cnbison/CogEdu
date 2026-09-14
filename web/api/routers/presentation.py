@@ -239,3 +239,31 @@ def get_timing() -> dict[str, Any]:
     兜底镜像, 镜像数值被 pytest 契约测试与 Python 值逐一锁定 (防漂移)。
     """
     return timing_payload()
+
+
+@router.get("/outline/{outline_id}", response_model=Outline)
+async def get_outline_by_id(outline_id: str, request: Request) -> Any:
+    """读取已落库的大纲 (复看已生成讲解 / 第 11 章反查的读路径).
+
+    查询串可带 student_id 供 router 级 dependency 放行学生角色; 端点内
+    按 outline.student_id 做权威校验 (他人大纲 403, 缺失 404).
+    """
+    outline = get_store().get_outline(outline_id)
+    if outline is None:
+        return JSONResponse({"error": "大纲不存在"}, status_code=404)
+    await require_student_access(request, student_id=outline.student_id)
+    return outline
+
+
+@router.get("/scenes/{outline_id}", response_model=list[Scene])
+async def get_scenes_by_outline(outline_id: str, request: Request) -> Any:
+    """读取已落库的场景列表 (只读, 不触发生成).
+
+    与 POST /scenes (生成) 区分: 生成耗时数分钟且计费, 复看/重放已
+    生成的讲解走本端点。归属校验同 GET /outline/{id}。
+    """
+    outline = get_store().get_outline(outline_id)
+    if outline is None:
+        return JSONResponse({"error": "大纲不存在"}, status_code=404)
+    await require_student_access(request, student_id=outline.student_id)
+    return get_store().list_scenes_by_outline(outline_id)

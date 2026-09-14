@@ -137,3 +137,52 @@ class TestScenesOwnership:
             "student_id": "stu_other", "outline_id": outline.outline_id,
         })
         assert resp.status_code == 403
+
+
+class TestReplayEndpoints:
+    """只读复看端点 (2026-09-14): 生成耗时数分钟且计费, 复看走只读路径."""
+
+    def test_get_outline_200(self, client: TestClient):
+        scene = _seed_scene("stu_a")
+        resp = client.get(f"/api/presentation/outline/{scene.outline_id}")
+        assert resp.status_code == 200
+        assert resp.json()["outline_id"] == scene.outline_id
+        assert resp.json()["schema_version"] == 1
+
+    def test_get_scenes_readonly_200(self, client: TestClient):
+        """GET /scenes/{id} 只读——不触发生成, 只返回已落库场景."""
+        scene = _seed_scene("stu_a")
+        resp = client.get(f"/api/presentation/scenes/{scene.outline_id}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert body[0]["scene_id"] == scene.scene_id
+        assert body[0]["schema_version"] == 2   # 带 actions 的场景
+
+    def test_get_scenes_empty_outline_200_empty_list(self, client: TestClient):
+        from cogedu.presentation.types import Outline
+
+        outline = Outline(student_id="stu_a", intervention_id="i", title="t",
+                          steps=[])
+        svc.get_store().save_outline(outline)
+        resp = client.get(f"/api/presentation/scenes/{outline.outline_id}")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_get_missing_404(self, client: TestClient):
+        assert client.get("/api/presentation/outline/no_such").status_code == 404
+        assert client.get("/api/presentation/scenes/no_such").status_code == 404
+
+    @pytest.mark.real_auth
+    def test_other_student_replay_403(self, client: TestClient, auth_factory):
+        """复看他人大纲/场景 → 403 (归属权威校验)."""
+        scene = _seed_scene("stu_owner")
+        headers, _ = auth_factory(username="stu_other_u3", role="student",
+                                  learning_student_id="stu_other")
+        q = "?student_id=stu_other"
+        r1 = client.get(f"/api/presentation/outline/{scene.outline_id}{q}",
+                        headers=headers)
+        r2 = client.get(f"/api/presentation/scenes/{scene.outline_id}{q}",
+                        headers=headers)
+        assert r1.status_code == 403
+        assert r2.status_code == 403

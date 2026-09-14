@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 讲解复看只读端点 + scene 页 `?outline_id=` 复看模式
+
+3-G 页面验收中一次成功生成（5 场景 87 动作零降级）因等待过久险些浪费——页面没有"复看已生成讲解"的入口，每次点讲解都重新生成（数分钟且计费）。补齐只读读路径：`GET /api/presentation/outline/{id}` 与 `GET /api/presentation/scenes/{id}`（不触发生成，按 outline 归属权威校验，与 POST 生成端点区分）；scene.js 支持 `?outline_id=` 参数走复看模式。测试 6 用例（200/404/空列表/越权 403）；全量 **1944 用例通过**。此读路径同时是第 11 章"错因→场景反查"（`idx_scenes_evidence`）的前置设施。
+
 ### 2026-09-14 — 维护者验收发现：大纲生成超时（30s 默认对 thinking 模型过紧）
 
 页面验收时点「讲解」报 `大纲生成失败: LLM 调用失败（重试 3 次后仍失败）：Request timed out`——场景生成在 3-G 灰度实证后已有 120s 独立超时，但**大纲生成**仍挂共享客户端默认 30s。超时是概率性的（灰度两次全过说明偶尔够用），thinking 时长波动下会连续失败。修复：大纲生成对称补独立超时（`COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC`，默认 120s，chat kwargs 透传 SDK，与 scene 同机制）；测试 4 用例（默认/env 覆盖/非法兜底/接线锁定）。全量 **1939 用例通过**。
