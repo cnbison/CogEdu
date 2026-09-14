@@ -14,12 +14,16 @@
 """
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any, Protocol
 
 from cogedu.presentation import prompts
 from cogedu.presentation.json_repair import parse_llm_json
 from cogedu.presentation.retry import RetryPolicy, call_with_retry
 from cogedu.presentation.types import GenerationContext, Outline, OutlineStep
+
+_log = logging.getLogger(__name__)
 
 
 class SupportsChat(Protocol):
@@ -32,6 +36,27 @@ class SupportsChat(Protocol):
 # max_tokens, LLMConfig 默认 1024 会被推理块耗尽 → strip 后剩空文本
 # (1-G-1 灰度实测)。JSON 输出 + 推理余量取 4096。
 GENERATION_MAX_TOKENS = 4096
+
+# 3-G 验收实证（2026-09-14）：thinking 模型单次调用可超共享客户端默认 30s
+# （维护者页面验收时大纲连续 3 次尝试全部超时）。与 scene 的独立超时同款
+# 机制：经 chat(**kwargs) 透传 openai SDK per-request timeout，不动共享客户端。
+OUTLINE_TIMEOUT_SEC_DEFAULT = 120.0
+
+
+def _outline_timeout() -> float:
+    """大纲生成的单次请求超时秒数. env
+    ``COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC`` 可配（非法值 warning + 兜底）."""
+    raw = os.environ.get("COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC", "").strip()
+    if not raw:
+        return OUTLINE_TIMEOUT_SEC_DEFAULT
+    try:
+        return float(raw)
+    except ValueError:
+        _log.warning(
+            "COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC 非法 (%r), 回退 %s",
+            raw, OUTLINE_TIMEOUT_SEC_DEFAULT,
+        )
+        return OUTLINE_TIMEOUT_SEC_DEFAULT
 
 
 class OutlineGenerationError(Exception):
@@ -70,7 +95,13 @@ class OutlineGenerator:
         )
 
         def _call() -> Any:
-            return parse_llm_json(self._llm.chat(messages, max_tokens=GENERATION_MAX_TOKENS))
+            return parse_llm_json(
+                self._llm.chat(
+                    messages,
+                    max_tokens=GENERATION_MAX_TOKENS,
+                    timeout=_outline_timeout(),
+                )
+            )
 
         raw = (
             call_with_retry(_call, policy, what="outline 生成")

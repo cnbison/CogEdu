@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from cogedu.presentation import outline
 from cogedu.presentation.outline import OutlineGenerationError, OutlineGenerator
 from cogedu.presentation.prompts import build_outline_messages
 from cogedu.presentation.types import GenerationContext
@@ -197,3 +198,35 @@ class TestPromptReservedParams:
         joined = "\n".join(m["content"] for m in msgs)
         assert "教材原文" in joined
         assert "img_0" in joined
+
+
+class TestOutlineTimeout:
+    """3-G 验收实证 (2026-09-14): thinking 模型超共享客户端 30s 默认 →
+    大纲生成连续超时 502. 独立 120s 超时经 chat kwargs 透传 SDK."""
+
+    def test_default_120s(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC", raising=False)
+        assert outline._outline_timeout() == 120.0
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC", "240")
+        assert outline._outline_timeout() == 240.0
+
+    def test_bogus_value_falls_back(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC", "bogus")
+        assert outline._outline_timeout() == 120.0
+
+    def test_timeout_passed_to_chat(self, monkeypatch: pytest.MonkeyPatch):
+        """chat 收到 timeout kwarg (透传 SDK per-request timeout 的接线锁定)."""
+        captured: dict = {}
+
+        class _CaptureLLM:
+            def chat(self, messages, **kwargs):
+                captured.update(kwargs)
+                return '{"title": "t", "steps": [{"title": "s", "key_points": []}]}'
+
+        outline.OutlineGenerator(_CaptureLLM()).generate(
+            GenerationContext(student_id="s", intervention_id="i")
+        )
+        assert captured["timeout"] == outline._outline_timeout()
+        assert captured["max_tokens"] == outline.GENERATION_MAX_TOKENS

@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 维护者验收发现：大纲生成超时（30s 默认对 thinking 模型过紧）
+
+页面验收时点「讲解」报 `大纲生成失败: LLM 调用失败（重试 3 次后仍失败）：Request timed out`——场景生成在 3-G 灰度实证后已有 120s 独立超时，但**大纲生成**仍挂共享客户端默认 30s。超时是概率性的（灰度两次全过说明偶尔够用），thinking 时长波动下会连续失败。修复：大纲生成对称补独立超时（`COGEDU_PRESENTATION_OUTLINE_TIMEOUT_SEC`，默认 120s，chat kwargs 透传 SDK，与 scene 同机制）；测试 4 用例（默认/env 覆盖/非法兜底/接线锁定）。全量 **1939 用例通过**。
+
 ### 2026-09-14 — 维护者验收发现：scene 页 api 助手不带登录凭证（修复，2-0-4 遗漏第三处）
 
 sid 与 API base 修复后维护者继续验收，点「讲解」报 `HTTP 401`。根因：`scene.js` 的 `api()` 助手（outline/scenes/timing 三个主要请求的公共路径）是页面内唯一裸 fetch 不带 Authorization 的请求——2-0-4 只给行为回写和音频导出加了凭证。测试环境 auth_bypass 掩盖，真实鉴权下"点击讲解"必 401。修复：走 `CogEduAuth.authFetch` 统一带 Bearer + 401 自动跳登录；grep 契约锁定。全量 **1935 用例通过**。
