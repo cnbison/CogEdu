@@ -225,7 +225,7 @@ class TestScenesBackfillIntegration:
         }
         # 共享单个 FakeLLM 实例 (get_llm 每次调用必须返回同一对象,
         # 否则每次都拿到满配输出列表 → 消费错位)
-        llm = FakeLLM([outline_out, dict(scene_out), dict(scene_out)])
+        llm = FakeLLM([outline_out, dict(scene_out)])  # 大纲 1 步 → 1 个场景输出
         monkeypatch.setattr("web.api.llm.get_llm", lambda: llm)
         resp = client.post("/api/presentation/outline", json={"student_id": "stu_tts"})
         assert resp.status_code == 200
@@ -233,8 +233,18 @@ class TestScenesBackfillIntegration:
         resp = client.post("/api/presentation/scenes", json={
             "student_id": "stu_tts", "outline_id": outline_id,
         })
-        assert resp.status_code == 200
-        scenes = resp.json()
+        assert resp.status_code == 202  # §10 #10 非阻塞: 后台线程生成
+
+        def _scenes():
+            got = client.get(f"/api/presentation/scenes/{outline_id}")
+            # 渐进落库: 等 1 个 step 的场景全部就绪 (status=ready)
+            st = client.get(f"/api/presentation/scenes/{outline_id}/status")
+            if st.status_code == 200 and st.json()["status"] == "ready":
+                return got.json()
+            return None
+
+        scenes = _poll(_scenes)
+        assert scenes is not None and len(scenes) == 1
         assert scenes[0]["schema_version"] == 2
         speech_action = next(a for a in scenes[0]["actions"] if a["type"] == "speech")
 

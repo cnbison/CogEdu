@@ -92,13 +92,28 @@ class TestPresentationEndToEnd:
         assert outline["evidence_id"] == "ev-e2e-1"
         assert len(outline["steps"]) == 2
 
-        # 3. 场景 (追溯字段 + degraded=false)
+        # 3. 场景 (追溯字段 + degraded=false) — §10 #10: 非阻塞生成 + 轮询
         resp = client.post("/api/presentation/scenes", json={
             "student_id": sid,
             "outline_id": outline["outline_id"],
         })
-        assert resp.status_code == 200, resp.text
-        scenes = resp.json()
+        assert resp.status_code == 202, resp.text
+        import time as _time
+
+        scenes = None
+        for _ in range(50):
+            st = client.get(
+                f"/api/presentation/scenes/{outline['outline_id']}/status"
+                f"?student_id={sid}",
+            )
+            if st.status_code == 200 and st.json()["status"] == "ready":
+                scenes = client.get(
+                    f"/api/presentation/scenes/{outline['outline_id']}"
+                    f"?student_id={sid}",
+                ).json()
+                break
+            _time.sleep(0.1)
+        assert scenes is not None, "场景生成未在时限内完成"
         assert len(scenes) == len(outline["steps"])
         for scene in scenes:
             assert scene["outline_id"] == outline["outline_id"]

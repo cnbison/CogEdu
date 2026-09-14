@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 
 PORT = int(os.environ.get("CANARY_PORT", "5199"))
@@ -89,6 +90,25 @@ def _login_as(sid: str) -> None:
     print(f"[canary] login ok: {resp['user']['username']} "
           f"(role={resp['user']['role']}, sid={resp['user']['learning_student_id']})")
 
+def _wait_scenes(sid: str, outline_id: str) -> list:
+    """§10 #10: POST /scenes 非阻塞 (202) → 轮询 status → 拉取场景列表."""
+    resp = req("POST", "/api/presentation/scenes", {
+        "student_id": sid, "outline_id": outline_id,
+    })
+    q = f"?student_id={urllib.parse.quote(sid)}"
+    if resp.get("status") == "ready":
+        return req("GET", f"/api/presentation/scenes/{outline_id}{q}")
+    while True:
+        st = req("GET", f"/api/presentation/scenes/{outline_id}/status{q}")
+        print(f"[scenes] 生成进度 {st['generated']}/{st['total']} ({st['status']})")
+        if st["status"] == "ready":
+            return req("GET", f"/api/presentation/scenes/{outline_id}{q}")
+        if st["status"] == "not_started":
+            resp = req("POST", "/api/presentation/scenes", {
+                "student_id": sid, "outline_id": outline_id,
+            })
+        time.sleep(10)
+
 
 def main() -> int:
     tmp_db = os.environ.get("ECOS_DB_PATH") or os.path.join(
@@ -148,9 +168,7 @@ def main() -> int:
                 print(f"  - {s['title']}  要点: {'; '.join(s['key_points'])}")
 
             # 3. 场景
-            scenes = req("POST", "/api/presentation/scenes", {
-                "outline_id": outline["outline_id"],
-            })
+            scenes = _wait_scenes(sid, outline["outline_id"])
             print(f"[scenes] {len(scenes)} scenes, degraded={[s['degraded'] for s in scenes]}")
             for s in scenes:
                 text = next((b["content"] for b in s["blocks"] if b["type"] == "text"), "")

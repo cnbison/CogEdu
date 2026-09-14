@@ -137,8 +137,22 @@ _SCENE_LLM_OUTPUT = {
 
 
 class TestScenesEndpoint:
-    def test_scenes_200_contract(self, client, monkeypatch, isolated_ecos_db):
-        """/outline 落库 → /scenes 恢复 context → 每步一个 Scene."""
+    @staticmethod
+    def _poll(fn, timeout: float = 15.0):
+        """§10 #10 非阻塞生成: 轮询到条件满足 (Mock LLM 秒级完成)."""
+        import time
+
+        deadline = time.time() + timeout
+        result = None
+        while time.time() < deadline:
+            result = fn()
+            if result:
+                return result
+            time.sleep(0.1)
+        return result
+
+    def test_scenes_generation_contract(self, client, monkeypatch, isolated_ecos_db):
+        """/outline 落库 → POST /scenes 202 非阻塞 → 轮询渐进落库 → GET 拉取."""
         monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
         resp = client.post("/api/presentation/outline", json={"student_id": "stu_http"})
         assert resp.status_code == 200
@@ -152,14 +166,32 @@ class TestScenesEndpoint:
             "/api/presentation/scenes",
             json={"student_id": "stu_http", "outline_id": outline_id},
         )
-        assert resp.status_code == 200
-        scenes = resp.json()
-        assert len(scenes) == 2  # 场景数 = 大纲步数
+        assert resp.status_code == 202  # 非阻塞: 立即返回 generating
+        assert resp.json()["status"] == "generating"
+
+        # 轮询: 渐进落库直到全部就绪
+        def _ready():
+            st = client.get(f"/api/presentation/scenes/{outline_id}/status")
+            if st.status_code != 200 or st.json()["status"] != "ready":
+                return None
+            return client.get(f"/api/presentation/scenes/{outline_id}").json()
+
+        scenes = self._poll(_ready)
+        assert scenes is not None and len(scenes) == 2  # 场景数 = 大纲步数
         for scene in scenes:
             assert scene["outline_id"] == outline_id
             assert scene["intervention_id"] == "int_http1"
             assert [b["type"] for b in scene["blocks"]] == ["text", "image"]
             assert scene["degraded"] is False
+
+        # 结果复用: 已落库场景再 POST → 200 ready, 不重复生成
+        resp = client.post(
+            "/api/presentation/scenes",
+            json={"student_id": "stu_http", "outline_id": outline_id},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        assert resp.json()["scene_count"] == 2
 
     def test_scenes_unknown_outline_404(self, client, monkeypatch, isolated_ecos_db):
         monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
@@ -170,8 +202,8 @@ class TestScenesEndpoint:
         assert resp.status_code == 404
         assert "不存在" in resp.json()["error"]
 
-    def test_scenes_parse_failure_degrades_200(self, client, monkeypatch, isolated_ecos_db):
-        """1-D-3: 解析失败重试耗尽 → 200 + degraded scene (学生端不空白)."""
+    def test_scenes_parse_failure_degrades(self, client, monkeypatch, isolated_ecos_db):
+        """1-D-3: 解析失败重试耗尽 → degraded scene 落库 (学生端不空白)."""
         monkeypatch.setattr("web.api.llm.get_llm", lambda: FakeLLM(_GOOD))
         outline_id = client.post(
             "/api/presentation/outline", json={"student_id": "stu_http"}
@@ -184,9 +216,16 @@ class TestScenesEndpoint:
             "/api/presentation/scenes",
             json={"student_id": "stu_http", "outline_id": outline_id},
         )
-        assert resp.status_code == 200
-        scenes = resp.json()
-        assert len(scenes) == 2
+        assert resp.status_code == 202  # 非阻塞
+
+        def _ready():
+            st = client.get(f"/api/presentation/scenes/{outline_id}/status")
+            if st.status_code == 200 and st.json()["status"] == "ready":
+                return client.get(f"/api/presentation/scenes/{outline_id}").json()
+            return None
+
+        scenes = self._poll(_ready)
+        assert scenes is not None and len(scenes) == 2
         for scene in scenes:
             assert scene["degraded"] is True
             assert scene["warnings"]  # warning 留痕, 不静默
@@ -206,8 +245,18 @@ class TestScenesEndpoint:
             "/api/presentation/scenes",
             json={"student_id": "stu_http", "outline_id": outline_id},
         )
-        assert resp.status_code == 502
-        assert "场景生成失败" in resp.json()["error"]
+        assert resp.status_code == 202  # 非阻塞: 传输层失败不再 502 给前端
+
+        # 线程内捕获记录 → 状态回 not_started (可幂等重触发), 不伪装成内容
+        def _failed():
+            st = client.get(f"/api/presentation/scenes/{outline_id}/status")
+            if st.status_code == 200 and st.json()["status"] == "not_started":
+                return st.json()
+            return None
+
+        status = self._poll(_failed)
+        assert status is not None
+        assert status["generated"] == 0  # 传输层失败不降级, 不伪装成内容 (1-D)
 
     def test_outline_persisted_and_replayable(self, client, monkeypatch, isolated_ecos_db):
         """/outline 落库 (含 context) — 落库失败 warning 不中断呈现的反向锚点."""

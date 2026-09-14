@@ -23,7 +23,6 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from cogedu.presentation.outline import OutlineGenerationError, OutlineGenerator
-from cogedu.presentation.scene import SceneGenerationError
 from cogedu.presentation.timing import timing_payload
 from cogedu.presentation.types import GenerationContext, Outline, RuntimeContractError, Scene
 
@@ -34,9 +33,10 @@ from web.api import llm as llm_service
 from web.api.auth import require_student_access
 from web.api.presentation_service import (
     _RETRY_POLICY,
-    generate_scenes_for_outline,
     get_store,
     persist_outline,
+    scenes_generation_in_progress,
+    start_scenes_generation,
 )
 
 _log = logging.getLogger(__name__)
@@ -132,31 +132,70 @@ def generate_outline(req: OutlineRequest):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/scenes", response_model=list[Scene])
-def generate_scenes(req: ScenesRequest):
-    """两阶段生成第二阶段: outline_id → 每步一个 Scene → 落库 → 返回."""
+@router.post("/scenes")
+def generate_scenes(req: ScenesRequest) -> Any:
+    """两阶段生成第二阶段（§10 #10 非阻塞化, 2026-09-14）.
+
+    语义:
+      - 大纲下已有落库场景 → ``200 {"status": "ready", "scene_count": n}``
+        （结果复用: 生成耗时数分钟且计费, 幂等不重复生成; 复看走
+        GET /scenes/{id}）
+      - 无落库场景 → 起后台线程生成, ``202 {"status": "generating"}``
+        立即返回; 前端轮询 GET /scenes/{id}/status 至 ready 后
+        GET /scenes/{id} 拉取
+    """
     # 3-F-5: outline 归属校验 (router 级 dependency 已验调用者身份,
     # 此处补齐"调用者是否有权操作这个 outline")
     outline = get_store().get_outline(req.outline_id)
-    if outline is not None and outline.student_id != req.student_id:
+    if outline is None:
+        return JSONResponse({"error": f"大纲不存在: {req.outline_id}"}, status_code=404)
+    if outline.student_id != req.student_id:
         return JSONResponse(
             {"error": "无权为该学生的大纲生成场景"}, status_code=403
         )
-    try:
-        return generate_scenes_for_outline(req.outline_id)
-    except LookupError as e:
-        return JSONResponse({"error": str(e)}, status_code=404)
-    except (SceneGenerationError, ValueError, RuntimeError) as e:
-        # 解析失败 (重试耗尽也不该到这——service 层已降级) / 传输层耗尽:
-        # 均为上游问题, 502 + warning 留痕 (不静默吞)
-        _log.warning("scene generation failed (outline=%s): %s", req.outline_id, e)
-        return JSONResponse({"error": f"场景生成失败: {e}"}, status_code=502)
-    except Exception as e:
-        _log.error(
-            "scene generation unexpected error (outline=%s)",
-            req.outline_id, exc_info=True,
+    existing = get_store().list_scenes_by_outline(req.outline_id)
+    if existing:
+        return JSONResponse({
+            "status": "ready",
+            "outline_id": req.outline_id,
+            "scene_count": len(existing),
+        })
+    if scenes_generation_in_progress(req.outline_id):
+        return JSONResponse(
+            {"status": "generating", "outline_id": req.outline_id}, status_code=202
         )
-        return JSONResponse({"error": str(e)}, status_code=500)
+    start_scenes_generation(req.outline_id)
+    return JSONResponse(
+        {"status": "generating", "outline_id": req.outline_id}, status_code=202
+    )
+
+
+@router.get("/scenes/{outline_id}/status")
+async def scenes_generation_status(outline_id: str, request: Request) -> dict[str, Any]:
+    """场景生成进度（§10 #10 前端轮询目标）.
+
+    status: ready = 已全部落库; generating = 后台线程进行中;
+    not_started = 无进行中线程且未落库完（线程崩溃/进程重启, 客户端
+    重新 POST 即可幂等重触发）。
+    """
+    outline = get_store().get_outline(outline_id)
+    if outline is None:
+        return JSONResponse({"error": f"大纲不存在: {outline_id}"}, status_code=404)
+    await require_student_access(request, student_id=outline.student_id)
+    generated = len(get_store().list_scenes_by_outline(outline_id))
+    total = len(outline.steps)
+    if total > 0 and generated >= total:
+        status = "ready"
+    elif scenes_generation_in_progress(outline_id):
+        status = "generating"
+    else:
+        status = "not_started"
+    return {
+        "outline_id": outline_id,
+        "generated": generated,
+        "total": total,
+        "status": status,
+    }
 
 
 @router.post("/event")

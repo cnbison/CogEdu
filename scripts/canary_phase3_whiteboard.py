@@ -162,9 +162,7 @@ def _run_case(case: dict) -> dict:
     })
     print(f"[outline] {outline['outline_id']}  title={outline['title']}")
 
-    scenes = req("POST", "/api/presentation/scenes", {
-        "student_id": sid, "outline_id": outline["outline_id"],
-    })
+    scenes = _wait_scenes(sid, outline["outline_id"])
     print(f"[scenes] {len(scenes)} scenes, degraded={[s['degraded'] for s in scenes]}, "
           f"schema={[s.get('schema_version') for s in scenes]}")
 
@@ -231,6 +229,25 @@ def _run_case(case: dict) -> dict:
         "problems": problems, "warnings_total": total_warnings,
         "timing_ok": timing_ok, "tts": tts_status, "k_moved_up": k_moved,
     }
+
+def _wait_scenes(sid: str, outline_id: str) -> list:
+    """§10 #10: POST /scenes 非阻塞 (202) → 轮询 status → 拉取场景列表."""
+    resp = req("POST", "/api/presentation/scenes", {
+        "student_id": sid, "outline_id": outline_id,
+    })
+    q = f"?student_id={urllib.parse.quote(sid)}"
+    if resp.get("status") == "ready":
+        return req("GET", f"/api/presentation/scenes/{outline_id}{q}")
+    while True:
+        st = req("GET", f"/api/presentation/scenes/{outline_id}/status{q}")
+        print(f"[scenes] 生成进度 {st['generated']}/{st['total']} ({st['status']})")
+        if st["status"] == "ready":
+            return req("GET", f"/api/presentation/scenes/{outline_id}{q}")
+        if st["status"] == "not_started":
+            resp = req("POST", "/api/presentation/scenes", {
+                "student_id": sid, "outline_id": outline_id,
+            })
+        time.sleep(10)
 
 
 def main() -> int:

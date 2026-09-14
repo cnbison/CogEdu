@@ -93,13 +93,37 @@ async function boot() {
         student_id: sid,
         // 从学习页进入时可带 evidence_id (1-A-4 追溯), v1 直达入口不带
       });
+      // §10 #10 非阻塞生成: POST 返回 202 (generating) 或 200 (ready, 已有
+      // 落库场景直接复用), 前端轮询进度——消除 10~25 分钟黑盒等待
       setStatus('正在生成讲解场景…');
-      // 3-F-5: student_id 必带 — require_student_access 按它校验学生本人,
-      // 服务端再验 outline 归属 (outline.student_id 必须一致)
-      scenes = await api('/api/presentation/scenes', {
+      let genResp = await api('/api/presentation/scenes', {
         student_id: sid,
         outline_id: outline.outline_id,
       });
+      if (genResp.status === 'generating') {
+        // 轮询进度; not_started (后台线程崩溃/进程重启) → 重新 POST 幂等重触发
+        let retriggered = 0;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const st = await api(
+            '/api/presentation/scenes/' + encodeURIComponent(outline.outline_id)
+            + '/status?student_id=' + encodeURIComponent(sid),
+          );
+          setStatus('正在生成讲解场景… ' + st.generated + ' / ' + st.total);
+          if (st.status === 'ready') break;
+          if (st.status === 'not_started') {
+            if (++retriggered > 2) throw new Error('场景生成反复中断，请稍后重试');
+            genResp = await api('/api/presentation/scenes', {
+              student_id: sid,
+              outline_id: outline.outline_id,
+            });
+          }
+        }
+      }
+      scenes = await api(
+        '/api/presentation/scenes/' + encodeURIComponent(outline.outline_id)
+        + '?student_id=' + encodeURIComponent(sid),
+      );
     }
     await fetchTiming();   // 3-E: 时间常数注入 engine/whiteboard (失败用兜底镜像)
     document.getElementById('scene-outline-title').textContent = outline.title || '讲解';

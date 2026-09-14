@@ -164,7 +164,10 @@ def _maybe_spawn_tts_backfill(scenes: list[Scene], store: PresentationStore) -> 
 
 
 def generate_scenes_for_outline(outline_id: str) -> list[Scene]:
-    """第二阶段编排: 取大纲 → 恢复生成上下文 → 逐步生成 → 落库 → TTS 后台补齐.
+    """第二阶段编排: 取大纲 → 恢复生成上下文 → 逐步生成 → **渐进落库** → TTS 补齐.
+
+    渐进落库（§10 #10）: 每个场景生成完立即 save_scene（on_scene 回调），
+    前端轮询可见进度，页面中断/进程重启不再浪费已生成部分。
 
     Raises:
         LookupError: outline_id 不存在
@@ -183,14 +186,55 @@ def generate_scenes_for_outline(outline_id: str) -> list[Scene]:
         )
     generator = SceneGenerator(llm_service.get_llm())
     # 1-D: 重试 + 降级 (解析失败重试耗尽 → degraded scene, 学生端不空白;
-    # 传输层 RuntimeError 不降级, 原样上抛由路由层 502)
-    scenes = generator.generate_for_outline(outline, ctx, policy=_RETRY_POLICY)
-    for scene in scenes:
-        # 落库失败不中断呈现 (save_scene 内部已 warning 留痕)
-        store.save_scene(scene)
+    # 传输层 RuntimeError 不降级, 原样上抛由路由层 502——后台模式下由
+    # worker 捕获记录, 可重新触发)
+    scenes = generator.generate_for_outline(
+        outline, ctx, policy=_RETRY_POLICY,
+        on_scene=lambda scene: store.save_scene(scene),  # 渐进落库
+    )
     # 3-F-3: TTS 异步补齐 (后台线程, 请求不等; 未配置/无 speech 静默跳过)
     _maybe_spawn_tts_backfill(scenes, store)
     return scenes
+
+
+# §10 #10: 生成中注册表（进程内防重入; 进程重启丢失 = 状态回"未生成"，
+# 幂等可重触发——与 3-F-3 的重启语义注记一致）
+_generating: set[str] = set()
+_generating_lock = threading.Lock()
+
+
+def scenes_generation_in_progress(outline_id: str) -> bool:
+    with _generating_lock:
+        return outline_id in _generating
+
+
+def start_scenes_generation(outline_id: str) -> None:
+    """起后台线程生成场景（§10 #10 非阻塞化; 调用方先查防重入/复用）."""
+    with _generating_lock:
+        if outline_id in _generating:
+            return
+        _generating.add(outline_id)
+    threading.Thread(
+        target=_scenes_generation_worker,
+        args=(outline_id,),
+        daemon=True,
+        name=f"scenes-generation-{outline_id}",
+    ).start()
+
+
+def _scenes_generation_worker(outline_id: str) -> None:
+    store = get_store()
+    try:
+        # 双触发防护: 另一线程可能已生成完毕（复用语义, 不重复计费）
+        if store.list_scenes_by_outline(outline_id):
+            return
+        generate_scenes_for_outline(outline_id)
+    except Exception as e:
+        # 线程内不能上抛——记录留痕, 状态回"未生成"可幂等重触发
+        _log.error("后台场景生成失败 (outline=%s): %s", outline_id, e, exc_info=True)
+    finally:
+        with _generating_lock:
+            _generating.discard(outline_id)
 
 
 # OutlineGenerator 从本模块 re-export (单一 patch 面: web.api.presentation_service)
@@ -203,4 +247,6 @@ __all__ = [
     "persist_outline",
     "reset_store",
     "reset_tts",
+    "scenes_generation_in_progress",
+    "start_scenes_generation",
 ]

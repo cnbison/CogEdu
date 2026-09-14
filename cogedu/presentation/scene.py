@@ -187,33 +187,38 @@ class SceneGenerator:
         outline: Outline,
         ctx: GenerationContext,
         policy: RetryPolicy | None = None,
+        on_scene: Callable[[Scene], None] | None = None,
     ) -> list[Scene]:
         """为大纲每步生成一个 Scene.
 
         policy=None: 严格模式（任一步失败整体上抛, 1-C 基线）。
         policy 传入: 解析失败重试 → 耗尽降级为 degraded scene（1-D-3）。
+        on_scene: 每个场景生成完成（含降级）即回调（§10 #10 渐进落库:
+            生成一个持久化一个, 前端轮询可见进度, 页面中断不再浪费已
+            生成部分）。
         """
         scenes: list[Scene] = []
         for step in outline.steps:
             if policy is None:
-                scenes.append(self.generate_one(outline, ctx, step))
-                continue
-            try:
-                scenes.append(
-                    call_with_retry(
+                scene = self.generate_one(outline, ctx, step)
+            else:
+                try:
+                    scene = call_with_retry(
                         lambda: self.generate_one(outline, ctx, step),  # noqa: B023
                         policy,
                         retry_on=(ValueError, SceneGenerationError),
                         what=f"scene[{step.step_id}] 生成",
                     )
-                )
-            except (ValueError, SceneGenerationError) as e:
-                # 重试耗尽 → 降级, warning 留痕 (不静默)
-                _log.warning(
-                    "scene 生成失败, 降级为模板内容 (outline=%s, step=%s): %s",
-                    outline.outline_id, step.step_id, e,
-                )
-                scenes.append(_degraded_scene(outline, ctx, step, str(e)))
+                except (ValueError, SceneGenerationError) as e:
+                    # 重试耗尽 → 降级, warning 留痕 (不静默)
+                    _log.warning(
+                        "scene 生成失败, 降级为模板内容 (outline=%s, step=%s): %s",
+                        outline.outline_id, step.step_id, e,
+                    )
+                    scene = _degraded_scene(outline, ctx, step, str(e))
+            scenes.append(scene)
+            if on_scene is not None:
+                on_scene(scene)
         return scenes
 
     def generate_one(
