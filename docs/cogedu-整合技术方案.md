@@ -271,7 +271,7 @@ class Parser(Protocol):
 
 ### 10.1 UI 现代化（#9）细化落档（2026-09-14 勘察，待维护者确认后施工）
 
-**勘察范围**：ECOS 参考工程 `../ecos/web/frontend/`（只读，React 18.3 + Vite 6 + TS 5.6，src 约 248K）+ CogEdu `web/` 层现状逐文件核对。本节是施工依据，确认前不动工。**总体结论：API 差异比预估小**——ECOS 前端调用的 17 个端点中，教师端 7 条与 CogEdu `/api/teacher` **同名同义 1:1 对齐**，学生端 8 条 CogEdu 也全部同名存在；真正要新写的是认证层、presentation 全新域、parent 权限扩展三块。
+**勘察范围**：ECOS 参考工程 `../ecos/web/frontend/`（只读，React 18.3 + Vite 6 + TS 5.6，src 约 248K）+ CogEdu `web/` 层现状逐文件核对。本节是施工依据，**四项决策已于 2026-09-14 拍板（10.1.7），施工开始**。**总体结论：API 差异比预估小**——ECOS 前端调用的 17 个端点中，教师端 7 条与 CogEdu `/api/teacher` **同名同义 1:1 对齐**，学生端 8 条 CogEdu 也全部同名存在；真正要新写的是认证层、presentation 全新域、parent 权限扩展三块。
 
 #### 10.1.1 清单 a：ECOS 前端页面/组件/路由结构盘点
 
@@ -340,12 +340,12 @@ class Parser(Protocol):
 
 **与 Phase 4 的边界**：#9 不做证据链新视图（4-C/4-D 的前端部分），但保留 `EChart.tsx` 封装与 react-query 基座供 Phase 4 直接复用；Phase 4 细化可与 9-C..9-E 并行推进。
 
-#### 10.1.7 待拍板项（确认后即可按 10.1.6 开工）
+#### 10.1.7 决策拍板（2026-09-14 维护者确认，按 10.1.6 开工）
 
-1. **契约测试迁移策略**：推荐双轨过渡（10.1.5）；备选是直接替换 legacy 页并一次性重写全部 grep 锁（省双轨维护，但回退余地小）。
-2. **React dist 产物是否入库**：推荐**不入库**（部署/发布时构建；KaTeX vendor 1.4M 入库是因为它是第三方原样拷贝，dist 是构建产物，性质不同）——但若维护者部署环境没有构建条件，则入库更省事。
-3. **login 页是否 React 化**：推荐本期保留 `web/login.html` 原样（`test_auth_api` 锁其内容含 `/api/auth/login`，且它是三端共用的服务端渲染页，React 化收益低）。
-4. **SSE 是否本期接入**：推荐不接（Phase 4 决策）。
+1. **契约测试迁移策略**：✅ **双轨过渡**（10.1.5）——React 端点验收切 dist 后逐条改锁，legacy 页保留兜底，全切换后删除。
+2. **React dist 产物**：✅ **不入库**——发布/部署时构建；`.gitignore` 维持全局忽略 `dist/`。
+3. **login 页**：✅ **保留 `web/login.html` 原样**——三端共用服务端渲染页，本期不 React 化。
+4. **SSE**：✅ **本期不接**——留给 Phase 4 可视化决策，本期用 react-query refetch。
 
 ---
 
