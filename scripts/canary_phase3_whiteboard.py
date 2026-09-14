@@ -110,13 +110,15 @@ def _check_tts_backfill(sid: str, scenes: list[dict]) -> str:
     if not os.environ.get("COGEDU_TTS_API_KEY"):
         print("[tts] 未配置 COGEDU_TTS_API_KEY → 跳过 (speech 静音降级, 3-D-5 默认路径)")
         return "skipped"
-    speech = next(
-        (a for s in scenes for a in (s.get("actions") or []) if a.get("type") == "speech"),
+    target = next(
+        (s for s in scenes
+         if any(a.get("type") == "speech" for a in (s.get("actions") or []))),
         None,
     )
-    if speech is None:
+    if target is None:
         return "no-speech"
-    audio_id = f"tts_{speech['scene_id']}_{speech['action_id']}"
+    speech = next(a for a in (target.get("actions") or []) if a.get("type") == "speech")
+    audio_id = f"tts_{target['scene_id']}_{speech['action_id']}"
     path = (f"/api/presentation/audio/{urllib.parse.quote(audio_id)}"
             f"?student_id={urllib.parse.quote(sid)}")
     deadline = time.monotonic() + 120
