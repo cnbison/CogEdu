@@ -3,7 +3,10 @@
  *   之前 inline 在 <script> 块, v0.51.0 拆到独立 app.js, defer 加载
  *   依赖: styles.css (CSS), DOMContentLoaded 时执行
  */
-const API = 'http://localhost:5173/api';
+// API base 用源相对路径 (2026-09-14): 此前写死 http://主机名:5173/api,
+// 从 0.0.0.0/局域网 IP 打开页面时是跨源请求 → 浏览器直接拒 (Failed to
+// fetch)。静态页由 FastAPI 自身托管, 同源 '/api' 在任何主机名下都正确。
+const API = '/api';
 let sid = '', q = null;
 
 // v0.95.0: 4 行为事件接通的状态 (hint / idle / goal_change / reflection)

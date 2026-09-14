@@ -299,6 +299,24 @@ class TestFrontendWiring:
         assert "learning_student_id" in app_js
         assert "sid = 'python_student_001'" not in app_js
 
+    def test_frontend_api_base_no_hardcoded_host(self):
+        """前端 API base 不得写死主机名 (2026-09-14).
+
+        app.js 曾写死 http://localhost:5173/api——从 0.0.0.0/局域网 IP
+        打开页面时变跨源请求, 浏览器直接拒 ("Failed to fetch").
+        静态页由 FastAPI 同源托管, 必须用源相对路径 '/api'.
+        """
+        from pathlib import Path
+
+        web_dir = Path(__file__).resolve().parent.parent / "web"
+        offenders = [
+            str(p.relative_to(web_dir.parent))
+            for p in web_dir.rglob("*.js")
+            if "localhost:5173" in p.read_text(encoding="utf-8")
+            or "127.0.0.1:5173" in p.read_text(encoding="utf-8")
+        ]
+        assert not offenders, f"写死主机名的前端文件: {offenders}"
+
 
 class TestPhase2DFrontend:
     """2-D (14.6): 家长端真实页 + 学生端授权确认页 — 路由与接线契约."""

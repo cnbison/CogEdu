@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 维护者验收发现：前端 API base 写死主机名（修复）
+
+sid 解析修复后维护者继续验收，换报错 `state 加载失败: Failed to fetch`——网络层失败而非 HTTP 错误。地址栏显示页面从 `0.0.0.0:5173` 打开，而 `app.js:6` 写死 `http://localhost:5173/api`：主机名不同即跨源，浏览器直接拒绝请求（登录页正常是因为 auth.js 用相对路径）。全仓排查仅此一处写死。
+
+修复：`const API = '/api'`（源相对路径——静态页由 FastAPI 自身托管，同源路径在任何主机名/局域网 IP 下都正确）；grep 契约测试全仓锁定前端 JS 不得写死主机名（`test_frontend_api_base_no_hardcoded_host`）。全量 **1934 用例通过**。
+
 ### 2026-09-14 — 维护者验收发现：学生端首页 sid 解析未接入登录身份（修复）
 
 维护者做 Phase 3 页面观感验收（3-G ③）时，登录后首页报"数据加载失败"，页面头部显示 `python_student_001`——Phase 1 时代的硬编码兜底学生 ID。诊断链：后端接口全正常（库副本复现三接口 200/毫秒级），异常在浏览器 localStorage 残留的 `ecos_last_sid`（Phase 1 匿名时代的旧学生）被 auto-start 直接采用，而登录身份是新建的 stu01 → 请求他人数据 → 服务端 `require_student_access` 正确 403。
