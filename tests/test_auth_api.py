@@ -284,6 +284,21 @@ class TestFrontendWiring:
         ).read_text(encoding="utf-8")
         assert "authFetch" in app_js
 
+    def test_app_js_sid_resolves_to_bound_identity(self):
+        """app.js 的 sid 解析: 登录账号绑定优先, 硬编码兜底已删 (2026-09-14).
+
+        2-0-4 只修了 scene.js, index 页 app.js 漏了同款问题——登录态下
+        仍可能拿 localStorage 旧值/硬编码 'python_student_001' 请求他人
+        数据 → 服务端 403 → "登录后数据加载失败" (维护者实测暴露).
+        """
+        from pathlib import Path
+
+        app_js = (
+            Path(__file__).resolve().parent.parent / "web" / "student" / "app.js"
+        ).read_text(encoding="utf-8")
+        assert "learning_student_id" in app_js
+        assert "sid = 'python_student_001'" not in app_js
+
 
 class TestPhase2DFrontend:
     """2-D (14.6): 家长端真实页 + 学生端授权确认页 — 路由与接线契约."""

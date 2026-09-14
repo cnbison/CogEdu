@@ -73,11 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
+    // 2-0-4 补全 (2026-09-14): 预填 sid 时登录账号绑定优先 ——
+    // localStorage 的 ecos_last_sid 可能是其他学生的旧值, 直接拿去
+    // auto-start 会 403 ("登录后数据加载失败")
+    const authUser = (window.CogEduAuth && window.CogEduAuth.getUser()) || null;
+    const boundSid = authUser && authUser.learning_student_id;
     const lastSid = localStorage.getItem('ecos_last_sid');
-    if (lastSid) {
-      // 把 lastSid 填到 input, 避免 start() fallback 到 'python_student_001' 默认值
+    const resolved = boundSid || lastSid;
+    if (resolved) {
       const sidInput = document.getElementById('sid');
-      if (sidInput) sidInput.value = lastSid;
+      if (sidInput) sidInput.value = resolved;
       // auto-start (start 内部会 hide login + show topbar + show study + restoreTabFromHash)
       start();
     }
@@ -101,16 +106,31 @@ const DIMS = [
 
 async function start(sidOverride) {
   // v0.51.2: 支持 auto-start（页面刷新时跳过登录入口）
-  //   优先级: sidOverride > input.value > localStorage ecos_last_sid > 'python_student_001'
+  //   优先级（2026-09-14 修订, 2-0-4 补全）: sidOverride > input.value >
+  //   登录账号绑定的 learning_student_id > localStorage ecos_last_sid。
+  //   登录态下学生只能访问自己的数据（服务端 require_student_access,
+  //   他人数据 403）——localStorage 里可能是其他学生的旧值（Phase 1
+  //   匿名时代遗留）, 硬编码 'python_student_001' 兜底已删除（登录态下
+  //   必然 403, 表现为"登录后数据加载失败"）。
   if (sidOverride) {
     sid = sidOverride;
   } else {
     sid = document.getElementById('sid').value.trim();
   }
   if (!sid) {
+    const authUser = (window.CogEduAuth && window.CogEduAuth.getUser()) || null;
+    sid = (authUser && authUser.learning_student_id) || '';
+  }
+  if (!sid) {
     try { sid = localStorage.getItem('ecos_last_sid') || ''; } catch(e) { sid = ''; }
   }
-  if (!sid) sid = 'python_student_001';
+  if (!sid) {
+    // 无 sid 可用: 留在登录入口让用户输入, 不发必 403 的请求
+    alert('请先输入学生 ID 再进入学习。\n（当前登录账号未绑定学习 ID, 请在输入框填写）');
+    const sidInput = document.getElementById('sid');
+    if (sidInput) sidInput.focus();
+    return;
+  }
   // 记住 sid 到 localStorage（W4 改进：避免重启后忘记 ID）
   try { localStorage.setItem('ecos_last_sid', sid); } catch(e) {}
   // v0.51.2: 同步到 input.value, 退出后再回来能看见当前 sid

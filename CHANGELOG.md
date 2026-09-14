@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 维护者验收发现：学生端首页 sid 解析未接入登录身份（修复）
+
+维护者做 Phase 3 页面观感验收（3-G ③）时，登录后首页报"数据加载失败"，页面头部显示 `python_student_001`——Phase 1 时代的硬编码兜底学生 ID。诊断链：后端接口全正常（库副本复现三接口 200/毫秒级），异常在浏览器 localStorage 残留的 `ecos_last_sid`（Phase 1 匿名时代的旧学生）被 auto-start 直接采用，而登录身份是新建的 stu01 → 请求他人数据 → 服务端 `require_student_access` 正确 403。
+
+根因与 scene.js 同款：**2-0-4 只修了 scene.js 的 sid 解析（登录绑定优先），index 页 app.js 漏了**——硬编码 `python_student_001` 兜底在登录态下必然 403。修复：`start()` 与 DOMContentLoaded auto-start 的 sid 解析改为「登录账号绑定的 `learning_student_id` 优先于 localStorage 旧值」，删除硬编码兜底；无 sid 时留在登录入口提示输入（不发必 403 的请求）。grep 契约测试锁定（`test_app_js_sid_resolves_to_bound_identity`）。全量 **1933 用例通过**。
+
 ### 2026-09-14 — 维护者验收发现：音频时长嗅探采样率位读错（修复）
 
 维护者按 3-G 验收手册做真实 TTS 小样本听音时发现时长系统性偏短 1.378 倍（10.684s 的文件实际播放 14.76s，两样本比例完全一致）。逐位诊断确认：MP3 帧头的采样率字段在 **byte2 的 bit 3-2**，嗅探器误读为 byte3 的 bits 3-2（那是 padding/私有位区域）——MiniMax T2A 返回的 32000 Hz MP3 被算成 44100 Hz。此前测试全绿的根因是"错对错"：测试夹具用同样错误的位布局构造 44100 样本，与旧嗅探器互相印证（vacuously passing）。
