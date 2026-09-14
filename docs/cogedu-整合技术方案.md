@@ -266,6 +266,7 @@ class Parser(Protocol):
 6. **教学素材规模** 仍待 Phase 5 第一步小范围测试后明确
 7. ~~Phase 0 三项改造是否合并施工~~ ✅ 已确认：合并（统一 Runtime 入口 + Flask→FastAPI + SQLite→PostgreSQL 一次性完成）
 8. ~~审查深度是否足够~~ ✅ 已确认足够，转入详细任务清单阶段（见第 12 章）
+9. **UI 现代化立项**（2026-09-14 确认）：ECOS v0.99.5 已有现成 React 18 + Vite + TS 前端工程（`ecos/web/frontend/`，echarts/react-query/router，student/parent 页面齐全，src 约 248K），CogEdu 学生端/家长端目前仍是 ECOS 早期静态页。**已拍板：不阻塞 Phase 3 验收发布**，UI 移植单独立项——范围 = 复制 ECOS 前端工程并适配（CogEdu 自建认证体系对接、API 差异审计、Phase 3 白板/播放 vanilla JS 模块 React 化整合），**建议与 Phase 4 证据链可视化合并考虑**（React + echarts 正是可视化需要的栈）。当前静态页此前暴露的三个前端缺陷（sid 解析/API base 写死/api 助手无凭证）已修复并 grep 契约锁定，移植时以契约测试为验收底线。
 
 ---
 
