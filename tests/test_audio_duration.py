@@ -26,21 +26,25 @@ def make_wav(duration_ms: int, sample_rate: int = 8000) -> bytes:
 
 def make_mp3_frame_header(version: int = 3, sample_rate_idx: int = 0,
                           bitrate_idx: int = 9, padding: int = 0) -> bytes:
-    # b0=0xFF; b1: sync(111) + version + layer(01=III) + no CRC
+    # 帧头位布局: byte2 = bitrate(4) + sample_rate(2) + padding(1) + private(1);
+    # byte3 = channel mode(2) + mode_ext(2) + copyright(1) + original(1) + emphasis(2)
+    # (与 audio_duration.py 的解析同源; 此前夹具把采样率写进 byte3 ——
+    #  错对错与旧嗅探器互相印证, 32000Hz 回归用例就是为此补的)
     b1 = 0xFB | ((version & 0x03) << 3) & 0xFF  # 0xFB = MPEG1 Layer3
     if version != 3:
         b1 = 0xFF | 0xE0 | (version << 3) | 0x02
-    b2 = (bitrate_idx << 4) | 0x00
-    b3 = (sample_rate_idx << 2) | (padding << 1)
+    b2 = (bitrate_idx << 4) | (sample_rate_idx << 2) | (padding << 1)
+    b3 = 0xC0  # mono
     return bytes([0xFF, b1, b2, b3])
 
 
-def make_mp3_xing(frames: int) -> bytes:
-    """MPEG1 Layer3 128kbps 44.1kHz, 带 Xing 帧数 tag."""
-    header = make_mp3_frame_header()  # 128kbps → frame_len 417
+def make_mp3_xing(frames: int, sample_rate_idx: int = 0) -> bytes:
+    """MPEG1 Layer3 128kbps MP3, 带 Xing 帧数 tag (默认 44.1kHz)."""
+    header = make_mp3_frame_header(sample_rate_idx=sample_rate_idx)
+    frame_len = int(144 * 128000 / {0: 44100, 1: 48000, 2: 32000}[sample_rate_idx])
     xing = b"Xing" + struct.pack(">I", 0x01) + struct.pack(">I", frames)
     body = header + b"\x00" * 100 + xing + b"\x00" * 300
-    return body.ljust(417 * max(frames, 1), b"\x00")
+    return body.ljust(frame_len * max(frames, 1), b"\x00")
 
 
 class TestWav:
@@ -62,6 +66,14 @@ class TestMp3:
         # 10 帧 × 1152 / 44100 ≈ 261ms (帧数优先, 与文件体积无关)
         expected = int(10 * 1152 / 44100 * 1000)
         assert measure_audio_duration(make_mp3_xing(10)) == expected
+
+    def test_xing_32000hz_regression(self):
+        """32000Hz 采样率回归 (3-G 真实 TTS 验收发现): MiniMax T2A 返回
+        32000Hz MP3, 嗅探器曾把采样率位读错成 44100 → 时长短 1.378 倍."""
+        expected = int(409 * 1152 / 32000 * 1000)
+        got = measure_audio_duration(make_mp3_xing(409, sample_rate_idx=2))
+        assert got == expected
+        assert abs(got - 14724) <= 1  # 与 afinfo 实测 14.724s 对齐
 
     def test_cbr_fallback_no_xing(self):
         # 无 Xing tag: 全文件按首帧码率 (128kbps) 估算

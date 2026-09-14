@@ -93,8 +93,11 @@ def _mp3_duration_ms(audio: bytes) -> int | None:
     if layer != 1 or version not in _SAMPLE_RATES:
         return None
     bitrate_idx = (b2 >> 4) & 0x0F
-    sample_rate_idx = (b3 >> 2) & 0x03
-    padding = (b3 >> 1) & 0x01
+    # 帧头位布局: byte2 = bitrate(4) + 采样率(2, bits 3-2) + padding(1) + private(1);
+    # 采样率不在 byte3（此前误读 b3 bits 3-2, 32000Hz 被算成 44100 → 时长
+    # 短 1.378 倍, 3-G 真实 TTS 验收发现）
+    sample_rate_idx = (b2 >> 2) & 0x03
+    padding = (b2 >> 1) & 0x01
     rates = _SAMPLE_RATES[version]
     if sample_rate_idx >= len(rates):
         return None
