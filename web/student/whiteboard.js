@@ -55,6 +55,19 @@ function computeScale(viewportWidthPx) {
   return (viewportWidthPx || WB_VIRTUAL_WIDTH) / WB_VIRTUAL_WIDTH;
 }
 
+// 剥离 LLM 误加进 latex 字段的 $/$$ 定界符与杂散 $ (与服务端
+// cogedu/presentation/scene.py _strip_latex_delimiters 同源——服务端
+// 3-F 新数据已剥, 此处兜底覆盖已落库的旧数据)
+function stripLatexDelimiters(raw) {
+  var s = String(raw || '').trim();
+  if (s.indexOf('$$') === 0) s = s.slice(2).replace(/^\s+/, '');
+  else if (s.indexOf('$') === 0) s = s.slice(1).replace(/^\s+/, '');
+  if (s.slice(-2) === '$$') s = s.slice(0, -2).replace(/\s+$/, '');
+  else if (s.slice(-1) === '$') s = s.slice(0, -1).replace(/\s+$/, '');
+  s = s.split('$').join('');
+  return s.trim();
+}
+
 // 动作 → 元素规格 (纯数据, 不碰 DOM)。未知/非法动作返回 null (调用方跳过)。
 // action 字段名为 3-A schema 的 snake_case 口径。
 function elementSpec(action, index, timing) {
@@ -202,10 +215,11 @@ function createWhiteboard(container, options) {
     // wb_draw_latex: 公式走共享 KaTeX 封装 (3-B-2 "同一能力只写一次")
     setBox(el, spec.style);
     el.style.color = spec.style.color || '#000000';
+    var tex = stripLatexDelimiters(spec.latex);
     if (window.CogEduFormula) {
-      window.CogEduFormula.renderFormulaInto(el, spec.latex, true);
+      window.CogEduFormula.renderFormulaInto(el, tex, true);
     } else {
-      el.textContent = spec.latex;             // formula.js 缺失: 纯文本兜底
+      el.textContent = tex;                    // formula.js 缺失: 纯文本兜底
     }
     return el;
   }
@@ -240,6 +254,7 @@ var CogEduWhiteboard = {
   shapePath: shapePath,
   clampCanvasPoint: clampCanvasPoint,
   computeScale: computeScale,
+  stripLatexDelimiters: stripLatexDelimiters,
   WB_VIRTUAL_WIDTH: WB_VIRTUAL_WIDTH,
   WB_VIRTUAL_HEIGHT: WB_VIRTUAL_HEIGHT,
   WB_SHAPE_PATHS: WB_SHAPE_PATHS,

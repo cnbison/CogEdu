@@ -137,7 +137,9 @@ def build_scene_messages(
         '- wb_draw_line：{"type": "wb_draw_line", "x1": int, "y1": int, '
         '"x2": int, "y2": int} —— 画一条线段（坐标轴、数轴、辅助线）。\n'
         '- wb_draw_latex：{"type": "wb_draw_latex", "latex": str, "x": int, '
-        '"y": int, "width": int} —— 画一条公式（LaTeX 串）。\n'
+        '"y": int, "width": int} —— 画一条公式。latex 字段只放公式本体：'
+        "不要带 $ 或 $$ 定界符，不要混入中文等说明文字；中文标注请另用"
+        "一条 wb_draw_text 动作。\n"
         "坐标系：虚拟画布宽 1000、高 562.5，原点在左上角，单位为像素；"
         "所有 x/y 都要在画布内。\n"
         "不要输出 action_id / estimated_duration_ms / audio_id 字段"
@@ -145,7 +147,7 @@ def build_scene_messages(
         "示例（一元二次方程求根公式的讲解片段）：\n"
         '{"actions": ['
         '{"type": "speech", "text": "我们先来看一元二次方程的求根公式。"}, '
-        '{"type": "wb_draw_latex", "latex": "$$x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$$", '
+        '{"type": "wb_draw_latex", "latex": "x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}", '
         '"x": 120, "y": 200, "width": 600}, '
         '{"type": "speech", "text": "其中判别式 b 平方减 4ac 决定根的个数。"}, '
         '{"type": "wb_draw_line", "x1": 60, "y1": 480, "x2": 940, "y2": 480}, '

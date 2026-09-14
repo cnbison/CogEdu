@@ -323,6 +323,8 @@ def _parse_actions(
             )
             continue
         warnings.extend(_clamp_action_coords(action, label=f"动作[{i}]"))
+        if isinstance(action, WbDrawLatexAction):
+            warnings.extend(_strip_latex_delimiters(action, label=f"动作[{i}]"))
         validated.append(action)
 
     # id 重分配 + 时长估算（timing.py 权威源）→ 超长 speech 拆分（3-D-3）
@@ -339,6 +341,34 @@ def _parse_actions(
         if isinstance(action, SpeechAction):
             action.estimated_duration_ms = estimate_action_duration_ms(action)
     return result, warnings
+
+
+def _strip_latex_delimiters(
+    action: WbDrawLatexAction, label: str
+) -> list[str]:
+    """剥离 LLM 误加进 latex 字段的 $ / $$ 定界符与杂散 $（3-G 验收发现）.
+
+    schema 约定 latex 只放公式本体（渲染层自己决定 display 模式），但
+    LLM 受示例影响常带定界符甚至混入中文标注。剥定界符后剩余的杂散 $
+    在合法公式里不存在（未转义的 $ 就是定界符），一并移除；中文标注
+    （如"（零上）"）保留——KaTeX strict 默认会以文本渲染。留痕不静默。
+    """
+    stripped = action.latex.strip()
+    if stripped.startswith("$$"):
+        stripped = stripped[2:].lstrip()
+    elif stripped.startswith("$"):
+        stripped = stripped[1:].lstrip()
+    if stripped.endswith("$$"):
+        stripped = stripped[:-2].rstrip()
+    elif stripped.endswith("$"):
+        stripped = stripped[:-1].rstrip()
+    if "$" in stripped:
+        stripped = stripped.replace("$", "")
+    stripped = stripped.strip()
+    if stripped == action.latex:
+        return []
+    action.latex = stripped
+    return [f"{label} (wb_draw_latex) 剥离了 latex 字段中的 $ 定界符/杂散 $"]
 
 
 def _clamp_action_coords(action: SceneAction, label: str) -> list[str]:

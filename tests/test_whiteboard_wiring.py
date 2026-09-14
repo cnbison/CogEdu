@@ -82,3 +82,31 @@ class TestLlmTextSafety:
                     assert "katex" in line or "renderToString" in line, (
                         f"{name} 出现非法 innerHTML 赋值: {line.strip()}"
                     )
+
+
+class TestKaTeXLocalVendor:
+    """KaTeX 本地 vendor (2026-09-14): 替代 jsdelivr CDN——国内网络下 CDN
+    加载失败会让全部公式降级源码直出 (3-G 验收实测暴露)."""
+
+    def test_scene_html_references_local_vendor(self):
+        html = _read("scene.html")
+        assert 'href="/vendor/katex/katex.min.css"' in html
+        assert 'src="/vendor/katex/katex.min.js"' in html
+        assert "cdn.jsdelivr.net" not in html
+
+    def test_vendor_files_exist_and_served(self):
+        import os
+
+        from fastapi.testclient import TestClient
+
+        from web.api.app import app
+
+        vendor = Path(__file__).resolve().parents[1] / "web" / "vendor" / "katex"
+        assert (vendor / "katex.min.js").is_file()
+        assert (vendor / "katex.min.css").is_file()
+        assert any(f.endswith(".woff2") for f in os.listdir(vendor / "fonts"))
+        client = TestClient(app)
+        assert client.get("/vendor/katex/katex.min.js").status_code == 200
+        font = next(f for f in os.listdir(vendor / "fonts") if f.endswith(".woff2"))
+        assert client.get(f"/vendor/katex/fonts/{font}").status_code == 200
+        assert client.get("/vendor/katex/../auth.js").status_code == 404  # 穿越防护

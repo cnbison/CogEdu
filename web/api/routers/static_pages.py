@@ -84,6 +84,17 @@ def auth_js():
     return _serve(WEB_DIR / "auth.js")
 
 
+@router.get("/vendor/katex/{filename:path}")
+def katex_vendor(filename: str):
+    """KaTeX 本地 vendor (2026-09-14, scene.html 头注: 替代 jsdelivr CDN,
+    国内网络下 CDN 加载失败会让全部公式降级源码直出)."""
+    base = (WEB_DIR / "vendor" / "katex").resolve()
+    target = (base / filename).resolve()
+    if not str(target).startswith(str(base)):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return _serve(target)
+
+
 @router.get("/student/assets/{filename:path}")
 def student_assets(filename: str):
     """React build 静态资源 (js/css), fallback legacy web/student/."""

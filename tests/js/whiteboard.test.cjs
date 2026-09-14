@@ -14,6 +14,7 @@ const {
   shapePath,
   clampCanvasPoint,
   computeScale,
+  stripLatexDelimiters,
   WB_VIRTUAL_WIDTH,
   WB_VIRTUAL_HEIGHT,
   WB_SHAPE_PATHS,
@@ -110,4 +111,16 @@ test('elementSpec: 未知动作类型 / 缺 type 拒绝 (null, 调用方跳过)'
   assert.strictEqual(elementSpec({ type: 'spotlight', x: 1, y: 1 }, 0), null);
   assert.strictEqual(elementSpec({ content: 'no type' }, 0), null);
   assert.strictEqual(elementSpec(null, 0), null);
+});
+
+// ─── latex 定界符剥离 (渲染侧兜底, 覆盖已落库旧数据; 与 scene.py 同源) ──────
+
+test('stripLatexDelimiters: 单 $ / 双 $$ / 中文混入 / 杂散 $', () => {
+  assert.strictEqual(stripLatexDelimiters('$+5^{\\circ}\\text{C}$（零上）'),
+                     '+5^{\\circ}\\text{C}（零上）');
+  assert.strictEqual(stripLatexDelimiters('$$x^2$$'), 'x^2');
+  assert.strictEqual(stripLatexDelimiters('$-100$ 元（收入）'), '-100 元（收入）');
+  assert.strictEqual(stripLatexDelimiters('x^2'), 'x^2');           // 干净的不动
+  assert.strictEqual(stripLatexDelimiters(''), '');
+  assert.strictEqual(stripLatexDelimiters(null), '');
 });

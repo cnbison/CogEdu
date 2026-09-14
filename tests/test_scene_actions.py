@@ -75,7 +75,7 @@ class TestParseActions:
     def test_full_valid_pipeline(self):
         raw = _raw(actions=[
             {"type": "speech", "text": "先看求根公式"},
-            {"type": "wb_draw_latex", "latex": "$x$", "x": 120, "y": 200},
+            {"type": "wb_draw_latex", "latex": "x^2", "x": 120, "y": 200},
             {"type": "wb_draw_line", "x1": 0, "y1": 500, "x2": 1000, "y2": 500},
             {"type": "wb_draw_text", "content": "标注", "x": 100, "y": 80},
             {"type": "wb_draw_shape", "shape": "circle", "x": 600, "y": 100,
@@ -121,6 +121,32 @@ class TestParseActions:
         assert actions[0].x == 1000
         assert actions[0].y == 0
         assert any("越界" in w for w in warnings)
+
+    def test_latex_delimiters_stripped_with_warning(self):
+        """3-G 验收发现: LLM 受旧示例影响把 $ 定界符和中文混进 latex 字段."""
+        actions, warnings = _parse_actions(
+            [{"type": "wb_draw_latex", "latex": "$+5^{\\circ}\\text{C}$（零上）",
+              "x": 100, "y": 100}],
+            scene_id="s1",
+        )
+        assert actions[0].latex == "+5^{\\circ}\\text{C}（零上）"
+        assert any("定界符" in w for w in warnings)
+
+    def test_latex_double_dollars_stripped(self):
+        actions, warnings = _parse_actions(
+            [{"type": "wb_draw_latex", "latex": "$$x^2$$", "x": 0, "y": 0}],
+            scene_id="s1",
+        )
+        assert actions[0].latex == "x^2"
+        assert any("定界符" in w for w in warnings)
+
+    def test_clean_latex_untouched_no_warning(self):
+        actions, warnings = _parse_actions(
+            [{"type": "wb_draw_latex", "latex": "x^2", "x": 0, "y": 0}],
+            scene_id="s1",
+        )
+        assert actions[0].latex == "x^2"
+        assert warnings == []
 
     def test_line_endpoints_clamped(self):
         actions, warnings = _parse_actions(

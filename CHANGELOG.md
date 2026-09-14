@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 维护者验收发现：白板公式源码直出（KaTeX 本地 vendor + latex 定界符治理）
+
+页面观感验收发现白板上公式全部以 LaTeX 源码直出（`$$+5^{\circ}\text{C}$$` 等宽字体）。双根因：① 公式渲染依赖 jsdelivr CDN（1-E 起挂着的 vendor TODO），加载失败即全量降级；② LLM 把 `$` 定界符和中文标注混进 latex 字段（`'$+5^{\circ}\text{C}$（零上）'`）——few-shot 旧示例本身带 `$$`，LLM 有样学样。
+
+修复三层：① **KaTeX 本地 vendor**（npmmirror 拉取 katex@0.16.11 dist 原样拷贝至 `web/vendor/katex/`，静态路由挂载含路径穿越防护，去掉 CDN/SRI 依赖，测试锁定文件存在 + 可服务 + 穿越拒绝）；② prompt few-shot 示例去掉定界符 + 明确"latex 只放公式本体，中文标注另用 wb_draw_text"；③ 定界符剥离双层——服务端 `_strip_latex_delimiters`（新数据，warning 留痕）+ whiteboard.js `stripLatexDelimiters`（渲染侧兜底，覆盖已落库旧数据）。**旧数据无需重新生成**，硬刷新即可正常渲染。全量 **1949 用例通过**（含 JS 26 例）。
+
 ### 2026-09-14 — 讲解复看只读端点 + scene 页 `?outline_id=` 复看模式
 
 3-G 页面验收中一次成功生成（5 场景 87 动作零降级）因等待过久险些浪费——页面没有"复看已生成讲解"的入口，每次点讲解都重新生成（数分钟且计费）。补齐只读读路径：`GET /api/presentation/outline/{id}` 与 `GET /api/presentation/scenes/{id}`（不触发生成，按 outline 归属权威校验，与 POST 生成端点区分）；scene.js 支持 `?outline_id=` 参数走复看模式。测试 6 用例（200/404/空列表/越权 403）；全量 **1944 用例通过**。此读路径同时是第 11 章"错因→场景反查"（`idx_scenes_evidence`）的前置设施。
