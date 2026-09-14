@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — UI 现代化（§10 #9）细化落档（勘察完成，待确认后施工）
+
+只读勘察 ECOS React 前端工程（`../ecos/web/frontend/`，React 18.3 + Vite 6 + TS）+ CogEdu web 层逐文件核对，三份清单写入方案文档 §10.1：
+
+- **清单 a（结构盘点）**：三入口多页 SPA（HashRouter）+ react-query 扁平 key + echarts 单封装；教师 2 页/学生 7 页/家长单页四卡的完整组件分组与移植注意点（响应字段硬对齐、同端点多形状契约、ECOS 无认证等）；
+- **清单 b（API 差异）**：**总体差异比预估小**——教师端 7 端点与 CogEdu `/api/teacher` 同名同义 1:1，学生端 8 端点全部同名存在；真正要新写的只有认证层（Bearer + 401 拦截 + `learning_student_id` 登录身份）、presentation 全新 8 端点（202 轮询协议/复看/音频/时序）、parent 权限扩展（guardian-links 状态机 + report 下载）三块；
+- **清单 c（Phase 3 模块整合）**：拍板挂载式宿主——`playback/whiteboard/formula.js` 三个 vanilla 模块原样保留（保住 node:test 24 例与时序数值锁），React 写 ScenePlayer 宿主组件做依赖注入，KaTeX 继续本地 vendor；
+- **托管衔接**：`static_pages.py` 预留的 dist 三入口约定与 ECOS vite 入口名天然一致，**无需改 app.py**；
+- **施工拆分**：9-A 骨架 → 9-B 认证基座 → 9-C 教师端（最小风险先打通）→ 9-D 学生端+presentation → 9-E 家长端 → 9-F 契约测试双轨迁移 → 9-G 灰度收官；Phase 4 前端（echarts 证据链）不在本期范围但保留基座复用；
+- **待拍板 4 项**：契约测试双轨过渡 vs 一次性替换、dist 产物是否入库（推荐不入库）、login 页是否 React 化（推荐保留）、SSE 是否本期接（推荐不接）。
+
+纯文档变更，无代码改动。
+
 ### 2026-09-14 — 讲解生成非阻塞化 + 进度轮询 + 结果复用（§10 #10 ①② 落地）
 
 Phase 3 验收暴露的"生成黑盒等待 10~25 分钟"改造（当日立项当日落地）：

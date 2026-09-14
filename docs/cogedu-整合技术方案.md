@@ -266,8 +266,86 @@ class Parser(Protocol):
 6. **教学素材规模** 仍待 Phase 5 第一步小范围测试后明确
 7. ~~Phase 0 三项改造是否合并施工~~ ✅ 已确认：合并（统一 Runtime 入口 + Flask→FastAPI + SQLite→PostgreSQL 一次性完成）
 8. ~~审查深度是否足够~~ ✅ 已确认足够，转入详细任务清单阶段（见第 12 章）
-9. **UI 现代化立项**（2026-09-14 确认）：ECOS v0.99.5 已有现成 React 18 + Vite + TS 前端工程（`ecos/web/frontend/`，echarts/react-query/router，student/parent 页面齐全，src 约 248K），CogEdu 学生端/家长端目前仍是 ECOS 早期静态页。**已拍板：不阻塞 Phase 3 验收发布**，UI 移植单独立项——范围 = 复制 ECOS 前端工程并适配（CogEdu 自建认证体系对接、API 差异审计、Phase 3 白板/播放 vanilla JS 模块 React 化整合），**建议与 Phase 4 证据链可视化合并考虑**（React + echarts 正是可视化需要的栈）。当前静态页此前暴露的三个前端缺陷（sid 解析/API base 写死/api 助手无凭证）已修复并 grep 契约锁定，移植时以契约测试为验收底线。
+9. **UI 现代化立项**（2026-09-14 确认）：ECOS v0.99.5 已有现成 React 18 + Vite + TS 前端工程（`ecos/web/frontend/`，echarts/react-query/router，student/parent 页面齐全，src 约 248K），CogEdu 学生端/家长端目前仍是 ECOS 早期静态页。**已拍板：不阻塞 Phase 3 验收发布**，UI 移植单独立项——范围 = 复制 ECOS 前端工程并适配（CogEdu 自建认证体系对接、API 差异审计、Phase 3 白板/播放 vanilla JS 模块 React 化整合），**建议与 Phase 4 证据链可视化合并考虑**（React + echarts 正是可视化需要的栈）。当前静态页此前暴露的三个前端缺陷（sid 解析/API base 写死/api 助手无凭证）已修复并 grep 契约锁定，移植时以契约测试为验收底线。**细化已落档（2026-09-14 勘察）**：三份清单（页面/组件结构盘点、API 差异清单、Phase 3 模块整合方案）+ 施工任务拆分见 §10.1，待维护者确认后施工。
 10. **讲解生成等待体验**（2026-09-14 立项，Phase 3 验收暴露；**同日 ①② 已落地**）：原状为生成全程 10~25 分钟黑盒等待——串行逐场景生成 + 个别场景吃满超时重试，且全部场景生成完才一次性落库/返回。**已完成**：① 逐场景落库（`generate_for_outline` 加 `on_scene` 回调）+ POST /scenes 非阻塞化（202 + 后台 daemon 线程，进程内防重入注册表）+ `GET /scenes/{id}/status` 进度端点（generated/total/status 三态：ready/generating/not_started 可幂等重触发）+ 前端轮询显示"n / m"进度；② 生成结果服务端复用（同大纲已有落库场景 → POST 直接 200 ready 返回，幂等不重复生成计费）。**剩余**：③ 重试/超时策略按耗时数据收紧；渐进显示目前是进度文字，逐场景边生成边渲染的完整形态留给 UI 现代化（#9）一并做。灰度脚本（1/3 两代）已同步接入轮询助手 `_wait_scenes`。
+
+### 10.1 UI 现代化（#9）细化落档（2026-09-14 勘察，待维护者确认后施工）
+
+**勘察范围**：ECOS 参考工程 `../ecos/web/frontend/`（只读，React 18.3 + Vite 6 + TS 5.6，src 约 248K）+ CogEdu `web/` 层现状逐文件核对。本节是施工依据，确认前不动工。**总体结论：API 差异比预估小**——ECOS 前端调用的 17 个端点中，教师端 7 条与 CogEdu `/api/teacher` **同名同义 1:1 对齐**，学生端 8 条 CogEdu 也全部同名存在；真正要新写的是认证层、presentation 全新域、parent 权限扩展三块。
+
+#### 10.1.1 清单 a：ECOS 前端页面/组件/路由结构盘点
+
+**工程形态**：三入口多页 SPA（`index.html`=教师端 / `student.html` / `parent.html`），各自独立 `main.tsx` + **HashRouter** + QueryClientProvider（staleTime 15s、refetchOnWindowFocus off）。无 axios、无 zustand/redux、无 Tailwind、无 UI 组件库；纯 fetch 封装；echarts 5.5 唯一封装在 `components/EChart.tsx`（init/resize/dispose + setOption）。
+
+**路由表**：
+
+| 入口 | 路由 | 页面 |
+|---|---|---|
+| 教师端 index.html | `/`；`/students/:id` | RosterPage（桌面表格/移动卡片双形态）；StudentDetailPage（474 行，内含 5D radar / EvidenceChain 下钻 / CalibrationView / POMDP 诊断 / MisconceptionsCard 子组件） |
+| 学生端 student.html | `/`（今天）、`/answer`、`/where`、`/growth`、`/report`、`/settings`；登录门 = 无 sid 时条件渲染 LoginPage（无 /login 路由） | 三卡首页+MotivationPanel；答题主流程（CodeMirror 编辑器、自评 4 档、AI 判分、反思、LCA 决策只读、idle 计时）；5D+Bloom 视图；成长折线；报告+打印；设置 |
+| 家长端 parent.html | **无 `<Routes>`**——单页 ParentHomePage，"列表/详情"两态靠 URL query `?student=<id>` 切换 | 四卡：Engagement / Advice（severity 三色）/ FiveDOverview / InterventionHistory |
+
+**组件分组**：`components/`（EChart + `ui/` 原子件：Icon/icons/iconMap/ClickableRow/CollapsibleSection/EmptyState/SectionHeader/uiHelpers/useMediaQuery，跨三端共享）｜`student/`（CodeEditor、MotivationPanel、7 页面）｜`parent/`（Cards 四卡、ui.ts 徽标映射、urlState.ts 纯函数）｜`pages/`（教师端 2 页）。
+
+**状态管理**：无全局 store；react-query queryKey 扁平二元组 `[资源名, sid]`，缓存失效靠手动 `refetch()`（无 invalidateQueries、无轮询）。**样式**：原生全局 CSS + `:root` 主题变量（`index.css`），学生端 787 行专属 CSS 含 `@media print`（`window.print()` 出 PDF）。
+
+**移植注意点**（勘察实录）：① 响应字段类型与后端契约逐字段硬对齐（家长端 InterventionItem 曾因字段名错配显示错位，ECOS 留有注释），移植保留宽类型 + `[key: string]: unknown` 逐步收紧；② 同一端点多形状隐式契约要处理（`/api/report` interpretation 失败降级 `{error}`、`/api/question` 完成态 `{done:true}`、`/api/judge` `judged:false`）；③ ECOS **无认证**——sid 纯前端 localStorage 手输、fetch 无 Authorization 头、完全不处理 401；④ 写路径两步（先 judge 后 answer，answer body 11 字段含 `self_confidence` 四档语义值）。
+
+#### 10.1.2 清单 b：API 调用层与 CogEdu 端点差异清单
+
+| # | 差异点 | ECOS 前端现状 | CogEdu 现状 | 移植动作 |
+|---|---|---|---|---|
+| 1 | **认证** | 无认证：fetch 只带 Accept/Content-Type，无 401 处理 | Bearer + 服务端会话（token `localStorage["cogedu_token"]`，401 → 清 token 跳 `/login?next=`），语义被 `test_auth_api.py` 锁定 | 三份 client 的 getJson/postJson 统一加 `Authorization: Bearer` 头 + 401 拦截，行为对齐现有 `web/auth.js` authFetch（服务端会话可撤销，不能换 JWT） |
+| 2 | **student_id 来源** | 用户手输/最近列表选择，存 localStorage | 登录身份：student 角色绑定 `learning_student_id`（`/api/auth/me` 返回） | 登录门改为真登录：POST `/api/auth/login` → `me` 取 `learning_student_id`；删除手输 sid 逻辑（呼应 3-F-5 修复的语义） |
+| 3 | 学生端 8 端点 | `/api/state|report|question|judge|answer|history|event/{hint,idle,goal_change,reflection}|students/recent` | **全部同名存在** | 字段级对齐：`/api/answer` 响应为 9 字段契约（`AnswerResponse` + exclude_none，`persisted=false` 要告警）；`/api/judge` 失败 **422** `{judged:false, error_code:"LLM_JUDGE_FAILED", needs_rejudge:true}`（ECOS 是 200 内 judged:false）；`/api/question` 附加 `lca_decision/is_probe/is_warmup/strategy` 字段（超集，前端按需取） |
+| 4 | **presentation 域**（全新） | 无 | 8 端点，router 级 `require_student_access`：POST `/api/presentation/outline`；POST `/scenes`（**非阻塞**：已有落库→200 ready 复用，否则 202 generating）；GET `/scenes/{id}/status`（generated/total/status ∈ ready/generating/not_started，not_started 幂等重触发）；GET `/outline/{id}`、GET `/scenes/{id}`（复看只读）；POST `/event`（scene_viewed/scene_completed）；GET `/audio/{id}`；GET `/timing` | 新增 presentation client：202 轮询协议（3s 间隔、重触发上限 2 次）+ 复看模式 + blob 音频缓存照 scene.js 现逻辑平移；**GET 一律带 `?student_id=` 查询串**（dependency 放行靠它），POST 带 body `student_id` |
+| 5 | **parent 域扩展** | 2 端点（students / overview） | 3 端点 + guardian-links 7 端点：overview/report 均按 per-student `guardian_can_access` 校验（无 `view_progress`/`download_report` 授权 403）；授权是 pending→active 状态机、**学生本人确认制** | 加 report 下载（docx，`?period=`）；新增授权管理视图（家长侧申请/撤回/撤销 + 错误语义 400/404/409）；学生 SPA 加确认页路由（对应现 `guardian-links.html`） |
+| 6 | 教师端 | 7 GET 端点 | **同名 7 端点已存在**（`require_roles("teacher","admin")`），CogEdu 教师页目前只是占位骨架 | 近乎直移 + Bearer 头；这是移植工作量最小、最先打通全链路的一块 |
+| 7 | SSE | 无 | GET `/api/events/stream`（进程内事件总线订阅） | **本期不接**，留给 Phase 4 可视化决策 |
+| 8 | API base / CORS | 相对路径 `/api` + vite dev proxy | 同源相对路径（无 CORS 中间件，5173 同端口托管）；grep 锁禁止 JS 出现 `localhost:5173` | 沿用相对 `/api` + dev proxy；不引入绝对 origin |
+| 9 | 枚举/值域耦合 | Bloom 枚举名与 L1..L6 两种形状混用；θ 值域 ±2.5；POMDP 英文枚举→中文徽标 | 复用同一内核，契约一致 | 保留 ECOS 映射表原样平移即可 |
+
+#### 10.1.3 清单 c：Phase 3 白板/播放模块 React 整合方案（挂载式宿主，2026-09-14 拍板）
+
+**原则：React 只做宿主，三个 vanilla 模块原样保留**——保住已人工验收的播放行为、tests/js 24 个 node:test 用例（依赖 `module.exports` CommonJS 导出）与 `test_presentation_timing.py` 的数值镜像锁。
+
+- **保留不动**：`web/student/{playback,whiteboard,formula}.js` 三个文件（`window.CogEduXxx` 全局 + `module.exports` 双通道是 node:test `require` 的前提，也是代数令牌/时序语义已验收的载体）。
+- **加载**：React 入口 html 以 `<script defer>` 按现有顺序引入三模块（formula → playback → whiteboard），与 scene.html 行为等价；不引 npm katex，继续用本地 vendor `/vendor/katex/`（避免双份实现 + `TestKaTeXLocalVendor` 锁冲突）。
+- **宿主组件 ScenePlayer**：`useEffect` 内 `createWhiteboard(containerRef.current, {timing})` + `createPlaybackEngine({actions, renderer: wb.renderer, speechPlayer, scheduler, now, timing, onStateChange, onDone})`；speechPlayer（blob 缓存 + ended 驱动 + 估算兜底）从 scene.js 平移成可注入对象，不改 playback.js；组件卸载必调 `engine.stop()`（代数令牌使旧异步回调失效的语义保留）；翻页/复看切换即 stop + 重建。
+- **timing 下发**：GET `/api/presentation/timing` → 同时注入 engine timing 与 renderer timing；playback.js/whiteboard.js 内的兜底镜像常量**一个字不动**（数值锁）。
+- **复看模式**：`scene.html?outline_id=` 改为 HashRouter 路由参数（如 `/scene/:outlineId`），走两个只读 GET，不触发生成。
+- **安全约定延续**：LLM 文本一律 textContent、innerHTML 仅限 KaTeX 渲染产物——现有 grep 锁改指向宿主组件后同样执行。
+- **渐进生成形态**（§10 #10 剩余项）：React 版在轮询 status 时按 `generated` 计数逐场景渲染（场景数据逐个 GET），宿主组件天然适合做，作为 9-D 任务的一部分收掉 #10 的尾巴。
+
+#### 10.1.4 托管与构建衔接（勘察确认：无需改 app.py）
+
+- `web/api/routers/static_pages.py:29` 已预留 `DIST_DIR = web/frontend/dist`，dist 优先、legacy 静态页兜底；入口名约定 `index.html`（教师）/`student.html`/`parent.html` 与 ECOS vite `rollupOptions.input` **天然一致**。
+- HashRouter 与 static_pages 的逐文件映射（无 history-fallback）兼容，深链接不碎。
+- `.gitignore` 全局忽略 `dist/`——React 构建产物是否入库**待拍板**（见 10.1.7）。
+- 开发模式：vite dev proxy `/api → 127.0.0.1:5173`。
+
+#### 10.1.5 契约测试迁移策略（待拍板，移植最大约束面）
+
+约 30+ 条 grep 契约断言指向 `web/student/` 旧文件（`test_whiteboard_wiring.py` 9 例、`test_auth_api.py` 前端接线段、`test_frontend_event_wiring.py`、`test_presentation_events.py`/`test_presentation_timing.py` 的 JS 段）。**推荐：双轨过渡**——React 端某端点验收通过切 dist 后，同步把对应 grep 锁改指向 React 工程源文件（**锁语义不变**：authFetch/Bearer/无写死主机名/textContent 安全/时序镜像/script 顺序），legacy 页保留兜底；全端点切换完成后再删 legacy 页与其专属锁。node:test（tests/js/*.test.cjs）因模块保留而**原样全绿**，不动。
+
+#### 10.1.6 施工任务拆分（参照 Phase 2/3 模式：每任务完成即更新四文档 + commit + push）
+
+- **9-A 工程骨架落地**：复制 ECOS 工程配置（package.json/vite.config/tsconfig/eslint）到 `web/frontend/`，三入口保留，业务代码先清空保 `build`/`typecheck`/`lint` 绿；提交注明来源 ECOS v0.99.5（只读复制，自包含维护）。
+- **9-B 认证与 API 基座**：authFetch 封装（Bearer + 401 → `/login?next=`）+ login 对接 + `me` 取 `learning_student_id` + 三份 client 与 types 契约对齐（清单 b #1/#2/#3）。
+- **9-C 教师端移植**（7 端点 1:1，最小风险先打通：构建 → 托管 → 契约测试全链路验证）。
+- **9-D 学生端移植 + presentation 集成**：答题主流程字段对齐 + ScenePlayer 宿主 + 202 轮询/复看/音频/时序 + 逐场景渐进渲染（收 §10 #10 尾巴）。
+- **9-E 家长端移植**：roster/overview/report 下载 + guardian 授权管理 + 学生端确认页路由。
+- **9-F 契约测试迁移**：按 10.1.5 双轨策略改锁 + node:test 回归 + legacy 兜底验证。
+- **9-G 灰度验证与收官**：真实进程人工验收（教师/学生/家长/场景/授权五页）+ 四文档收官 + 全量发布。
+
+**与 Phase 4 的边界**：#9 不做证据链新视图（4-C/4-D 的前端部分），但保留 `EChart.tsx` 封装与 react-query 基座供 Phase 4 直接复用；Phase 4 细化可与 9-C..9-E 并行推进。
+
+#### 10.1.7 待拍板项（确认后即可按 10.1.6 开工）
+
+1. **契约测试迁移策略**：推荐双轨过渡（10.1.5）；备选是直接替换 legacy 页并一次性重写全部 grep 锁（省双轨维护，但回退余地小）。
+2. **React dist 产物是否入库**：推荐**不入库**（部署/发布时构建；KaTeX vendor 1.4M 入库是因为它是第三方原样拷贝，dist 是构建产物，性质不同）——但若维护者部署环境没有构建条件，则入库更省事。
+3. **login 页是否 React 化**：推荐本期保留 `web/login.html` 原样（`test_auth_api` 锁其内容含 `/api/auth/login`，且它是三端共用的服务端渲染页，React 化收益低）。
+4. **SSE 是否本期接入**：推荐不接（Phase 4 决策）。
 
 ---
 
