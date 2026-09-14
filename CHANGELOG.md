@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — 维护者验收发现：scene 页 api 助手不带登录凭证（修复，2-0-4 遗漏第三处）
+
+sid 与 API base 修复后维护者继续验收，点「讲解」报 `HTTP 401`。根因：`scene.js` 的 `api()` 助手（outline/scenes/timing 三个主要请求的公共路径）是页面内唯一裸 fetch 不带 Authorization 的请求——2-0-4 只给行为回写和音频导出加了凭证。测试环境 auth_bypass 掩盖，真实鉴权下"点击讲解"必 401。修复：走 `CogEduAuth.authFetch` 统一带 Bearer + 401 自动跳登录；grep 契约锁定。全量 **1935 用例通过**。
+
 ### 2026-09-14 — 维护者验收发现：前端 API base 写死主机名（修复）
 
 sid 解析修复后维护者继续验收，换报错 `state 加载失败: Failed to fetch`——网络层失败而非 HTTP 错误。地址栏显示页面从 `0.0.0.0:5173` 打开，而 `app.js:6` 写死 `http://localhost:5173/api`：主机名不同即跨源，浏览器直接拒绝请求（登录页正常是因为 auth.js 用相对路径）。全仓排查仅此一处写死。

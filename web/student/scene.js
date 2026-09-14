@@ -364,12 +364,16 @@ function nextScene() {
 // ─── 工具 ────────────────────────────────────────────────────────────────
 
 async function api(url, body) {
+  // 2-0-4 补全 (2026-09-14): outline/scenes/timing 与回写/音频一样必须带
+  // 登录凭证——此前本函数是页面内唯一裸 fetch 的请求路径, 真实鉴权下
+  // "点击讲解"必 401 (测试环境 auth_bypass 掩盖)。走 authFetch 统一
+  // 带 Bearer + 401 自动跳登录。
   const opts = { headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) {           // 无 body → GET (3-E /timing)
     opts.method = 'POST';
     opts.body = JSON.stringify(body);
   }
-  const resp = await fetch(url, opts);
+  const resp = await window.CogEduAuth.authFetch(url, opts);
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     throw new Error(data.error || '请求失败 (HTTP ' + resp.status + ')');

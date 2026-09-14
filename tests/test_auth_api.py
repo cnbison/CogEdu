@@ -275,6 +275,20 @@ class TestFrontendWiring:
         ).read_text(encoding="utf-8")
         assert "Authorization" in scene_js
 
+    def test_scene_api_helper_uses_authfetch(self):
+        """scene 页 api 助手走 authFetch (2026-09-14 补).
+
+        outline/scenes/timing 是页面内主要请求路径, 此前裸 fetch 不带
+        凭证——真实鉴权下"点击讲解"必 401 (测试 auth_bypass 掩盖),
+        维护者页面观感验收时暴露.
+        """
+        from pathlib import Path
+
+        scene_js = (
+            Path(__file__).resolve().parent.parent / "web" / "student" / "scene.js"
+        ).read_text(encoding="utf-8")
+        assert "CogEduAuth.authFetch(url, opts)" in scene_js
+
     def test_app_js_uses_authfetch(self):
         """学生端 api 封装走 authFetch (401 统一跳登录)."""
         from pathlib import Path
