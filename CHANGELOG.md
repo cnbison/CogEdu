@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 2026-09-14 — UI 现代化（§10 #9）开工：9-A 前端工程骨架落地
+
+- `web/frontend/` 新增 React 18.3 + Vite 6 + TS 工程（配置移植自 ECOS v0.99.5 前端，`../ecos/web/frontend/` commit `9cdacab` 工作树，只读复制自包含维护，无任何运行时/构建引用）：package.json（react/react-router/@tanstack/react-query/echarts/codemirror/lucide-react）、vite.config（三入口 teacher=index.html / student.html / parent.html 对齐 static_pages DIST_DIR 约定；dev 5174 proxy /api → 5173；`__APP_VERSION__` 编译期注入）、tsconfig 三件套、eslint flat config、index.css 全局样式（ECOS 原样）。
+- 业务代码为骨架占位（三端各一个 AppShell 占位页），随 9-B..9-E 分任务移植。
+- **验证**：`npm run build / lint / typecheck` 全绿（vite 6.4.3，dist 三入口产物正确）；TestClient 实测 `/`、`/student/`、`/parent/`、`/teacher/` 均由 `web/frontend/dist` 接管——`static_pages.py` 预留的 dist 优先逻辑零改动生效，legacy 静态页自动降为兜底。
+- dist 构建产物不入库（`.gitignore` 维持全局忽略 `dist/`，拍板记录见方案文档 §10.1.7）。
+
 ### 2026-09-14 — UI 现代化（§10 #9）细化落档（勘察完成，待确认后施工）
 
 只读勘察 ECOS React 前端工程（`../ecos/web/frontend/`，React 18.3 + Vite 6 + TS）+ CogEdu web 层逐文件核对，三份清单写入方案文档 §10.1：
