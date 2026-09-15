@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-C：教师端移植（7 端点 1:1，React 全链路首次打通）
+
+- 自 ECOS v0.99.5 前端复制：`pages/RosterPage.tsx`（桌面表格/移动卡片双形态）+ `pages/StudentDetailPage.tsx`（5D radar / EvidenceChain 下钻 / CalibrationView / POMDP 诊断 / MisconceptionsCard）+ `components/EChart.tsx`（echarts 单封装，Phase 4 可视化复用）+ `components/ui/` 原子件（Icon/icons/iconMap/ClickableRow/CollapsibleSection/EmptyState/SectionHeader/uiHelpers/useMediaQuery，含原 vitest 测试）+ `api/types.ts`（响应契约，与 `web/api/routers/teacher.py` 逐字段核对一致）；
+- `api/client.ts` 适配：getJson 换 CogEdu 共享 auth 基座（Bearer + 401 跳登录），端点路径不变；`TEACHER_ENDPOINTS` 契约测试原样保留；
+- 路由：`/`→roster、`/students/:id`→详情（HashRouter），外层 RequireSession（teacher/admin）；
+- **验证**：vitest 31 用例全绿（8 auth 基座 + 23 移植）；`build/lint/typecheck` 全绿；TestClient 冒烟 7 端点（教师 token，空库 404/200 形态符合契约）。
+
 ### 2026-09-15 — UI 现代化 9-B：认证与 API 基座（React 端接入 CogEdu 自建认证）
 
 - `web/frontend/src/shared/auth.ts`：authFetch 统一请求入口（自动附 `Authorization: Bearer`，401 → 清会话 + 跳 `/login?next=`，next 含 HashRouter hash 回跳）+ login/logout/fetchSession + getJson/postJson helper；**localStorage 键名沿用 `cogedu_token`/`cogedu_user`，与 legacy `web/auth.js` 互操作**（双轨期两栈共享登录态）；

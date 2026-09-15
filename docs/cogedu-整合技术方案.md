@@ -332,7 +332,7 @@ class Parser(Protocol):
 
 - **9-A 工程骨架落地**：✅（2026-09-14 完成）复制 ECOS 工程配置（package.json/vite.config/tsconfig/eslint）到 `web/frontend/`，三入口保留，业务代码先清空保 `build`/`typecheck`/`lint` 绿；提交注明来源 ECOS v0.99.5（只读复制，自包含维护）。**验证**：`npm run build|lint|typecheck` 全绿，TestClient 实测 `/`、`/student/`、`/parent/`、`/teacher/` 四入口均由 dist 接管（static_pages dist 优先逻辑自动生效，app.py 零改动）。
 - **9-B 认证与 API 基座**：✅（2026-09-15 完成）`src/shared/auth.ts`（authFetch Bearer + 401 清会话跳 `/login?next=`（hash 回跳）+ login/logout/fetchSession + localStorage 键与 legacy web/auth.js 互操作）+ `session.ts` useSession（服务端权威校验）+ `RequireSession.tsx` 守卫（角色矩阵）+ 三端 main 接 QueryClientProvider + HashRouter；vitest 8 用例锁基座语义。**验证**：真实进程冒烟（建号→login→me→403 矩阵→401→撤销立即失效）全通。
-- **9-C 教师端移植**（7 端点 1:1，最小风险先打通：构建 → 托管 → 契约测试全链路验证）。
+- **9-C 教师端移植**：✅（2026-09-15 完成）RosterPage/StudentDetailPage + EChart/ui 组件（Icon/EmptyState/CollapsibleSection/SectionHeader/ClickableRow/useMediaQuery/uiHelpers）+ api client/types 自 ECOS v0.99.5 前端复制，路由 `/`→roster、`/students/:id`→详情；getJson 换共享 Bearer 基座，响应类型与 CogEdu teacher.py 逐字段核对一致。vitest 31 用例全绿（含 ECOS 原有端点契约/组件测试）；TestClient 冒烟 7 端点（教师 token，空库 404/200 形态符合契约）。
 - **9-D 学生端移植 + presentation 集成**：答题主流程字段对齐 + ScenePlayer 宿主 + 202 轮询/复看/音频/时序 + 逐场景渐进渲染（收 §10 #10 尾巴）。
 - **9-E 家长端移植**：roster/overview/report 下载 + guardian 授权管理 + 学生端确认页路由。
 - **9-F 契约测试迁移**：按 10.1.5 双轨策略改锁 + node:test 回归 + legacy 兜底验证。
