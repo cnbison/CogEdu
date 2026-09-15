@@ -179,3 +179,16 @@ class TestEndpointWiring:
 def test_three_entries_exist(rel: str):
     """三入口 html 存在（static_pages DIST_DIR 约定的构建输入前提）."""
     assert (FRONTEND_DIR / rel).is_file()
+
+
+def test_parent_entry_has_router_provider():
+    """家长端入口必须包 HashRouter（无 Routes ≠ 无 Router）.
+
+    2026-09-15 验收发现：9-B 重写 parent/main.tsx 时漏了 HashRouter，
+    ParentHomePage 的 useSearchParams 在 Router 上下文外直接抛异常，
+    整端白屏（守卫/退出登录全部不可达）。
+    """
+    main_tsx = (SRC_DIR / "parent" / "main.tsx").read_text(encoding="utf-8")
+    assert "HashRouter" in main_tsx
+    # 包裹顺序：HashRouter 必须在 QueryClientProvider 内层且包住 App
+    assert main_tsx.index("<HashRouter>") < main_tsx.index("<App />")
