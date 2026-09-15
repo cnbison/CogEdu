@@ -228,6 +228,13 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
           <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
             生成按你当前的学习状态定制，通常需要几分钟；已生成的讲解从下方记录直接复看，不会重复生成。
           </p>
+          {records.isLoading && <p className="muted">正在加载讲解记录…</p>}
+          {records.isError && (
+            <p className="muted" style={{ color: "var(--danger, #dc2626)" }}>
+              讲解记录加载失败：{(records.error as Error)?.message ?? "未知错误"}
+              ——若刚更新过后端，请重启服务进程后刷新重试。
+            </p>
+          )}
           {records.data && rows.length > 0 && (
             <table style={{ marginTop: 14 }}>
               <thead>
