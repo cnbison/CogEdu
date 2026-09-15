@@ -188,11 +188,30 @@ def generate_scenes_for_outline(outline_id: str) -> list[Scene]:
     # 1-D: 重试 + 降级 (解析失败重试耗尽 → degraded scene, 学生端不空白;
     # 传输层 RuntimeError 不降级, 原样上抛由路由层 502——后台模式下由
     # worker 捕获记录, 可重新触发)
+    #
+    # TTS 渐进回填 (2026-09-15 验收反馈): 原设计音频在全部场景生成完后
+    # 统一补齐——渐进渲染下学生边生成边听, 早期页面长时间无声。改为每个
+    # 场景落库后立即起线程回填该场景的音频; 末尾 _maybe_spawn_tts_backfill
+    # 保留兜底 (audio_id 幂等, 不重复合成)。
+    tts_client = get_tts()
+
+    def _on_scene(scene: Scene) -> None:
+        store.save_scene(scene)
+        if tts_client is not None and any(
+            getattr(a, "type", "") == "speech" for a in (scene.actions or [])
+        ):
+            threading.Thread(
+                target=backfill_scene_audio,
+                args=([scene], store, tts_client),
+                daemon=True,
+                name="tts-backfill-scene",
+            ).start()
+
     scenes = generator.generate_for_outline(
         outline, ctx, policy=_RETRY_POLICY,
-        on_scene=lambda scene: store.save_scene(scene),  # 渐进落库
+        on_scene=_on_scene,  # 渐进落库 + 渐进音频回填
     )
-    # 3-F-3: TTS 异步补齐 (后台线程, 请求不等; 未配置/无 speech 静默跳过)
+    # 3-F-3: TTS 异步补齐兜底 (后台线程, 请求不等; 未配置/无 speech 静默跳过)
     _maybe_spawn_tts_backfill(scenes, store)
     return scenes
 
