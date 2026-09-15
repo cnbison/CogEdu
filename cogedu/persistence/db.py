@@ -34,6 +34,7 @@ from .adapter import (
     BACKEND_POSTGRES,
     BACKEND_SQLITE,
     PGConnectionProxy,
+    SQLiteConnectionProxy,
     detect_backend,
     normalize_value,
     open_connection,
@@ -344,6 +345,11 @@ class Database:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON")
             self._conn.execute("PRAGMA journal_mode = WAL")
+            # 线程串行化代理 (与 adapter.open_connection 同款): FastAPI
+            # threadpool 并发共享此连接, 裸连接并发 execute 会触发
+            # sqlite3.InterfaceError / 静默空结果 (2026-09-15 教师详情页
+            # 6 并发请求暴露)
+            self._conn = SQLiteConnectionProxy(self._conn)
         return self._conn
 
     def _create_pg_connection(self) -> "PGConnectionProxy":

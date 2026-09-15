@@ -471,3 +471,55 @@ class TestRoleMatrix:
             json={"student_id": "stu_001", "skill_id": "s1"},
         )
         assert resp.status_code == 403
+
+
+# ─── 并发请求下的会话解析稳定性 (2026-09-15) ─────────────────────────────────
+
+
+class TestConcurrentAuthedRequests:
+    """教师详情页 6 端点并发 → 共享 SQLite 连接上的会话查询并发执行.
+
+    曾因裸 sqlite3 连接跨线程并发 execute 触发 InterfaceError / 静默空
+    结果 → 会话被误判无效 → 前端收到 401 清会话跳登录（用户感知:
+    "点学生详情被踢回登录页"）。SQLiteConnectionProxy 语句级串行后
+    必须全 200。回归锁: 并发 401/500 即挂。
+    """
+
+    def test_teacher_detail_page_concurrent_requests(self, client, auth_factory):
+        import concurrent.futures
+
+        headers, _ = auth_factory(username="conc_teacher", role="teacher")
+        sid = "stu_001"
+        paths = [
+            f"/api/teacher/students/{sid}",
+            f"/api/teacher/students/{sid}/evidence",
+            f"/api/teacher/students/{sid}/diagnostic",
+            f"/api/teacher/students/{sid}/interventions",
+            f"/api/teacher/students/{sid}/calibration",
+            f"/api/teacher/students/{sid}/misconceptions",
+        ]
+
+        def _hit(path: str):
+            return client.get(path, headers=headers).status_code
+
+        for _round in range(3):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+                codes = list(ex.map(_hit, paths))
+            # 业务码允许 200/404 (tmp 库无 students 行时详情类 404 合法),
+            # 但鉴权不稳会表现为 401、连接损坏表现为 500 — 均不允许
+            assert all(
+                c not in (401, 500) for c in codes
+            ), f"并发请求出现鉴权/服务端错误: {paths} → {codes}"
+
+    def test_mixed_auth_traffic_concurrent(self, client, auth_factory):
+        """auth/me 高频并发（轮询类页面的最坏情形）不允许误判 401."""
+        import concurrent.futures
+
+        headers, _ = auth_factory(username="conc_me", role="guardian")
+
+        def _me(_i: int):
+            return client.get("/api/auth/me", headers=headers).status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            codes = list(ex.map(_me, range(24)))
+        assert all(c == 200 for c in codes), f"24 次并发 /me 出现非 200: {codes}"

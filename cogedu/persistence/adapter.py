@@ -152,12 +152,108 @@ class PGConnectionProxy:
         return getattr(self._real, name)
 
 
+class _MaterializedCursor:
+    """物化游标: 行数据在 execute 时已全部取回, fetchone/fetchall 走内存.
+
+    消费面覆盖仓库现有用法: fetchone / fetchall / rowcount / lastrowid /
+    迭代。不支持的游标属性抛 AttributeError (防止静默错数据)。
+    """
+
+    def __init__(self, cur: Any, rows: list[Any]) -> None:
+        self._cur = cur
+        self._rows = rows
+        self._pos = 0
+
+    def fetchone(self) -> Any:
+        if self._pos >= len(self._rows):
+            return None
+        row = self._rows[self._pos]
+        self._pos += 1
+        return row
+
+    def fetchall(self) -> list[Any]:
+        rows = self._rows[self._pos :]
+        self._pos = len(self._rows)
+        return rows
+
+    def __iter__(self) -> Any:
+        return iter(self._rows)
+
+    @property
+    def rowcount(self) -> int:
+        return self._cur.rowcount
+
+    @property
+    def lastrowid(self) -> Any:
+        return self._cur.lastrowid
+
+    @property
+    def description(self) -> Any:
+        return self._cur.description
+
+
+class SQLiteConnectionProxy:
+    """sqlite3 连接线程串行化代理 (与 PGConnectionProxy 对称).
+
+    背景 (2026-09-15): 多个持久层共用"单连接 + check_same_thread=False +
+    WAL"范式, 多线程并发访问触发 sqlite3.InterfaceError (bad parameter
+    or other API misuse) 或查询静默空结果——教师详情页 6 个并发请求下
+    auth 会话查询被误判 → 前端收到 401 清会话跳登录。Python 报告
+    threadsafety=3 (serialized), 但该承诺在本构建上不可靠——仅锁
+    execute 仍会在锁外 fetchone 时交错损坏游标。
+
+    因此**语句完整生命周期原子化**: execute 在锁内物化全部行, 返回
+    _MaterializedCursor (锁外只读内存)。仓库查询均为小结果集
+    (LIMIT 量级), 物化无内存风险。
+    """
+
+    def __init__(self, real: Any) -> None:
+        import threading
+
+        self._real = real
+        self._lock = threading.RLock()
+
+    def execute(self, sql: str, params: Any = None) -> Any:
+        with self._lock:
+            if params is None:
+                # sqlite3 不接受显式 params=None ("parameters are of
+                # unsupported type") — 无参调用必须不带第二参透传
+                cur = self._real.execute(sql)
+            else:
+                cur = self._real.execute(sql, params)
+            return _MaterializedCursor(cur, cur.fetchall())
+
+    def executemany(self, sql: str, seq: Any) -> Any:
+        with self._lock:
+            return self._real.executemany(sql, seq)
+
+    def executescript(self, script: str) -> Any:
+        with self._lock:
+            return self._real.executescript(script)
+
+    def commit(self) -> None:
+        with self._lock:
+            self._real.commit()
+
+    def rollback(self) -> None:
+        with self._lock:
+            self._real.rollback()
+
+    def close(self) -> None:
+        with self._lock:
+            self._real.close()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._real, name)
+
+
 def open_connection(path_or_dsn: str, timeout_sec: float = 10.0) -> tuple[str, Any]:
     """打开 SQLite 原生连接或 PG 代理连接 (12.5: 各持久化模块共用工厂).
 
     Returns:
-        (backend, conn) — sqlite 返回原生 sqlite3.Connection (零行为变化),
-        postgres 返回 autocommit + dict 行 + 占位符翻译的 PGConnectionProxy.
+        (backend, conn) — sqlite 返回线程串行化代理 (包装原生
+        sqlite3.Connection), postgres 返回 autocommit + dict 行 +
+        占位符翻译的 PGConnectionProxy.
     """
     backend = detect_backend(path_or_dsn)
     if backend == BACKEND_POSTGRES:
@@ -187,4 +283,4 @@ def open_connection(path_or_dsn: str, timeout_sec: float = 10.0) -> tuple[str, A
     # 可能指向只有 event_log 表的库 (retention 测试), FK ON 会因
     # students 表不存在而写失败。各层保持既有 FK 语义。
     conn.execute("PRAGMA journal_mode = WAL")
-    return backend, conn
+    return backend, SQLiteConnectionProxy(conn)
