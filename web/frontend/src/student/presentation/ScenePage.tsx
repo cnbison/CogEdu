@@ -99,6 +99,9 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
   const [statusText, setStatusText] = useState("正在准备…");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  // 等待阶段提示：outline = 同步 LLM 大纲调用（最易被误认为无反应的窗口），
+  // generating = 逐场景后台生成（渐进出页）
+  const [phase, setPhase] = useState<"outline" | "generating">("outline");
 
   const pageEnteredAt = useRef(Date.now());
   const totalDwellMs = useRef(0);
@@ -120,8 +123,10 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
             return;
           }
         } else {
+          setPhase("outline");
           setStatusText("正在根据你的学习状态选择讲解内容…");
           loadedOutline = await generateOutline(sid);
+          setPhase("generating");
           setStatusText("正在生成讲解场景…");
           let gen = await startScenes(sid, loadedOutline.outline_id);
           if (gen.status === "generating") {
@@ -169,6 +174,8 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
   // 1-F：翻页即回写 scene_viewed（dwell 埋点）；最后一页回写 scene_completed
   const goNext = useCallback(() => {
     if (!outline) return;
+    // 渐进渲染中：末页尚未生成完时不触发完成回写
+    if (!ready && index >= scenes.length - 1) return;
     const dwellSec = (Date.now() - pageEnteredAt.current) / 1000;
     totalDwellMs.current += Date.now() - pageEnteredAt.current;
     void postSceneEvent(sid, outline.outline_id, "scene_viewed", {
@@ -188,7 +195,7 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
       });
       navigate("/"); // 回学习页（今天）
     }
-  }, [outline, scenes, index, sid, navigate]);
+  }, [outline, scenes, index, sid, navigate, ready]);
 
   const goPrev = () => {
     if (index > 0) {
@@ -204,30 +211,47 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
       </div>
     );
   }
-  if (!ready || !outline || !scenes.length) {
-    return (
-      <div className="scene-status" style={{ padding: 16 }}>
-        <p className="muted">{statusText}</p>
-        {scenes.length > 0 && (
-          <p className="muted" style={{ fontSize: 13 }}>
-            已生成 {scenes.length} 页，完成后即可从头翻阅。
-          </p>
-        )}
-      </div>
-    );
+  // 渐进渲染：大纲就绪且已有落库场景即出页（后续页面生成完自动出现），
+  // 不再等全部生成完——消除"黑盒等待"（§10 #10 完整形态）
+  if (outline && scenes.length > 0) {
+    return renderSceneView();
   }
 
-  const scene = scenes[Math.min(index, scenes.length - 1)];
-  const isLast = index === scenes.length - 1;
-
+  // 纯等待态（大纲生成中 / 首个场景未落库）：spinner + 预期时长提示，
+  // 避免一行静态文字被误认为无反应（2026-09-15 人工验收反馈）
   return (
-    <div className="scene-view">
-      <header className="scene-head">
-        <h2 id="scene-outline-title">{outline.title || "讲解"}</h2>
+    <div className="scene-status">
+      <div className="spinner" />
+      <p>{statusText}</p>
+      <p className="muted" style={{ fontSize: 13 }}>
+        {phase === "outline"
+          ? "AI 正在生成讲解大纲，通常需要 1~2 分钟，请稍候…"
+          : "逐场景生成中，每个场景约 1~2 分钟；已完成的会先显示出来"}
+      </p>
+    </div>
+  );
+
+  function renderSceneView() {
+    // 调用点已保证 outline 非空（渐进渲染分支条件）
+    const o = outline!;
+    const scene = scenes[Math.min(index, scenes.length - 1)];
+    const isLast = index === scenes.length - 1;
+    const tailGenerating = isLast && !ready;
+
+    return (
+      <div className="scene-view">
+        <header className="scene-head">
+        <h2 id="scene-outline-title">{o.title || "讲解"}</h2>
         <span id="scene-progress" className="muted">
           {index + 1} / {scenes.length}
         </span>
       </header>
+      {!ready && (
+        <p className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="spinner" style={{ width: 16, height: 16, margin: 0, borderWidth: 2 }} />
+          后续页面正在生成（每个约 1~2 分钟），完成后自动出现；已生成的可直接翻看。
+        </p>
+      )}
       {scene.degraded && (
         <div id="scene-degraded-banner" className="degraded-banner">
           本场景为降级内容（生成不完整），仅供参考。
@@ -248,10 +272,17 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
         <button id="scene-prev" onClick={goPrev} disabled={index === 0}>
           ← 上一页
         </button>
-        <button id="scene-next" className="green" onClick={goNext}>
-          {isLast ? "完成学习 ✓" : "下一页 →"}
+        <button
+          id="scene-next"
+          className="green"
+          onClick={goNext}
+          disabled={tailGenerating}
+          title={tailGenerating ? "最后一页还在生成中" : undefined}
+        >
+          {tailGenerating ? "生成中…" : isLast ? "完成学习 ✓" : "下一页 →"}
         </button>
       </div>
     </div>
   );
+  }
 }
