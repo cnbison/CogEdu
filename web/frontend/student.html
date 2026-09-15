@@ -4,8 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CogEdu 学生端</title>
-    <!-- KaTeX 本地 vendor（禁 CDN——test_whiteboard_wiring 锁）-->
+    <!-- KaTeX 本地 vendor（禁 CDN——test_whiteboard_wiring 锁）。
+         katex.min.js 必须在 formula.js 之前加载：window.katex 缺失时
+         formula.js 降级为等宽原文直出（2026-09-15 验收发现白板 $$ 源码
+         直出即此因——9-D 移植时漏抄了 legacy scene.html 的这行）。 -->
     <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
+    <script defer src="/vendor/katex/katex.min.js"></script>
   </head>
   <body>
     <div id="root"></div>

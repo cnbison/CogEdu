@@ -59,6 +59,16 @@ class TestKaTeXLocalVendor:
         html = _read("student.html")
         assert "/vendor/katex/katex.min.css" in html
 
+    def test_katex_js_loaded_before_formula(self):
+        """katex.min.js 必须加载且在 formula.js 之前（defer 按文档序执行）.
+
+        2026-09-15 验收发现：9-D 移植时漏抄这行 → window.katex 缺失 →
+        formula.js 降级等宽原文直出（白板 $$ 源码复现）。
+        """
+        html = _read("student.html")
+        assert 'src="/vendor/katex/katex.min.js"' in html
+        assert html.index("katex.min.js") < html.index("formula.js")
+
     def test_no_cdn_anywhere(self):
         offenders = [
             str(p.relative_to(FRONTEND_DIR))

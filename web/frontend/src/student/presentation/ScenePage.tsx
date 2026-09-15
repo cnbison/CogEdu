@@ -115,8 +115,12 @@ export default function ScenePage({
   // generating = 逐场景后台生成（渐进出页）
   const [phase, setPhase] = useState<"outline" | "generating">("outline");
   // 入口模式：/scene 先展示讲解记录（历史复看 + 显式生成），点按钮才开始
-  // 生成——避免每次进入都静默生成新大纲重复计费（复看走 /scene/:outlineId 自动开始）
-  const [started, setStarted] = useState(!!replayOutlineId);
+  // 生成——避免每次进入都静默生成新大纲重复计费（复看走 /scene/:outlineId 自动开始）。
+  // started 必须对路由参数**响应式**派生：/scene → /scene/:id 是同一组件实例
+  // （路由复用），useState 初始值不会重算——2026-09-15 验收发现点记录行
+  // 无反应、硬刷新才进复看即此因。
+  const [manualStart, setManualStart] = useState(false);
+  const started = !!replayOutlineId || manualStart;
   const records = useQuery({
     queryKey: ["presentationOutlines", sid],
     queryFn: () => listOutlines(sid),
@@ -232,7 +236,7 @@ export default function ScenePage({
       <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
         <div className="card">
           <h2>AI 讲解</h2>
-          <button className="green" onClick={() => setStarted(true)}>
+          <button className="green" onClick={() => setManualStart(true)}>
             生成新讲解
           </button>
           <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
@@ -317,6 +321,10 @@ export default function ScenePage({
     return (
       <div className="scene-view">
         <header className="scene-head">
+        {/* 回退到讲解列表（人工验收反馈：此前只能绕道"今天" TAB） */}
+        <button className="ghost" style={{ marginBottom: 8 }} onClick={() => navigate("/scene")}>
+          ← 讲解列表
+        </button>
         <h2 id="scene-outline-title">{o.title || "讲解"}</h2>
         <span id="scene-progress" className="muted">
           {index + 1} / {scenes.length}
