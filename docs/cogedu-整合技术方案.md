@@ -336,7 +336,7 @@ class Parser(Protocol):
 - **9-D 学生端移植 + presentation 集成**：✅（2026-09-15 完成）ECOS 学生端 6 页（Home/Answer/Where/Growth/Report/Settings）+ CodeEditor/MotivationPanel + types 移植；api 适配（共享 Bearer 基座 + judge 422 结构化降级还原 + answer 9 字段契约）。presentation 三件套：`presentation/api.ts`（URL 契约锁 ?student_id= 查询串）+ `ScenePlayer.tsx`（挂载式宿主，window.CogEduXxx 全局注入、每页重建、卸载必 stop）+ `ScenePage.tsx`（生成/轮询/复看/1-F 回写 + **渐进渲染**——generating 期间轮询同步拉取已落库场景边生成边出页，收 §10 #10 尾巴）；vanilla 三模块经 student.html `<script defer>` 注入（顺序锁 formula→playback→whiteboard），scene.css 一并入库；vite dev proxy 补 /student、/vendor。vitest 36 用例全绿；TestClient 冒烟 timing/越权 403/无 token 401/404 形态。
 - **9-E 家长端移植**：✅（2026-09-15 完成）ECOS 家长端单页（roster 选择 + 四卡 overview + urlState ?student= 持久化）+ ui/urlState 测试移植；api 换共享 Bearer 基座并扩展：**授权管理卡**（申请/权限词汇表/撤回/撤销，400/404/409 错误透出）+ **Word 报告下载**（三 period，403 语义透出）；学生 SPA 加 `/guardian-links` 确认页路由（确认/拒绝/撤销）+ 设置页入口。vitest 49 用例全绿；TestClient 冒烟 2-A 全状态机（pending→confirm→active→revoke，撤销后 403）。
   - **过程发现并修正冒烟方法错误**：早期误用不存在的 `COGEDU_DB` 环境变量，冒烟用户写入真实开发库 `web/ecos.db`（8 用户 + 会话 + 2 授权记录）——已全部清理（仅剩维护者原有 `stu01`），正确环境变量为 `ECOS_DB_PATH`。
-- **9-F 契约测试迁移**：按 10.1.5 双轨策略改锁 + node:test 回归 + legacy 兜底验证。
+- **9-F 契约测试迁移**：✅（2026-09-15 完成）按 10.1.5 双轨策略：新增 `tests/test_frontend_react_wiring.py`（15 例）把 legacy 锁语义迁移到 React 工程源文件——script 顺序/KaTeX 本地 vendor 禁 CDN/**React 源禁 dangerouslySetInnerHTML**（安全约定升级）/Bearer+cogedu_token 互操作/learning_student_id 禁手输/无写死主机名/presentation 与 parent 端点路径字面量/复看路由。legacy 锁语义不变继续执行（兜底页接线完整性）；node:test 24 例原样全绿。双轨合计 110 用例通过。
 - **9-G 灰度验证与收官**：真实进程人工验收（教师/学生/家长/场景/授权五页）+ 四文档收官 + 全量发布。
 
 **与 Phase 4 的边界**：#9 不做证据链新视图（4-C/4-D 的前端部分），但保留 `EChart.tsx` 封装与 react-query 基座供 Phase 4 直接复用；Phase 4 细化可与 9-C..9-E 并行推进。

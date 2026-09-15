@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-F：契约测试双轨迁移（React 接线锁落档）
+
+- 新增 `tests/test_frontend_react_wiring.py`（15 例）：legacy 锁语义逐条迁移到 React 工程源文件——
+  - script 装载顺序 formula→playback→whiteboard + defer（挂载式整合前提）；
+  - KaTeX 本地 vendor + 全源文件禁 CDN；
+  - **React 源禁 `dangerouslySetInnerHTML`**（LLM 文本安全约定在 React 侧升级：legacy 锁 innerHTML 用途，React 侧连用都不用）；
+  - auth 基座：Bearer 头 + `cogedu_token`/`cogedu_user` 键名互操作 + 401 → `/login?next=`；
+  - sid 来源 = `learning_student_id`，禁 `prompt(` 手输 / 禁 `ecos_last_student_id`；
+  - 无写死主机名（扫 ts/tsx/html）；presentation client 路径字面量（`?student_id=` 查询串约定）+ 1-F 回写事件 + 复看路由 `/scene/:outlineId`；parent 三块接线（roster/links/report）；
+- 双轨并存：legacy 锁语义不变继续执行（兜底页接线完整），node:test 24 例原样全绿；
+- **验证**：auth/whiteboard/event/presentation/timing/playback + React 接线合计 **110 契约用例通过**。
+
 ### 2026-09-15 — UI 现代化 9-E：家长端移植 + 学生端授权确认页（2-A/2-C 能力 React 化）
 
 - **家长端**：ECOS 单页形态移植（roster 选择 + Engagement/Advice/FiveDOverview/InterventionHistory 四卡 + `?student=` URL 持久化，含原 ui/urlState 测试）；api 换共享 Bearer 基座。CogEdu 扩展两块：
