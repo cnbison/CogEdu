@@ -12,6 +12,7 @@
 - 业务代码为骨架占位（三端各一个 AppShell 占位页），随 9-B..9-E 分任务移植。
 - **验证**：`npm run build / lint / typecheck` 全绿（vite 6.4.3，dist 三入口产物正确）；TestClient 实测 `/`、`/student/`、`/parent/`、`/teacher/` 均由 `web/frontend/dist` 接管——`static_pages.py` 预留的 dist 优先逻辑零改动生效，legacy 静态页自动降为兜底。
 - dist 构建产物不入库（`.gitignore` 维持全局忽略 `dist/`，拍板记录见方案文档 §10.1.7）。
+- **契约测试双轨适配（3 处，锁语义不变）**：① `no_hardcoded_host` 扫描排除 `node_modules/` 与 `dist/`（本锁针对自有源文件，第三方依赖与构建产物不属扫描对象）；② 家长页两条内容锁改为"路由 200 + React 壳断言 + legacy 兜底文件接线完整性"——dist 存在后路由自动由 dist 接管，legacy 页降为兜底但须保持接线完整（直至 9-E 切换）。全量 **1949 用例通过**。
 
 ### 2026-09-14 — UI 现代化（§10 #9）细化落档（勘察完成，待确认后施工）
 

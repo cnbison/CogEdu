@@ -326,8 +326,13 @@ class TestFrontendWiring:
         offenders = [
             str(p.relative_to(web_dir.parent))
             for p in web_dir.rglob("*.js")
-            if "localhost:5173" in p.read_text(encoding="utf-8")
-            or "127.0.0.1:5173" in p.read_text(encoding="utf-8")
+            # 排除第三方依赖与构建产物：本锁针对 CogEdu 自有前端源文件
+            if "node_modules" not in p.parts
+            and "dist" not in p.parts
+            and (
+                "localhost:5173" in p.read_text(encoding="utf-8")
+                or "127.0.0.1:5173" in p.read_text(encoding="utf-8")
+            )
         ]
         assert not offenders, f"写死主机名的前端文件: {offenders}"
 
@@ -336,13 +341,26 @@ class TestPhase2DFrontend:
     """2-D (14.6): 家长端真实页 + 学生端授权确认页 — 路由与接线契约."""
 
     def test_parent_page_served(self, client):
+        """/parent/ 路由 200（9-A 起 dist 优先返回 React 壳）+ legacy 兜底页接线完整.
+
+        双轨过渡（方案文档 §10.1.5）：React dist 存在时路由由 dist 接管，
+        legacy 页（web/parent/index.html）降为兜底但须保持接线完整，
+        直至 9-E 家长端切换完成后移除。
+        """
         resp = client.get("/parent/index.html")
         assert resp.status_code == 200
-        # 三大块: 仪表盘(roster/overview) + 授权管理 + 报告下载
+        assert "<div id=\"root\">" in resp.text  # React 壳（dist 优先）
+        # legacy 兜底页三大块: 仪表盘(roster/overview) + 授权管理 + 报告下载
         # (页面 JS 经 authFetch('/api' + path) 拼接, 断言 path 字面量)
-        assert "'/parent/students'" in resp.text
-        assert "'/guardian/links'" in resp.text
-        assert "/report?period=' + period" in resp.text
+        from pathlib import Path
+
+        legacy = (
+            Path(__file__).resolve().parent.parent
+            / "web" / "parent" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "'/parent/students'" in legacy
+        assert "'/guardian/links'" in legacy
+        assert "/report?period=' + period" in legacy
 
     def test_student_guardian_links_page_served(self, client):
         resp = client.get("/student/guardian-links.html")
