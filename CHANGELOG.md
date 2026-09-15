@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-D：学生端移植 + presentation 集成（挂载式白板宿主 + 渐进渲染）
+
+- **学生端 6 页移植**（ECOS v0.99.5 前端）：Home/Answer/Where/Growth/Report/Settings + CodeEditor/MotivationPanel + types；api 适配三点：共享 Bearer 基座、`/api/judge` 422 结构化降级还原为 `JudgeResult`（CogEdu 契约是 HTTP 422 + `{judged:false, error_code, needs_rejudge}`）、`/api/answer` 9 字段响应契约（`persisted===false` 告警语义保留）；
+- **presentation 集成（§10.1.3 挂载式拍板落地）**：vanilla 三模块 `formula/playback/whiteboard.js` **原样保留**（node:test 24 例与时序数值锁不动），经 `student.html` `<script defer>` 注入（顺序 = legacy 契约 formula→playback→whiteboard），React 只写宿主——`ScenePlayer.tsx`（createWhiteboard + createPlaybackEngine 依赖注入，speechPlayer 从 scene.js 平移为 blob 缓存 + ended 驱动，卸载必 stop 保代数令牌语义，模块缺失退回纯翻页）；KaTeX 继续本地 vendor；
+- **ScenePage.tsx**：生成数据链平移（outline → scenes 202 → 3s 轮询 → not_started 幂等重触发 ≤2）+ 复看模式（`/scene/:outlineId` 路由参数，两个只读 GET）+ 1-F 回写（scene_viewed dwell / scene_completed，keepalive）+ **渐进渲染**（generating 期间每次轮询同步拉取已落库场景，边生成边出页——§10 #10 剩余项收尾）；
+- `presentation/api.ts` 契约测试 6 例锁 URL/请求体形状（?student_id= 查询串、202 复用、blob 缓存、回写 body）；vite dev proxy 补 /student、/vendor；共享 auth 基座补 ApiError（status/body，供端点级降级契约）；
+- **验证**：vitest 36 用例全绿；build/lint/typecheck 全绿；TestClient 冒烟（timing 7 字段、跨学生 403、无 token 401、缺失大纲 404）。
+
 ### 2026-09-15 — UI 现代化 9-C：教师端移植（7 端点 1:1，React 全链路首次打通）
 
 - 自 ECOS v0.99.5 前端复制：`pages/RosterPage.tsx`（桌面表格/移动卡片双形态）+ `pages/StudentDetailPage.tsx`（5D radar / EvidenceChain 下钻 / CalibrationView / POMDP 诊断 / MisconceptionsCard）+ `components/EChart.tsx`（echarts 单封装，Phase 4 可视化复用）+ `components/ui/` 原子件（Icon/icons/iconMap/ClickableRow/CollapsibleSection/EmptyState/SectionHeader/uiHelpers/useMediaQuery，含原 vitest 测试）+ `api/types.ts`（响应契约，与 `web/api/routers/teacher.py` 逐字段核对一致）；

@@ -20,6 +20,15 @@ export default defineConfig({
         target: "http://127.0.0.1:5173",
         changeOrigin: true,
       },
+      // dev 模式下 vanilla 模块与 KaTeX vendor 仍由 FastAPI 提供（生产同源）
+      "/student": {
+        target: "http://127.0.0.1:5173",
+        changeOrigin: true,
+      },
+      "/vendor": {
+        target: "http://127.0.0.1:5173",
+        changeOrigin: true,
+      },
     },
   },
   build: {

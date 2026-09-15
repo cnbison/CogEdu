@@ -93,9 +93,23 @@ export async function authFetch(url: string, opts: RequestInit = {}): Promise<Re
   return resp;
 }
 
+/** 非 2xx 错误：message 保持 ECOS 风格文案，另带 status/body 供端点级降级契约用（如 judge 422）。 */
+export class ApiError extends Error {
+  status: number;
+  body: Record<string, unknown>;
+
+  constructor(path: string, status: number, body: Record<string, unknown>) {
+    const serverMsg = typeof body.error === "string" ? body.error : "";
+    super(serverMsg || `API ${path} 失败: HTTP ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
 export async function getJson<T>(path: string): Promise<T> {
   const resp = await authFetch(path, { headers: { Accept: "application/json" } });
-  if (!resp.ok) throw new Error(`API ${path} 失败: HTTP ${resp.status}`);
+  if (!resp.ok) throw new ApiError(path, resp.status, await resp.json().catch(() => ({})));
   return (await resp.json()) as T;
 }
 
@@ -105,7 +119,7 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(`API ${path} 失败: HTTP ${resp.status}`);
+  if (!resp.ok) throw new ApiError(path, resp.status, await resp.json().catch(() => ({})));
   return (await resp.json()) as T;
 }
 

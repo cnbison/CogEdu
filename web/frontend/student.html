@@ -4,9 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CogEdu 学生端</title>
+    <!-- KaTeX 本地 vendor（禁 CDN——test_whiteboard_wiring 锁）-->
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
   </head>
   <body>
     <div id="root"></div>
+    <!-- Phase 3 vanilla 模块（挂载式整合，§10.1.3 拍板）：顺序 = legacy scene.html 契约
+         （formula → playback → whiteboard，TestScriptLoadOrder 锁语义），由 FastAPI
+         /student/{path} 托管（dist 优先无同名文件 → 回落 web/student/ 源文件）。
+         React ScenePlayer 经 window.CogEduXxx 全局消费，缺失时退回纯翻页。 -->
+    <script defer src="/student/formula.js"></script>
+    <script defer src="/student/playback.js"></script>
+    <script defer src="/student/whiteboard.js"></script>
     <script type="module" src="/src/student/main.tsx"></script>
   </body>
 </html>
