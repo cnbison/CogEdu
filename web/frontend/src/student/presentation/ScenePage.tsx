@@ -310,8 +310,10 @@ export default function ScenePage({
     return renderSceneView();
   }
 
-  // 半成品大纲（0 场景）：沿用已有大纲续生成，不重新生成
-  if (outline && scenes.length === 0) {
+  // 半成品大纲（0 场景）：沿用已有大纲续生成，不重新生成。
+  // 仅在未处于续生成时显示——否则生成期间（首个场景落库前）页面停在
+  // 卡片上无任何反馈，看起来像"点了没反应"（2026-09-15 验收反馈）
+  if (outline && scenes.length === 0 && !resume) {
     return (
       <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
         <div className="card">
