@@ -121,6 +121,9 @@ export default function ScenePage({
   // 无反应、硬刷新才进复看即此因。
   const [manualStart, setManualStart] = useState(false);
   const started = !!replayOutlineId || manualStart;
+  // 续生成：0 场景的半成品大纲（生成被中断/未触发）沿用已有大纲继续，
+  // 不重新生成大纲（省一次大纲 LLM 调用）
+  const [resume, setResume] = useState(false);
   const records = useQuery({
     queryKey: ["presentationOutlines", sid],
     queryFn: () => listOutlines(sid),
@@ -139,20 +142,30 @@ export default function ScenePage({
       try {
         let loadedScenes: Scene[];
         let loadedOutline: Outline;
-        if (replayOutlineId) {
+        if (replayOutlineId && !resume) {
+          // 只读复看：大纲 + 已落库场景，不触发生成
           setStatusText("正在加载已生成的讲解…");
           loadedOutline = await getOutline(sid, replayOutlineId);
           loadedScenes = await getScenes(sid, replayOutlineId);
           if (!loadedScenes.length) {
-            setErrorText("该大纲还没有已生成的场景 (生成可能未完成), 请重新点击讲解生成。");
+            // 半成品大纲（场景被中断/从未触发）→ 保留数据，渲染"继续生成"卡片
+            setOutline(loadedOutline);
+            setScenes([]);
             return;
           }
         } else {
-          setPhase("outline");
-          setStatusText("正在根据你的学习状态选择讲解内容…");
-          loadedOutline = await generateOutline(sid);
           setPhase("generating");
           setStatusText("正在生成讲解场景…");
+          if (replayOutlineId) {
+            // 续生成：复用已有大纲
+            loadedOutline = await getOutline(sid, replayOutlineId);
+          } else {
+            setPhase("outline");
+            setStatusText("正在根据你的学习状态选择讲解内容…");
+            loadedOutline = await generateOutline(sid);
+            setPhase("generating");
+            setStatusText("正在生成讲解场景…");
+          }
           let gen = await startScenes(sid, loadedOutline.outline_id);
           if (gen.status === "generating") {
             let retriggered = 0;
@@ -194,7 +207,7 @@ export default function ScenePage({
     return () => {
       cancelled = true;
     };
-  }, [sid, replayOutlineId, started]);
+  }, [sid, replayOutlineId, started, resume]);
 
   // 1-F：翻页即回写 scene_viewed（dwell 埋点）；最后一页回写 scene_completed
   const goNext = useCallback(() => {
@@ -295,6 +308,24 @@ export default function ScenePage({
   // 不再等全部生成完——消除"黑盒等待"（§10 #10 完整形态）
   if (outline && scenes.length > 0) {
     return renderSceneView();
+  }
+
+  // 半成品大纲（0 场景）：沿用已有大纲续生成，不重新生成
+  if (outline && scenes.length === 0) {
+    return (
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
+        <div className="card">
+          <h2>{outline.title || "讲解"}</h2>
+          <p className="muted">该讲解还没有已生成的场景——生成可能被中断或未开始。</p>
+          <button className="green" onClick={() => setResume(true)}>
+            继续生成场景
+          </button>
+          <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+            沿用这份大纲继续生成场景（大纲已生成，不重复计费），通常需要几分钟。
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // 纯等待态（大纲生成中 / 首个场景未落库）：spinner + 预期时长提示，
