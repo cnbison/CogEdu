@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-B：认证与 API 基座（React 端接入 CogEdu 自建认证）
+
+- `web/frontend/src/shared/auth.ts`：authFetch 统一请求入口（自动附 `Authorization: Bearer`，401 → 清会话 + 跳 `/login?next=`，next 含 HashRouter hash 回跳）+ login/logout/fetchSession + getJson/postJson helper；**localStorage 键名沿用 `cogedu_token`/`cogedu_user`，与 legacy `web/auth.js` 互操作**（双轨期两栈共享登录态）；
+- `session.ts`（useSession，服务端权威校验 GET /api/auth/me，不只信本地缓存——legacy requireLogin 语义）+ `RequireSession.tsx` 会话守卫（角色矩阵：student/guardian/teacher/admin）；
+- 三端 main 接 QueryClientProvider（staleTime 15s）+ HashRouter（家长端单页无 Routes，沿用 ECOS 形态）；三端 App 为会话守卫 + 占位内容，页面随 9-C/D/E 移植；
+- **sid 来源切换**：React 学生端从登录身份 `learning_student_id`（/api/auth/me）取 sid，删除手输 sid 通路（清单 b #2，3-F-5 语义在 React 侧延续）；
+- vitest 8 用例锁基座行为（Bearer 头/401 跳转/错误文案/登录往返/键名锁定）；
+- **验证**：真实进程冒烟（建号→login→me→student 打 teacher 域 403→坏 token 401→logout 后同 token 401）全通；`npm build/lint/typecheck/test` 全绿。
+
 ### 2026-09-14 — UI 现代化（§10 #9）开工：9-A 前端工程骨架落地
 
 - `web/frontend/` 新增 React 18.3 + Vite 6 + TS 工程（配置移植自 ECOS v0.99.5 前端，`../ecos/web/frontend/` commit `9cdacab` 工作树，只读复制自包含维护，无任何运行时/构建引用）：package.json（react/react-router/@tanstack/react-query/echarts/codemirror/lucide-react）、vite.config（三入口 teacher=index.html / student.html / parent.html 对齐 static_pages DIST_DIR 约定；dev 5174 proxy /api → 5173；`__APP_VERSION__` 编译期注入）、tsconfig 三件套、eslint flat config、index.css 全局样式（ECOS 原样）。
