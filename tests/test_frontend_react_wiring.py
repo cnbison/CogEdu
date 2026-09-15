@@ -149,6 +149,18 @@ class TestEndpointWiring:
         assert '"/scene/:outlineId"' in app_tsx  # 复看模式
         assert '"/guardian-links"' in app_tsx
 
+    def test_scene_page_consumes_route_param(self):
+        """/scene/:outlineId 的路由参数必须被 ScenePage 消费（复看模式激活的前提）.
+
+        2026-09-15 验收发现：路由存在但组件未读 useParams 且 App 未传 prop，
+        点讲解记录行只原地重渲染列表、复看永不激活。
+        """
+        page = (SRC_DIR / "student" / "presentation" / "ScenePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert "useParams" in page
+        assert "params.outlineId" in page
+
 
 @pytest.mark.parametrize(
     "rel",

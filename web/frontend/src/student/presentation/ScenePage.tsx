@@ -8,7 +8,7 @@
 // 安全约定（1-E-2 延续）：LLM 文本一律 textContent / createTextNode；
 // innerHTML 仅限 KaTeX 渲染产物（经 formula.js renderFormulaInto）。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   generateOutline,
@@ -92,7 +92,17 @@ function ImageBlockView({ block }: { block: { url?: string | null; alt?: string 
 
 // ─── 场景页 ─────────────────────────────────────────────────────────────
 
-export default function ScenePage({ sid, replayOutlineId }: { sid: string; replayOutlineId?: string }) {
+export default function ScenePage({
+  sid,
+  replayOutlineId: replayOutlineIdProp,
+}: {
+  sid: string;
+  replayOutlineId?: string;
+}) {
+  // 复看目标优先取路由参数（/scene/:outlineId，讲解记录列表点行进入）；
+  // prop 留给程序化跳转场景。
+  const params = useParams();
+  const replayOutlineId = replayOutlineIdProp ?? params.outlineId;
   const navigate = useNavigate();
   const [outline, setOutline] = useState<Outline | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
