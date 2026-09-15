@@ -8,6 +8,7 @@ import WherePage from "./pages/WherePage";
 import GrowthPage from "./pages/GrowthPage";
 import SettingsPage from "./pages/SettingsPage";
 import ReportPage from "./pages/ReportPage";
+import GuardianLinksPage from "./pages/GuardianLinksPage";
 import ScenePage from "./presentation/ScenePage";
 import { logout } from "../shared/auth";
 
@@ -35,6 +36,8 @@ export default function App() {
                 <Route path="/report" element={<ReportPage studentId={learningStudentId} />} />
                 <Route path="/scene" element={<ScenePage sid={learningStudentId} />} />
                 <Route path="/scene/:outlineId" element={<ScenePage sid={learningStudentId} />} />
+                {/* 2-A: 家长授权确认页（学生本人确认制） */}
+                <Route path="/guardian-links" element={<GuardianLinksPage />} />
                 <Route
                   path="/settings"
                   element={

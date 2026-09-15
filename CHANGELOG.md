@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-E：家长端移植 + 学生端授权确认页（2-A/2-C 能力 React 化）
+
+- **家长端**：ECOS 单页形态移植（roster 选择 + Engagement/Advice/FiveDOverview/InterventionHistory 四卡 + `?student=` URL 持久化，含原 ui/urlState 测试）；api 换共享 Bearer 基座。CogEdu 扩展两块：
+  - **授权管理卡**（2-A）：发起绑定申请（5 项权限词汇表多选）、pending 撤回 / active 撤销；400/404/409 错误语义透出为用户可读文案；
+  - **Word 报告下载**（2-C）：week/month/all 三档，`download_report` 授权语义（403 = 无权/已撤销）透出。
+- **学生端**：新增 `/guardian-links` 路由（确认/拒绝/撤销，学生本人确认制）+ 设置页入口；对应 legacy `guardian-links.html` 的 React 化。
+- vitest 49 用例全绿（新增 parent ui/urlState 移植测试）；build/lint/typecheck 全绿；
+- **冒烟（正确隔离后）**：2-A 全状态机 pending→confirm→active→revoke 通过；active + 学习记录缺失 → 404、撤销后 → 403，权限语义正确。
+- **过程修正**：早期冒烟误用不存在的 `COGEDU_DB` 环境变量导致 8 个冒烟用户 + 2 条授权记录写入真实开发库 `web/ecos.db`——已全部清理（保留维护者原有 `stu01`），正确环境变量为 `ECOS_DB_PATH`（auth_store.py:406）。
+
 ### 2026-09-15 — UI 现代化 9-D：学生端移植 + presentation 集成（挂载式白板宿主 + 渐进渲染）
 
 - **学生端 6 页移植**（ECOS v0.99.5 前端）：Home/Answer/Where/Growth/Report/Settings + CodeEditor/MotivationPanel + types；api 适配三点：共享 Bearer 基座、`/api/judge` 422 结构化降级还原为 `JudgeResult`（CogEdu 契约是 HTTP 422 + `{judged:false, error_code, needs_rejudge}`）、`/api/answer` 9 字段响应契约（`persisted===false` 告警语义保留）；

@@ -64,6 +64,17 @@ export default function SettingsPage({
           >
             <Icon icon={FileText} size={16} /> 查看学习报告（可打印 / PDF）
           </NavLink>
+          {/* 2-A: 家长授权确认入口 */}
+          <NavLink
+            to="/guardian-links"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)",
+              textDecoration: "none", fontWeight: 500,
+            }}
+          >
+            家长授权管理（确认 / 拒绝 / 撤销）
+          </NavLink>
           <button className="ghost" onClick={exportReport} disabled={exporting}>
             {exporting ? "导出中…" : <><Icon icon={Upload} size={16} /> 导出原始数据 (JSON, 开发者)</>}
           </button>
@@ -79,7 +90,7 @@ export default function SettingsPage({
       <section className="card">
         <h2><Icon icon={Info} size={20} /> 关于</h2>
         <div className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>
-          <div>ECOS 学习端 · 学生版 v{__APP_VERSION__}</div>
+          <div>CogEdu 学习端 · 学生版 v{__APP_VERSION__}</div>
           <div>
             引擎版本：ECOS v{report.data?.ecos_version ?? "—"} ·{" "}
             {report.data?.interpretation ? "规则引擎通俗化" : ""}
