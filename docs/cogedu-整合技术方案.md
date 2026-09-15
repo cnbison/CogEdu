@@ -266,8 +266,8 @@ class Parser(Protocol):
 6. **教学素材规模** 仍待 Phase 5 第一步小范围测试后明确
 7. ~~Phase 0 三项改造是否合并施工~~ ✅ 已确认：合并（统一 Runtime 入口 + Flask→FastAPI + SQLite→PostgreSQL 一次性完成）
 8. ~~审查深度是否足够~~ ✅ 已确认足够，转入详细任务清单阶段（见第 12 章）
-9. **UI 现代化立项**（2026-09-14 确认）：ECOS v0.99.5 已有现成 React 18 + Vite + TS 前端工程（`ecos/web/frontend/`，echarts/react-query/router，student/parent 页面齐全，src 约 248K），CogEdu 学生端/家长端目前仍是 ECOS 早期静态页。**已拍板：不阻塞 Phase 3 验收发布**，UI 移植单独立项——范围 = 复制 ECOS 前端工程并适配（CogEdu 自建认证体系对接、API 差异审计、Phase 3 白板/播放 vanilla JS 模块 React 化整合），**建议与 Phase 4 证据链可视化合并考虑**（React + echarts 正是可视化需要的栈）。当前静态页此前暴露的三个前端缺陷（sid 解析/API base 写死/api 助手无凭证）已修复并 grep 契约锁定，移植时以契约测试为验收底线。**细化已落档（2026-09-14 勘察）**：三份清单（页面/组件结构盘点、API 差异清单、Phase 3 模块整合方案）+ 施工任务拆分见 §10.1，待维护者确认后施工。
-10. **讲解生成等待体验**（2026-09-14 立项，Phase 3 验收暴露；**同日 ①② 已落地**）：原状为生成全程 10~25 分钟黑盒等待——串行逐场景生成 + 个别场景吃满超时重试，且全部场景生成完才一次性落库/返回。**已完成**：① 逐场景落库（`generate_for_outline` 加 `on_scene` 回调）+ POST /scenes 非阻塞化（202 + 后台 daemon 线程，进程内防重入注册表）+ `GET /scenes/{id}/status` 进度端点（generated/total/status 三态：ready/generating/not_started 可幂等重触发）+ 前端轮询显示"n / m"进度；② 生成结果服务端复用（同大纲已有落库场景 → POST 直接 200 ready 返回，幂等不重复生成计费）。**剩余**：③ 重试/超时策略按耗时数据收紧；渐进显示目前是进度文字，逐场景边生成边渲染的完整形态留给 UI 现代化（#9）一并做。灰度脚本（1/3 两代）已同步接入轮询助手 `_wait_scenes`。
+9. **UI 现代化立项**（2026-09-14 确认）：ECOS v0.99.5 已有现成 React 18 + Vite + TS 前端工程（`ecos/web/frontend/`，echarts/react-query/router，student/parent 页面齐全，src 约 248K），CogEdu 学生端/家长端目前仍是 ECOS 早期静态页。**已拍板：不阻塞 Phase 3 验收发布**，UI 移植单独立项——范围 = 复制 ECOS 前端工程并适配（CogEdu 自建认证体系对接、API 差异审计、Phase 3 白板/播放 vanilla JS 模块 React 化整合），**建议与 Phase 4 证据链可视化合并考虑**（React + echarts 正是可视化需要的栈）。当前静态页此前暴露的三个前端缺陷（sid 解析/API base 写死/api 助手无凭证）已修复并 grep 契约锁定，移植时以契约测试为验收底线。**细化已落档（2026-09-14 勘察）**：三份清单（页面/组件结构盘点、API 差异清单、Phase 3 模块整合方案）+ 施工任务拆分见 §10.1。**施工完成（2026-09-15，9-A..9-F）**：三端 React 化全部落地 + 契约测试双轨迁移完成，**待维护者人工验收**（教师/学生/家长/场景/授权五页真实进程观感）。
+10. **讲解生成等待体验**（2026-09-14 立项，Phase 3 验收暴露；**同日 ①② 已落地**）：原状为生成全程 10~25 分钟黑盒等待——串行逐场景生成 + 个别场景吃满超时重试，且全部场景生成完才一次性落库/返回。**已完成**：① 逐场景落库（`generate_for_outline` 加 `on_scene` 回调）+ POST /scenes 非阻塞化（202 + 后台 daemon 线程，进程内防重入注册表）+ `GET /scenes/{id}/status` 进度端点（generated/total/status 三态：ready/generating/not_started 可幂等重触发）+ 前端轮询显示"n / m"进度；② 生成结果服务端复用（同大纲已有落库场景 → POST 直接 200 ready 返回，幂等不重复生成计费）；③ **渐进渲染已随 UI 现代化 9-D 落地**（React ScenePage 在 generating 期间每次轮询同步拉取已落库场景，边生成边出页）。**剩余**：重试/超时策略按耗时数据收紧。灰度脚本（1/3 两代）已同步接入轮询助手 `_wait_scenes`。
 
 ### 10.1 UI 现代化（#9）细化落档（2026-09-14 勘察，待维护者确认后施工）
 
@@ -337,7 +337,7 @@ class Parser(Protocol):
 - **9-E 家长端移植**：✅（2026-09-15 完成）ECOS 家长端单页（roster 选择 + 四卡 overview + urlState ?student= 持久化）+ ui/urlState 测试移植；api 换共享 Bearer 基座并扩展：**授权管理卡**（申请/权限词汇表/撤回/撤销，400/404/409 错误透出）+ **Word 报告下载**（三 period，403 语义透出）；学生 SPA 加 `/guardian-links` 确认页路由（确认/拒绝/撤销）+ 设置页入口。vitest 49 用例全绿；TestClient 冒烟 2-A 全状态机（pending→confirm→active→revoke，撤销后 403）。
   - **过程发现并修正冒烟方法错误**：早期误用不存在的 `COGEDU_DB` 环境变量，冒烟用户写入真实开发库 `web/ecos.db`（8 用户 + 会话 + 2 授权记录）——已全部清理（仅剩维护者原有 `stu01`），正确环境变量为 `ECOS_DB_PATH`。
 - **9-F 契约测试迁移**：✅（2026-09-15 完成）按 10.1.5 双轨策略：新增 `tests/test_frontend_react_wiring.py`（15 例）把 legacy 锁语义迁移到 React 工程源文件——script 顺序/KaTeX 本地 vendor 禁 CDN/**React 源禁 dangerouslySetInnerHTML**（安全约定升级）/Bearer+cogedu_token 互操作/learning_student_id 禁手输/无写死主机名/presentation 与 parent 端点路径字面量/复看路由。legacy 锁语义不变继续执行（兜底页接线完整性）；node:test 24 例原样全绿。双轨合计 110 用例通过。
-- **9-G 灰度验证与收官**：真实进程人工验收（教师/学生/家长/场景/授权五页）+ 四文档收官 + 全量发布。
+- **9-G 灰度验证与收官**：🟡（2026-09-15 自动化部分完成）真实进程灰度通过（真实端口起服：React dist 三入口托管 / vanilla 模块回落 / KaTeX vendor / bundle 加载全通）；四文档收官完成。**剩余：维护者人工验收**（教师/学生/家长/场景/授权五页真实观感 + 真实 LLM/TTS 链路的讲解生成），验收通过后全量发布并删除 legacy 兜底页（10.1.5 双轨终点）。
 
 **与 Phase 4 的边界**：#9 不做证据链新视图（4-C/4-D 的前端部分），但保留 `EChart.tsx` 封装与 react-query 基座供 Phase 4 直接复用；Phase 4 细化可与 9-C..9-E 并行推进。
 

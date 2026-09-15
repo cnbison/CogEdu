@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — UI 现代化 9-G：真实进程灰度通过，四文档收官（待维护者人工验收）
+
+- **真实进程灰度**：真实端口起服（FastAPI 5173）逐项通过——React dist 三入口托管（/ /student/ /parent/ /teacher/ 全部由 dist 接管）、vanilla 三模块 script 回落 `web/student/` 解析、KaTeX vendor CSS 服务、student SPA bundle（519KB）加载、/login /auth.js /api/version 正常；
+- **四文档收官**：方案文档（§10 #9 施工完成 + #10 渐进渲染收尾 + 10.1.6 全任务标记）、CLAUDE.md 当前状态、README 当前状态段、本文件；
+- 全量 **1964 用例通过**（pytest，含新增 React 接线锁 15 例）+ 前端 vitest 49 例 + node:test 26 例；
+- **待维护者人工验收**（自动化不可替代部分）：教师/学生/家长/场景/授权五页真实观感 + 真实 LLM/TTS 链路的讲解生成与渐进渲染体验；验收通过后删除 legacy 兜底页（10.1.5 双轨终点）并全量发布，随后按第 16 章细化启动 Phase 4。
+
 ### 2026-09-15 — UI 现代化 9-F：契约测试双轨迁移（React 接线锁落档）
 
 - 新增 `tests/test_frontend_react_wiring.py`（15 例）：legacy 锁语义逐条迁移到 React 工程源文件——
