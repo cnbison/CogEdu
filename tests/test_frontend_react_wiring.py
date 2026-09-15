@@ -45,6 +45,14 @@ class TestScriptLoadOrder:
         html = _read("student.html")
         assert 'src="/src/student/main.tsx"' in html
 
+    def test_student_css_imported(self):
+        """学生端专属样式表必须被引入（2026-09-15 人工验收发现：漏引致整页裸排版）.
+
+        student/index.css 自带 @import "../index.css"，引它即同时拿全局基础。
+        """
+        main_tsx = (SRC_DIR / "student" / "main.tsx").read_text(encoding="utf-8")
+        assert 'import "./index.css"' in main_tsx
+
 
 class TestKaTeXLocalVendor:
     def test_student_html_uses_local_vendor(self):

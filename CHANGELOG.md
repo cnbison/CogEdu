@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — 修复：学生端 React 页整页裸排版（漏引学生端样式表）
+
+维护者人工验收发现学生端首页无样式（三卡/底部 Tab/顶栏全部裸排版）。根因：`src/student/main.tsx` 只引了全局 `../index.css`，未引学生端专属的 `./index.css`（三卡 `.home-cards`、底部导航 `.bottom-nav`、顶栏 `.student-topbar`、答题页样式都在其中）——移植 ECOS 时该表自带 `@import "../index.css"`，引它即同时拿全局基础，但 9-D 搭学生端 shell 时漏了。修复引入 + `test_frontend_react_wiring.py` 加接线锁防回归。已重建 dist。
+
 ### 2026-09-15 — UI 现代化 9-G：真实进程灰度通过，四文档收官（待维护者人工验收）
 
 - **真实进程灰度**：真实端口起服（FastAPI 5173）逐项通过——React dist 三入口托管（/ /student/ /parent/ /teacher/ 全部由 dist 接管）、vanilla 三模块 script 回落 `web/student/` 解析、KaTeX vendor CSS 服务、student SPA bundle（519KB）加载、/login /auth.js /api/version 正常；
