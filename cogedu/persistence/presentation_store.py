@@ -122,6 +122,7 @@ class PresentationStore:
         self.backend = detect_backend(db_path)
         self._conn: Any = None
         self._pg_tx_lock = threading.RLock()  # PG: 共享连接事务串行
+        self._sqlite_tx_lock = threading.RLock()  # SQLite: 同上（写线程间串行）
         self._init_schema()
 
     @property
@@ -132,19 +133,26 @@ class PresentationStore:
 
     @contextmanager
     def _tx(self):
-        """事务上下文 (双后端, 语义同 LCAStore._tx)."""
+        """事务上下文 (双后端, 语义同 LCAStore._tx).
+
+        双后端都持锁串行：SQLite 分支原本无锁——回填线程与生成线程共用
+        同一连接（check_same_thread=False + WAL）时交错事务会触发
+        "cannot start a transaction within a transaction"（2026-09-15
+        逐场景 TTS 回填引入并发后暴露）。
+        """
         if self.backend == BACKEND_POSTGRES:
             with self._pg_tx_lock:
                 conn = self.conn
                 with conn.transaction():
                     yield conn
             return
-        try:
-            yield self.conn
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
+        with self._sqlite_tx_lock:
+            try:
+                yield self.conn
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def _init_schema(self) -> None:
         try:
