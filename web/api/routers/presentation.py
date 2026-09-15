@@ -280,6 +280,24 @@ def get_timing() -> dict[str, Any]:
     return timing_payload()
 
 
+@router.get("/outlines")
+def list_outlines(request: Request) -> Any:
+    """学生的大纲列表（讲解记录入口页, UI 现代化 9-G 补）.
+
+    修复的缺口：复看只读端点早已存在但学生端没有列表入口, 导致每次
+    点"看 AI 讲解"都生成新大纲（重复计费）。本端点返回该学生全部大纲
+    摘要（id/标题/创建时间/场景数）, 前端据此展示"讲解记录"。
+
+    router 级 require_student_access 从查询串取 student_id（学生本人 /
+    staff）; 只返回本人数据, 无跨学生面。
+    """
+    student_id = request.query_params.get("student_id") or ""
+    if not student_id:
+        return JSONResponse({"error": "缺少 student_id"}, status_code=400)
+    summaries = get_store().list_outline_summaries_by_student(student_id)
+    return {"outlines": summaries}
+
+
 @router.get("/outline/{outline_id}", response_model=Outline)
 async def get_outline_by_id(outline_id: str, request: Request) -> Any:
     """读取已落库的大纲 (复看已生成讲解 / 第 11 章反查的读路径).

@@ -8,6 +8,7 @@ import {
   getScenes,
   getStatus,
   getTiming,
+  listOutlines,
   postSceneEvent,
   startScenes,
 } from "./api";
@@ -92,6 +93,13 @@ describe("presentation client 契约", () => {
       event_type: "scene_viewed",
       payload: { scene_id: "s1", step_id: "p1", dwell_sec: 3.5, index: 0 },
     });
+  });
+
+  it("listOutlines GET 带 ?student_id= 查询串", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResp({ outlines: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listOutlines(SID);
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/presentation/outlines?student_id=${SID}`);
   });
 
   it("fetchAudioBlob 同会话缓存（第二次不重复下载）", async () => {

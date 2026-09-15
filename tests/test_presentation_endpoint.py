@@ -287,3 +287,54 @@ class TestScenePageStatic:
         for path in ("/student/scene.js", "/student/scene.css"):
             resp = client.get(path)
             assert resp.status_code == 200, path
+
+
+# ─── 大纲列表端点 (UI 现代化 9-G 补: 讲解记录入口) ───────────────────────────
+
+
+class TestOutlineListEndpoint:
+    """GET /api/presentation/outlines?student_id= — 讲解记录列表.
+
+    修复的缺口: 复看只读端点早已存在但学生端没有列表入口, 导致每次点
+    "看 AI 讲解"都生成新大纲（重复计费）。
+    """
+
+    def test_list_outlines_empty(self, client):
+        resp = client.get("/api/presentation/outlines?student_id=stu_http")
+        assert resp.status_code == 200
+        assert resp.json() == {"outlines": []}
+
+    def test_list_outlines_missing_param_400(self, client):
+        # auth_bypass 下依赖按 admin 放行, 端点自身校验缺参 → 400
+        resp = client.get("/api/presentation/outlines")
+        assert resp.status_code == 400
+
+    def test_list_outlines_seeded_summary_shape(self, client, isolated_ecos_db):
+        from cogedu.presentation.types import Outline, OutlineStep
+
+        from web.api.presentation_service import get_store
+
+        store = get_store()
+        for i in range(2):
+            store.save_outline(
+                Outline(
+                    student_id="stu_http",
+                    intervention_id="int_x",
+                    title=f"讲解 {i}",
+                    steps=[OutlineStep(title="步骤")],
+                )
+            )
+        resp = client.get("/api/presentation/outlines?student_id=stu_http")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["outlines"]) == 2
+        item = data["outlines"][0]
+        assert set(item) == {"outline_id", "title", "created_at", "scene_count"}
+        assert item["scene_count"] == 0
+        assert item["title"].startswith("讲解")
+        # 倒序: 最新在前
+        assert data["outlines"][0]["created_at"] >= data["outlines"][1]["created_at"]
+
+    def test_list_outlines_registered_in_openapi(self, client):
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "/api/presentation/outlines" in paths

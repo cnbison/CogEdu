@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### 2026-09-15 — 讲解记录入口（人工验收反馈）：/scene 改为"讲解记录 + 显式生成"，修复重复生成计费缺口
+
+维护者验收提问暴露的缺口：复看只读端点早已存在但学生端**没有列表入口**——每次点"看 AI 讲解"都静默生成一份新大纲（重复计费），旧讲解没有任何入口可达。修复：
+
+- **后端**：新增 `GET /api/presentation/outlines?student_id=`（router 级 `require_student_access` 查询串放行，学生仅本人）+ `PresentationStore.list_outline_summaries_by_student`（摘要形状：outline_id/title/created_at/scene_count，created_at 倒序，失败 → [] + warning）；pytest 4 例（空列表/缺参 400/摘要形状与排序/OpenAPI 注册）；
+- **前端**：`/scene` 改为入口页——讲解记录列表（点行进 `/scene/:outlineId` 复看，0 页显示"未生成"）+ 显式"生成新讲解"按钮（点按钮才开始生成流程）；HomePage 入口按钮文案不变，落地即见记录页；vitest URL 契约 1 例；
+- 生成页/复看页行为不变。已重建 dist。
+
 ### 2026-09-15 — 讲解页等待体验改进（人工验收反馈）：spinner + 预期时长 + 渐进出页完整形态
 
 维护者验收反馈"选择 AI 讲解后只有一行静态文字，容易误以为没反应"（大纲阶段的同步 LLM 调用最长 120s）。三项改进：

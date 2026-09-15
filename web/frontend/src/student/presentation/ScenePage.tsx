@@ -9,12 +9,14 @@
 // innerHTML 仅限 KaTeX 渲染产物（经 formula.js renderFormulaInto）。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   generateOutline,
   getOutline,
   getScenes,
   getStatus,
   getTiming,
+  listOutlines,
   startScenes,
   postSceneEvent,
   type Outline,
@@ -102,13 +104,22 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
   // 等待阶段提示：outline = 同步 LLM 大纲调用（最易被误认为无反应的窗口），
   // generating = 逐场景后台生成（渐进出页）
   const [phase, setPhase] = useState<"outline" | "generating">("outline");
+  // 入口模式：/scene 先展示讲解记录（历史复看 + 显式生成），点按钮才开始
+  // 生成——避免每次进入都静默生成新大纲重复计费（复看走 /scene/:outlineId 自动开始）
+  const [started, setStarted] = useState(!!replayOutlineId);
+  const records = useQuery({
+    queryKey: ["presentationOutlines", sid],
+    queryFn: () => listOutlines(sid),
+    enabled: !started,
+  });
 
   const pageEnteredAt = useRef(Date.now());
   const totalDwellMs = useRef(0);
   const completedReported = useRef(false);
 
-  // 数据链（生成 / 复看）
+  // 数据链（生成 / 复看）——started 后才执行
   useEffect(() => {
+    if (!started) return;
     let cancelled = false;
     (async () => {
       try {
@@ -169,7 +180,7 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
     return () => {
       cancelled = true;
     };
-  }, [sid, replayOutlineId]);
+  }, [sid, replayOutlineId, started]);
 
   // 1-F：翻页即回写 scene_viewed（dwell 埋点）；最后一页回写 scene_completed
   const goNext = useCallback(() => {
@@ -203,6 +214,54 @@ export default function ScenePage({ sid, replayOutlineId }: { sid: string; repla
       pageEnteredAt.current = Date.now();
     }
   };
+
+  // 入口页：讲解记录列表 + 显式生成按钮
+  if (!started) {
+    const rows = records.data?.outlines ?? [];
+    return (
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
+        <div className="card">
+          <h2>AI 讲解</h2>
+          <button className="green" onClick={() => setStarted(true)}>
+            生成新讲解
+          </button>
+          <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+            生成按你当前的学习状态定制，通常需要几分钟；已生成的讲解从下方记录直接复看，不会重复生成。
+          </p>
+          {records.data && rows.length > 0 && (
+            <table style={{ marginTop: 14 }}>
+              <thead>
+                <tr>
+                  <th>讲解记录</th>
+                  <th>页数</th>
+                  <th>日期</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((o) => (
+                  <tr
+                    key={o.outline_id}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(`/scene/${o.outline_id}`)}
+                  >
+                    <td>
+                      <strong>{o.title || "讲解"}</strong>
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {o.scene_count > 0 ? `${o.scene_count} 页` : "未生成"}
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {o.created_at?.slice(0, 10) ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (errorText) {
     return (

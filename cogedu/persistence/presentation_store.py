@@ -15,6 +15,7 @@ adapter.open_connection 双后端 (SQLite 原路径 / PG 经 DSN), schema
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from contextlib import contextmanager
@@ -253,6 +254,41 @@ class PresentationStore:
             )
             return None
 
+    def list_outline_summaries_by_student(self, student_id: str) -> list[dict[str, Any]]:
+        """学生的大纲列表（讲解记录入口页数据源, UI 现代化 9-G 补）.
+
+        返回摘要形状（不反序列化完整 payload 的 steps）:
+        {outline_id, title, created_at, scene_count}，按创建时间倒序。
+        失败 → [] + warning（调用方显示空列表，不阻塞入口页）。
+        """
+        try:
+            rows = self.conn.execute(
+                "SELECT o.outline_id, o.created_at, o.payload, "
+                "(SELECT COUNT(*) FROM presentation_scenes s "
+                " WHERE s.outline_id = o.outline_id) AS scene_count "
+                "FROM presentation_outlines o WHERE o.student_id = ? "
+                "ORDER BY o.created_at DESC",
+                (student_id,),
+            ).fetchall()
+            out: list[dict[str, Any]] = []
+            for row in rows:
+                payload = json.loads(_col(row, "payload", 2))
+                out.append(
+                    {
+                        "outline_id": _col(row, "outline_id", 0),
+                        "created_at": _col(row, "created_at", 1),
+                        "title": payload.get("title") or "",
+                        "scene_count": _col(row, "scene_count", 3),
+                    }
+                )
+            return out
+        except Exception:
+            _log.warning(
+                "list_outline_summaries_by_student 失败 (sid=%s)", student_id,
+                exc_info=True,
+            )
+            return []
+
     def list_scenes_by_outline(self, outline_id: str) -> list[Scene]:
         return self._list_scenes(
             "SELECT payload FROM presentation_scenes WHERE outline_id = ? "
@@ -370,3 +406,10 @@ def _payload(row: Any) -> str:
     if isinstance(row, dict):
         return row["payload"]
     return row[0]
+
+
+def _col(row: Any, key: str, idx: int) -> Any:
+    """多列查询取列 (SQLite dict 行 / PG dict 行统一)."""
+    if isinstance(row, dict):
+        return row[key]
+    return row[idx]

@@ -75,6 +75,20 @@ export function generateOutline(sid: string): Promise<Outline> {
   return postJson<Outline>("/api/presentation/outline", { student_id: sid });
 }
 
+// 讲解记录（大纲列表，GET /outlines —— 学生本人 ?student_id= 放行）
+export interface OutlineSummary {
+  outline_id: string;
+  title: string;
+  created_at: string;
+  scene_count: number;
+}
+
+export function listOutlines(sid: string): Promise<{ outlines: OutlineSummary[] }> {
+  return getJson<{ outlines: OutlineSummary[] }>(
+    `/api/presentation/outlines?student_id=${encodeURIComponent(sid)}`,
+  );
+}
+
 export interface StartScenesResponse {
   status: "ready" | "generating";
   outline_id: string;
