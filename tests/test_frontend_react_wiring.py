@@ -324,3 +324,140 @@ class TestSidebarShellWiring:
         )
         # react entry 不变
         assert 'src="/src/student/main.tsx"' in html
+
+
+class TestScenePageDesktopWiring:
+    """UI-R-2：讲解场景页桌面布局重构接线契约.
+
+    锁语义（设计稿 docs/ui-r-0-信息架构设计稿.md §5 + §10）：
+      - .wrap { max-width: 720px } 已删除（白板破 720 版心）
+      - ScenePage 引入 OutlinePanel 大纲面板
+      - ScenePlayer 暴露 onSubtitleChange + renderControls 接口
+      - ≥1024 双栏 grid 布局；768-1023 大纲抽屉；<768 退化形态
+      - Phase 3 vanilla 挂载（wb-container + whiteboard.js createWhiteboard）继续生效
+      - 控制条 DOM id（scene-prev / scene-next / wb-play / wb-replay）保留
+    """
+
+    def test_scene_css_no_wrap_720_constraint(self):
+        """白板破 720：scene.css 的 .wrap { max-width: 720px } 必须删除.
+        UI-R-1 的 720/721 断点已清，但 scene.css 内的 .wrap 720 仍在——本步扫尾.
+        注意：必须剥离 CSS 注释（/* ... */）后再 grep——注释里的描述文字不应被算作规则.
+        """
+        import re
+        css = (SRC_DIR / "student" / "scene.css").read_text(encoding="utf-8")
+        # 剥离 /* ... */ 块注释
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        # 单独成行的 .wrap { ... max-width: 720px ... } 块必须消失
+        wrap_blocks = re.findall(r"\.wrap\s*\{[^}]*\}", css_no_comments)
+        for blk in wrap_blocks:
+            assert "max-width: 720px" not in blk, (
+                f"scene.css .wrap 仍限制 720px（白板被压根源），应删除: {blk}"
+            )
+
+    def test_scene_page_uses_outline_panel(self):
+        """ScenePage 必须 import 并使用 OutlinePanel 大纲面板."""
+        page = (SRC_DIR / "student" / "presentation" / "ScenePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert 'from "./OutlinePanel"' in page
+        assert "<OutlinePanel" in page
+        # OutlinePanel 三 prop：outline + scenes + currentIndex + onJump
+        assert "outline={o}" in page or "outline={outline}" in page
+        assert "scenes={scenes}" in page
+        assert "currentIndex={index}" in page
+        assert "onJump=" in page
+
+    def test_scene_player_exposes_subtitle_callback(self):
+        """ScenePlayer 暴露 onSubtitleChange 回调（字幕状态由父 ScenePage 渲染）."""
+        player = (SRC_DIR / "student" / "presentation" / "ScenePlayer.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert "onSubtitleChange" in player
+        # 字幕变更时必须调 onSubtitleChange?.(subtitle)
+        assert "onSubtitleChange?.(subtitle)" in player
+
+    def test_scene_player_exposes_render_controls(self):
+        """ScenePlayer 暴露 renderControls render prop（控制条由父拼装）."""
+        player = (SRC_DIR / "student" / "presentation" / "ScenePlayer.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert "renderControls" in player
+        # 必须传 ControlsApi（togglePlay / replayPage / state / started）
+        for k in ("togglePlay", "replayPage", "state", "started"):
+            assert k in player, f"ScenePlayer ControlsApi 缺 {k}"
+
+    def test_scene_page_passes_render_controls_to_scene_player(self):
+        """ScenePage 必须用 renderControls 拼装统一控制条（prev/play/replay/next 合并）."""
+        page = (SRC_DIR / "student" / "presentation" / "ScenePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert "renderControls={" in page
+        # 统一控制条内必须含 4 个按钮 id
+        for btn_id in ("scene-prev", "scene-next", "wb-play", "wb-replay"):
+            assert btn_id in page, f"ScenePage 控制条缺 {btn_id} DOM id（兼容性契约）"
+
+    def test_desktop_dual_column_layout_at_1024(self):
+        """≥1024 必须双栏 grid（白板主舞台 + 字幕/大纲右侧）."""
+        css = (SRC_DIR / "student" / "scene.css").read_text(encoding="utf-8")
+        # ≥1024 媒体查询 + grid-template-columns（双栏）
+        import re
+        m1024 = re.search(
+            r"@media\s*\(\s*min-width:\s*1024px\s*\)\s*\{(.*?)^\}",
+            css,
+            re.DOTALL | re.MULTILINE,
+        )
+        assert m1024, "scene.css 缺 @media (min-width: 1024px) 块"
+        block = m1024.group(1)
+        assert "grid-template-columns" in block, "≥1024 缺双栏 grid 配置"
+        # 768-1023 必须有大纲抽屉 toggle + drawer
+        m768 = re.search(
+            r"@media\s*\(\s*min-width:\s*768px\s*\)\s+and\s+\(\s*max-width:\s*1023px\s*\)\s*\{(.*?)^\}",
+            css,
+            re.DOTALL | re.MULTILINE,
+        )
+        assert m768, "scene.css 缺 @media (min-width: 768px) and (max-width: 1023px) 块"
+        drawer_block = m768.group(1)
+        assert "outline-toggle" in drawer_block or "outline-drawer" in drawer_block, (
+            "768-1023 缺大纲抽屉样式"
+        )
+
+    def test_phase3_vanilla_mount_continues_in_scene_player(self):
+        """whiteboard.js 挂载点 wb-container 仍由 ScenePlayer 创建（vanilla 契约）."""
+        player = (SRC_DIR / "student" / "presentation" / "ScenePlayer.tsx").read_text(
+            encoding="utf-8"
+        )
+        # wb-container DOM 必须存在
+        assert 'id="wb-container"' in player
+        assert 'className="wb-container"' in player
+        # createWhiteboard 调用点必须存在
+        assert "CogEduWhiteboard.createWhiteboard" in player
+        # ResizeObserver 缩放由 whiteboard.js 内部处理，本组件不重复实现
+        assert "ResizeObserver" not in player
+        # aspect-ratio 由 scene.css 提供；不在 JSX 内联
+        assert "aspect-ratio" not in player
+
+    def test_unified_control_bar_no_split_pager(self):
+        """设计稿 §5 拍板：控制条合并为单行（prev/play/replay/next 同列）；
+        旧 .scene-pager 分离式结构必须不再作为主控制条（保留可能用于其它，
+        但本组件主流程不再渲染两段独立控制）.
+        """
+        page = (SRC_DIR / "student" / "presentation" / "ScenePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        # 主流程必须用 .scene-controls，不再有独立的 .scene-pager 包裹 prev/next
+        assert "scene-controls" in page
+        # 但允许 scene-pager 残留在 history 中（设计稿 §5 明确拍板控制条合并）
+        # 这里不强删旧 class 名，避免无谓的清洁工作，仅锁主流程用新结构
+
+    def test_mobile_subtitle_and_outline_handling(self):
+        """<768 退化形态：移动字幕在 wb-container 之下；大纲面板隐藏."""
+        page = (SRC_DIR / "student" / "presentation" / "ScenePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        # 移动字幕 DOM id 必须存在（CSS 控制可见性）
+        assert 'id="scene-subtitle-mobile"' in page
+        # 桌面字幕与移动字幕分别渲染
+        assert 'id="scene-subtitle"' in page
+        assert "scene-subtitle-desktop" in page
+        # 大纲面板通过 OutlinePanel 渲染（<768 由 CSS 隐藏 .scene-outline-drawer）
+        assert "OutlinePanel" in page

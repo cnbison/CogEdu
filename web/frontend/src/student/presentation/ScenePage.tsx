@@ -1,9 +1,14 @@
-// 讲解场景页（9-D：legacy scene.js 的数据链 + 翻页 + 1-F 回写平移为 React）。
+// 讲解场景页（UI-R-2：桌面布局重构，延续 9-D legacy scene.js 数据链 + 翻页 + 1-F 回写）。
 //
 // 数据链：POST /outline → POST /scenes（非阻塞 202/200 复用）→ 轮询 status
 // （3s；not_started 幂等重触发≤2 次）→ GET scenes。渐进渲染（§10 #10 尾）：
 // generating 期间每次轮询同步拉取已落库场景列表，边生成边出页。
 // 复看模式（/scene/:outlineId）：两个只读 GET，不触发生成。
+//
+// 桌面布局（设计稿 docs/ui-r-0-信息架构设计稿.md §5）：
+//   ≥1024px：白板主舞台（16:9，全幅）+ 字幕/大纲双栏右侧
+//   768-1023px：白板主舞台 + 字幕单栏 + 大纲折叠为抽屉（toggle 唤出）
+//   <768px：退化形态——白板单栏、字幕在白板下方、大纲隐藏（不展示）
 //
 // 安全约定（1-E-2 延续）：LLM 文本一律 textContent / createTextNode；
 // innerHTML 仅限 KaTeX 渲染产物（经 formula.js renderFormulaInto）。
@@ -24,6 +29,7 @@ import {
   type Scene,
 } from "./api";
 import ScenePlayer from "./ScenePlayer";
+import OutlinePanel from "./OutlinePanel";
 import "../scene.css";
 
 const POLL_MS = 3000;
@@ -124,6 +130,10 @@ export default function ScenePage({
   // 续生成：0 场景的半成品大纲（生成被中断/未触发）沿用已有大纲继续，
   // 不重新生成大纲（省一次大纲 LLM 调用）
   const [resume, setResume] = useState(false);
+  // UI-R-2: 字幕状态由 ScenePlayer 通过 onSubtitleChange 上提到此处渲染
+  const [subtitle, setSubtitle] = useState("");
+  // UI-R-2: 大纲抽屉 toggle（768-1023 形态专用；其他形态 CSS 隐藏按钮）
+  const [outlineDrawerOpen, setOutlineDrawerOpen] = useState(false);
   const records = useQuery({
     queryKey: ["presentationOutlines", sid],
     queryFn: () => listOutlines(sid),
@@ -242,11 +252,20 @@ export default function ScenePage({
     }
   };
 
+  // UI-R-2: 大纲面板点击跳转（侧栏 / 抽屉共用）
+  const onJump = (i: number) => {
+    if (i >= 0 && i < scenes.length) {
+      setIndex(i);
+      pageEnteredAt.current = Date.now();
+      setOutlineDrawerOpen(false); // 抽屉模式点完自动关闭
+    }
+  };
+
   // 入口页：讲解记录列表 + 显式生成按钮
   if (!started) {
     const rows = records.data?.outlines ?? [];
     return (
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
+      <div className="scene-view scene-view-list" style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
         <div className="card">
           <h2>AI 讲解</h2>
           <button className="green" onClick={() => setManualStart(true)}>
@@ -315,7 +334,7 @@ export default function ScenePage({
   // 卡片上无任何反馈，看起来像"点了没反应"（2026-09-15 验收反馈）
   if (outline && scenes.length === 0 && !resume) {
     return (
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
+      <div className="scene-view scene-view-list" style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
         <div className="card">
           <h2>{outline.title || "讲解"}</h2>
           <p className="muted">该讲解还没有已生成的场景——生成可能被中断或未开始。</p>
@@ -351,55 +370,130 @@ export default function ScenePage({
     const isLast = index === scenes.length - 1;
     const tailGenerating = isLast && !ready;
 
+    // UI-R-2：单一 DOM 结构，CSS 按断点适配（≥1024 双栏 / 768-1023 单栏 + 抽屉 / <768 退化）
     return (
-      <div className="scene-view">
+      <div className="scene-view scene-view-desktop">
+        {/* 顶条（设计稿 §5）：讲解列表 + 大纲标题 + 第 N/M 页 */}
         <header className="scene-head">
-        {/* 回退到讲解列表（人工验收反馈：此前只能绕道"今天" TAB） */}
-        <button className="ghost" style={{ marginBottom: 8 }} onClick={() => navigate("/scene")}>
-          ← 讲解列表
-        </button>
-        <h2 id="scene-outline-title">{o.title || "讲解"}</h2>
-        <span id="scene-progress" className="muted">
-          {index + 1} / {scenes.length}
-        </span>
-      </header>
-      {!ready && (
-        <p className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="spinner" style={{ width: 16, height: 16, margin: 0, borderWidth: 2 }} />
-          后续页面正在生成（每个约 1~2 分钟），完成后自动出现；已生成的可直接翻看。
-        </p>
-      )}
-      {scene.degraded && (
-        <div id="scene-degraded-banner" className="degraded-banner">
-          本场景为降级内容（生成不完整），仅供参考。
-        </div>
-      )}
-      <div id="scene-content" className="card scene-content">
-        <h3>{scene.title}</h3>
-        {(scene.blocks || []).map((block, i) =>
-          block.type === "text" ? (
-            <TextBlock key={i} content={block.content} />
-          ) : (
-            <ImageBlockView key={i} block={block} />
-          ),
+          <button className="ghost" onClick={() => navigate("/scene")}>
+            ← 讲解列表
+          </button>
+          <h2 id="scene-outline-title">{o.title || "讲解"}</h2>
+          <span id="scene-progress" className="muted">
+            {index + 1} / {scenes.length}
+          </span>
+        </header>
+
+        {!ready && (
+          <p className="muted scene-generating-hint">
+            <span className="spinner spinner-inline" />
+            后续页面正在生成（每个约 1~2 分钟），完成后自动出现；已生成的可直接翻看。
+          </p>
         )}
+        {scene.degraded && (
+          <div id="scene-degraded-banner" className="degraded-banner">
+            本场景为降级内容（生成不完整），仅供参考。
+          </div>
+        )}
+
+        <div className="scene-body">
+          <div className="scene-main">
+            {/* 本页内容卡（设计拍板 A：白板上方，保留文字/图片上下文） */}
+            <div id="scene-content" className="card scene-content">
+              <h3>{scene.title}</h3>
+              {(scene.blocks || []).map((block, i) =>
+                block.type === "text" ? (
+                  <TextBlock key={i} content={block.content} />
+                ) : (
+                  <ImageBlockView key={i} block={block} />
+                ),
+              )}
+            </div>
+
+            {/* 白板主舞台（vanilla 挂载点 wb-container，aspect-ratio:16/9 由 scene.css 自适应） */}
+            <ScenePlayer
+              scene={scene}
+              sid={sid}
+              timing={timing}
+              onSubtitleChange={setSubtitle}
+              renderControls={({ togglePlay, replayPage, state, started }) => (
+                <div className="scene-controls">
+                  <button id="scene-prev" onClick={goPrev} disabled={index === 0}>
+                    ← 上一页
+                  </button>
+                  <div className="scene-controls-play">
+                    <button id="wb-play" onClick={togglePlay}>
+                      {state === "playing"
+                        ? "⏸ 暂停"
+                        : state === "paused"
+                          ? "▶ 继续播放"
+                          : started
+                            ? "▶ 重新播放"
+                            : "▶ 播放讲解"}
+                    </button>
+                    {started && (
+                      <button id="wb-replay" className="amber" onClick={replayPage}>
+                        ↻ 重播本页
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    id="scene-next"
+                    className="green"
+                    onClick={goNext}
+                    disabled={tailGenerating}
+                    title={tailGenerating ? "最后一页还在生成中" : undefined}
+                  >
+                    {tailGenerating ? "生成中…" : isLast ? "完成学习 ✓" : "下一页 →"}
+                  </button>
+                </div>
+              )}
+            />
+
+            {/* 移动端字幕：<768 显示；桌面由 .scene-side 渲染 */}
+            {subtitle ? (
+              <div id="scene-subtitle-mobile" className="scene-subtitle-mobile wb-subtitle">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="scene-side">
+            {/* 桌面字幕栏（≥1024 显示；<1024 由 CSS 隐藏） */}
+            <div id="scene-subtitle" className="scene-subtitle-desktop">
+              {subtitle ? (
+                subtitle
+              ) : (
+                <span className="muted">（讲解词随播放推进）</span>
+              )}
+            </div>
+
+            {/* 大纲抽屉 toggle（仅 768-1023 形态显示） */}
+            <button
+              type="button"
+              className="scene-outline-toggle"
+              onClick={() => setOutlineDrawerOpen((v) => !v)}
+              aria-expanded={outlineDrawerOpen}
+              aria-controls="scene-outline-panel"
+            >
+              {outlineDrawerOpen ? "收起大纲 ▾" : "展开大纲 ▸"}
+            </button>
+
+            {/* 大纲面板（≥1024 常驻；768-1023 受 .scene-outline-drawer 控制；<768 CSS 隐藏） */}
+            <div
+              id="scene-outline-panel"
+              className={`scene-outline-drawer ${outlineDrawerOpen ? "open" : ""}`}
+            >
+              <OutlinePanel
+                outline={o}
+                scenes={scenes}
+                currentIndex={index}
+                onJump={onJump}
+              />
+            </div>
+          </aside>
+        </div>
       </div>
-      <ScenePlayer scene={scene} sid={sid} timing={timing} />
-      <div className="scene-pager">
-        <button id="scene-prev" onClick={goPrev} disabled={index === 0}>
-          ← 上一页
-        </button>
-        <button
-          id="scene-next"
-          className="green"
-          onClick={goNext}
-          disabled={tailGenerating}
-          title={tailGenerating ? "最后一页还在生成中" : undefined}
-        >
-          {tailGenerating ? "生成中…" : isLast ? "完成学习 ✓" : "下一页 →"}
-        </button>
-      </div>
-    </div>
-  );
+    );
   }
 }

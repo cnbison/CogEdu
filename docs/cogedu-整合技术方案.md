@@ -1058,7 +1058,7 @@ P0-1a 三学科试点内容准备                        UI-R 桌面优先重设
 
 - [x] **UI-R-0 信息架构设计稿** ✅（2026-09-16 拍板）：页面树 / 导航模型 / 讲解页布局（白板主舞台 + 字幕/大纲双栏辅栏），五项决策全部锁定——D1 学习/工具/报告三组 / D2 字幕+大纲双栏 / D3 抽屉降级 / D4 教师家长端本轮不动 / D5 命名「讲解」；设计稿见 `docs/ui-r-0-信息架构设计稿.md`
 - [x] **UI-R-1 SidebarShell 工作台** ✅（2026-09-16 施工完成，待人工验收）：左侧栏三形态（≥1024 展开 220px / 768-1023 收窄 64px 图标栏 / <768 抽屉）替代旧底部 5-Tab；单一导航源 `web/frontend/src/student/components/navTree.ts`（侧栏 + 抽屉共用，8 路由全列 + Phase 4-6 槽位 disabled）；顶条跨三形态常驻（hamburger 仅 drawer + brand + username + 退出）；CSS 断点 768 / 1024（旧 720/721 已清除）；scene.css 的 `.wrap { max-width: 720px }` 不在本步范围（白板破版心留 UI-R-2）。契约锁：新增 `TestSidebarShellWiring` 8 例（旧 .bottom-nav / .student-topbar 退役 / 单源 / 三形态断点 / shell-content 不带 max-width / Phase 3 vanilla 模块挂载继续生效）；全量 1963 用例通过（pytest + 0 回归）。
-- [ ] **UI-R-2 讲解场景页桌面布局**：白板 16:9 全幅主舞台，字幕/大纲/播放控件为辅栏（桌面双栏）；答题页可走题目主区 + 历史侧栏
+- [x] **UI-R-2 讲解场景页桌面布局** ✅（2026-09-16 施工完成，待人工验收）：白板 16:9 全幅主舞台（破 `.wrap { max-width: 720px }` 限制）+ 字幕/大纲双栏右侧（≥1024）；768-1023 单栏 + 大纲折叠为抽屉（toggle 唤出）；<768 退化形态保留（移动字幕在白板下方、大纲隐藏）。ScenePlayer 重构为瘦宿主：暴露 `onSubtitleChange` 回调 + `renderControls` render prop（控制条由 ScenePage 拼装合并 prev/play/replay/next 为单行）；ScenePage 桌面布局：顶条（讲解列表 + 大纲标题 + 第N/M页）+ 本页内容卡（白板上方）+ 白板主舞台 + 统一控制条 + 侧栏（桌面字幕 + 大纲抽屉 toggle）；新增 `OutlinePanel.tsx`（已生成页码索引 + 当前页高亮 + 点击跳转，未生成项 disabled 标注）。契约锁：新增 `TestScenePageDesktopWiring` 9 例（白板破 720 / OutlinePanel 三 prop / ScenePlayer 暴露回调 / 控制条 DOM id 保留 / 双栏 grid / Phase 3 vanilla 挂载继续 / 移动字幕/大纲处理）；全量 1972 用例通过（1963 → +9）。
 - [ ] **UI-R-3 移动降级**：<768px 侧栏收为抽屉导航，保持可用——降级形态，不做双端并重优化
 - [ ] **UI-R-4 Phase 3 vanilla 模块不动**：`whiteboard/playback/formula.js` 三模块及其 node:test 26 例时序锁原样保留，React 宿主换壳（延续 9-D 挂载式整合模式）
 - [ ] **UI-R-5 契约延续**：`test_frontend_react_wiring.py` 契约锁延续，新增桌面布局 grep 锁

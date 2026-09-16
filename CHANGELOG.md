@@ -6,6 +6,43 @@
 
 ## [Unreleased]
 
+### 2026-09-16 — UI-R-2 讲解场景页桌面布局重构（待人工验收）
+
+设计稿见 `docs/ui-r-0-信息架构设计稿.md` §5（讲解场景页桌面布局）+ §11 UI-R-2。核心：白板破 720 版心，按 16:9 等比缩放至填满可用宽度（1366×768 笔记本上 ≈1150×646，比现状放大约 60%）。三形态适配：≥1024 双栏（白板主舞台 + 字幕/大纲右侧）/ 768-1023 单栏 + 大纲抽屉 / <768 退化形态保留。
+
+**新增文件**：
+
+- `web/frontend/src/student/presentation/OutlinePanel.tsx` — 大纲面板：渲染 outline.steps + scenes 的已生成页索引（步骤号 + 标题），当前页高亮可点击跳转（`onJump(index)`），未生成项渲染为 disabled + "生成中"标签——避免"大纲说有但点击无反应"的死链体感。
+
+**修改文件**：
+
+- `web/frontend/src/student/presentation/ScenePlayer.tsx` — 重构为瘦宿主：删 `wb-controls` + `wb-subtitle` DOM（控制条与字幕位置由 ScenePage 控制）；暴露 `onSubtitleChange?: (text: string) => void` 回调（speech 动作字幕状态上提到 ScenePage）；暴露 `renderControls?: (api) => ReactNode` render prop（提供 `{togglePlay, replayPage, state, started}`）；保留 `wb-container` vanilla 挂载点 + `wb-section` 容器 + `wb-viewport` 缩放契约（whiteboard.js 内 ResizeObserver 触发）。无 renderControls 时 fallback 到旧 wb-controls 行为（向后兼容）。
+- `web/frontend/src/student/presentation/ScenePage.tsx` — 桌面布局重构：单一 DOM 树 + CSS 适配三形态；顶条（讲解列表回退按钮 + h2 大纲标题 + 第N/M页进度）+ 本页内容卡（白板上方，文字/图片上下文保留）+ ScenePlayer（白板主舞台）+ 统一控制条 `scene-controls`（prev/play/replay/next 合并）+ 侧栏 `scene-side`（桌面字幕 + 大纲抽屉 toggle）；移动端字幕在 wb-container 之下由 `id="scene-subtitle-mobile"` 渲染，CSS 控制可见性。
+- `web/frontend/src/student/scene.css` — 删 `.wrap { max-width: 720px }`（白板被压根源）、`.scene-topbar` / `.scene-header` legacy 顶条、`.scene-card` / `.scene-pager` / `.btn` / `.btn-primary` 旧组件样式；新增 `.scene-view-desktop` 桌面布局骨架、`.scene-body` grid 双栏（≥1024 grid-template-columns: minmax(0, 1fr) 320px）、`.scene-controls` 统一控制条、`.scene-side` 侧栏 sticky 滚动、`.scene-outline-toggle` / `.scene-outline-drawer` 抽屉容器、`.outline-panel` / `.outline-row` 大纲面板样式；保留 `.wb-container` / `.wb-viewport` / `.wb-stage` / `.wb-el*` vanilla 契约 CSS（whiteboard.js 自动创建并操作，零改动）。
+- `tests/test_frontend_react_wiring.py` — 新增 `TestScenePageDesktopWiring` 9 例：白板破 720（剥离 CSS 注释后扫描）/ OutlinePanel 三 prop + onJump / ScenePlayer 暴露 onSubtitleChange + renderControls + ControlsApi 四字段 / ScenePage 用 renderControls 拼装且 4 个按钮 id（scene-prev/scene-next/wb-play/wb-replay）保留 / ≥1024 双栏 grid + 768-1023 抽屉样式 / Phase 3 vanilla 挂载继续（wb-container id/class + createWhiteboard 调用 + 禁 ResizeObserver/aspect-ratio 重复实现）/ 统一控制条 / 移动字幕 + 桌面字幕分别渲染。
+
+**硬边界守住情况**：
+
+| 红线 | 状态 |
+|---|---|
+| Phase 3 vanilla 三模块零改动 | ✅ `web/student/{whiteboard,playback,formula}.js` 未触碰；node:test 25/25 原样全绿（playback 14 + whiteboard 11） |
+| student.html 注入顺序 | ✅ defer 顺序 formula→playback→whiteboard 不变 |
+| 路由表 | ✅ 8 项路由（含 `/scene/:outlineId` 复看）不变 |
+| 后端 | ✅ 0 行改动 |
+| scene.css vanilla 契约 | ✅ `.wb-container` / `.wb-viewport` / `.wb-stage` / `.wb-el*` 等类名 + aspect-ratio:16/9 + width:100% 保留 |
+| 控制条 DOM id | ✅ scene-prev / scene-next / wb-play / wb-replay 全部保留（向后兼容键盘/可访问性） |
+
+**不在本步范围（明确边界）**：
+
+- ❌ 答题页双栏（设计稿 §6，UI-R-3 任务）
+- ❌ 其他页面宽幅适配（UI-R-4 任务）
+- ❌ 教师/家长端（§9 D4：本轮不动）
+- ❌ Phase 4-6 槽位点亮
+
+**测试**：全量 **1972 用例通过**（pytest + 1 skip；前次 1963 → +9 新契约锁）；vitest 55/55；node:test 25/25；构建产物三入口正常（dist 不入库）。
+
+**下一步**：维护者在三形态真机过一遍讲解场景（白板破 720 后尺寸、字幕/大纲双栏、768-1023 抽屉 toggle、移动端退化）；如发现真缺陷按验收期模式补 CHANGELOG 条目 + 加契约锁；之后启动 UI-R-3 答题页双栏。
+
 ### 2026-09-16 — UI-R-1 SidebarShell 工作台壳层完成（维护者验收通过，启动 UI-R-2）
 
 学生端骨架一次换：底部 5-Tab 退役，左侧栏三形态接管。设计稿见 `docs/ui-r-0-信息架构设计稿.md` §11 UI-R-1，硬边界（Phase 3 vanilla 三模块零改动 / 路由表不变 / 纯前端无后端改动 / dist 不入库）全部守住。

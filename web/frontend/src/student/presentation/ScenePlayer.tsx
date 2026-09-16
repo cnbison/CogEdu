@@ -1,14 +1,22 @@
-// 白板讲解宿主（9-D，挂载式整合——方案文档 §10.1.3 拍板）。
+// 白板讲解宿主（UI-R-2 重构，延续 9-D 挂载式整合 §10.1.3）。
 //
 // 原则：React 只做宿主，三个 vanilla 模块原样保留：
 //   web/student/formula.js（KaTeX 封装）/ playback.js（播放引擎，代数令牌
 //   时序语义已验收）/ whiteboard.js（DOM+SVG renderer）。
-// 本组件等价于 legacy scene.js 的 setupPlayback/togglePlay/replayPage 部分：
-//   createWhiteboard(container, {timing}) + createPlaybackEngine({actions,
-//   renderer, speechPlayer, timing, ...})，每页重建不跨页复用，卸载必 stop。
+//
+// UI-R-2 重构点（设计稿 §5 控制条合并 + 字幕栏桌面双栏化）：
+//   - 删 wb-controls / wb-subtitle DOM（控制条由 ScenePage 拼装；
+//     字幕由 ScenePage 渲染到桌面侧栏左栏，移动端退化形态由 ScenePage
+//     在 wb-container 之后渲染）
+//   - 暴露 renderControls render prop：ScenePage 传入控件渲染函数，
+//     本组件提供 {togglePlay, replayPage, state, started}
+//   - 暴露 onSubtitleChange 回调：本组件内 subtitle state 变更时通知父
+//   - 保留 wb-container vanilla 挂载 + wb-section 容器（向后兼容 CSS）
+//
 // 模块经 student.html <script defer> 全局注入（window.CogEduXxx），
 // 缺失时退回纯翻页（console.warn，与 legacy 守卫一致）。
-import { useEffect, useRef, useState } from "react";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { fetchAudioBlob, type PresentationTiming, type Scene, type SceneAction } from "./api";
 
 interface PlaybackEngine {
@@ -22,6 +30,13 @@ interface PlaybackEngine {
 
 interface WhiteboardHandle {
   renderer: { clear(): void; execute(action: SceneAction): Promise<void> };
+}
+
+interface ControlsApi {
+  togglePlay: () => void;
+  replayPage: () => void;
+  state: "idle" | "playing" | "paused";
+  started: boolean;
 }
 
 // 引擎 speechPlayer 接口实现（3-D 三级路径：audio ended 驱动 → 失败回落
@@ -63,19 +78,31 @@ export default function ScenePlayer({
   scene,
   sid,
   timing,
+  onSubtitleChange,
+  renderControls,
 }: {
   scene: Scene;
   sid: string;
   timing: PresentationTiming | null;
+  /** speech 动作开始时回调当前讲解词；ScenePage 渲染到双栏左栏（≥1024）
+   *  或 wb-container 之后（移动端退化） */
+  onSubtitleChange?: (text: string) => void;
+  /** 控制条由 ScenePage 拼装：传入 (api) => ReactNode，api 提供播放状态 + 操作 */
+  renderControls?: (api: ControlsApi) => ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<PlaybackEngine | null>(null);
-  const [engine, setEngine] = useState<PlaybackEngine | null>(null);
   const [state, setState] = useState<"idle" | "playing" | "paused">("idle");
   const [started, setStarted] = useState(false);
   const [subtitle, setSubtitle] = useState("");
+  const [engineReady, setEngineReady] = useState(false);
 
   const hasActions = !!(scene.actions && scene.actions.length);
+
+  // 字幕同步通知父（双栏渲染或移动端退化渲染）
+  useEffect(() => {
+    onSubtitleChange?.(subtitle);
+  }, [subtitle, onSubtitleChange]);
 
   // 每页重建（3-C-4 翻页联动：卸载即 stop——令牌失效 + 音频停止）
   useEffect(() => {
@@ -114,14 +141,15 @@ export default function ScenePlayer({
       onDone: () => setState(eng.getState()),
     });
     engineRef.current = eng;
-    setEngine(eng);
     setState("idle");
     setStarted(false);
     setSubtitle("");
+    setEngineReady(true);
     return () => {
       eng.stop(); // 代数令牌失效 + 音频停止（tests/js/playback.test.cjs 锁语义）
       engineRef.current = null;
-      setEngine(null);
+      setEngineReady(false);
+      setSubtitle("");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.scene_id]);
@@ -149,24 +177,23 @@ export default function ScenePlayer({
 
   return (
     <div className="wb-section" id="wb-section">
-      <div className="wb-controls">
-        <button id="wb-play" onClick={togglePlay}>
-          {state === "playing" ? "⏸ 暂停" : state === "paused" ? "▶ 继续播放" : started ? "▶ 重新播放" : "▶ 播放讲解"}
-        </button>
-        {/* 重播按钮：开播过才出现（3-B-3：重播是唯一的"再来一遍"） */}
-        {started && (
-          <button id="wb-replay" className="amber" onClick={replayPage}>
-            ↻ 重播本页
-          </button>
-        )}
-      </div>
       <div id="wb-container" ref={containerRef} className="wb-container" />
-      {subtitle ? (
-        <div id="wb-subtitle" className="wb-subtitle">
-          {subtitle}
+      {renderControls ? (
+        renderControls({ togglePlay, replayPage, state, started })
+      ) : (
+        // 默认降级控制条：保持向后兼容（未传 renderControls 时 ScenePage 旧代码仍可工作）
+        <div className="wb-controls">
+          <button id="wb-play" onClick={togglePlay}>
+            {state === "playing" ? "⏸ 暂停" : state === "paused" ? "▶ 继续播放" : started ? "▶ 重新播放" : "▶ 播放讲解"}
+          </button>
+          {started && (
+            <button id="wb-replay" className="amber" onClick={replayPage}>
+              ↻ 重播本页
+            </button>
+          )}
         </div>
-      ) : null}
-      {engine === null && (
+      )}
+      {!engineReady && (
         <p className="muted" style={{ fontSize: 13 }}>
           播放组件不可用，本页以纯翻页展示（内容不受影响）。
         </p>

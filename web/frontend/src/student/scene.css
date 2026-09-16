@@ -1,4 +1,16 @@
-/* 讲解场景页 (Phase 1, 1-E) — 样式变量与主学生端 styles.css 同一套体系 */
+/* 讲解场景页 (UI-R-2 桌面布局重构，延续 Phase 1 + Phase 3 白板语音)
+   -----------------------------------------------------------------------------
+   设计稿 docs/ui-r-0-信息架构设计稿.md §5：
+   - ≥1024 双栏：白板主舞台 + 字幕/大纲双栏右侧
+   - 768-1023 单栏：白板主舞台 + 字幕栏 + 大纲抽屉
+   - <768 退化形态：单栏，字幕在白板下方，大纲隐藏
+
+   硬边界（保留 vanilla 模块契约）：
+   - .wb-container / .wb-viewport / .wb-stage / .wb-el* 由 whiteboard.js 自动创建并操作
+   - .wb-container 的父容器宽度变化 → viewport.clientWidth 触发 ResizeObserver 重缩放
+   - 不引入固定宽度约束在 .wb-container / .wb-viewport 上
+   -----------------------------------------------------------------------------
+*/
 
 :root {
   --c-primary: #1e40af;
@@ -27,22 +39,8 @@ body {
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   line-height: 1.75;
 }
-.wrap { max-width: 720px; margin: 0 auto; padding: var(--sp-4); }
 
-.scene-topbar {
-  background: var(--c-bg-card);
-  border-bottom: 1px solid var(--c-border);
-  padding: var(--sp-3) 0;
-}
-.scene-topbar .wrap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.back { color: var(--c-primary); text-decoration: none; font-size: 14px; }
-.sid-pill { font-size: 12px; color: var(--c-text-muted); }
-
-/* 加载 / 错误态 */
+/* ── 加载 / 错误态 ─────────────────────────────────────── */
 .scene-status { text-align: center; padding: 64px 0; color: var(--c-text-muted); }
 .spinner {
   width: 28px; height: 28px;
@@ -52,44 +50,110 @@ body {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+.spinner-inline {
+  width: 16px; height: 16px;
+  margin: 0;
+  display: inline-block;
+  vertical-align: -3px;
+  border-width: 2px;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 场景头部 */
-.scene-header {
+/* ── UI-R-2 桌面布局（≥768 启用） ─────────────────────────────── */
+.scene-view-desktop {
+  /* 顶条与主体纵向排；主体由 CSS Grid 在 ≥1024 双栏化 */
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin: var(--sp-5) 0 var(--sp-3);
+  flex-direction: column;
+  /* UI-R-2 关键：不再有 .wrap { max-width: 720px } 限制 — 白板可全幅 */
+  width: 100%;
+  padding: var(--sp-4) var(--sp-5);
+  gap: var(--sp-3);
 }
-.scene-header h2 { margin: 0; font-size: 20px; }
-.progress { color: var(--c-text-muted); font-size: 13px; white-space: nowrap; }
 
-/* degraded 提示条 (1-E-4) */
-.degraded-banner {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
-  border-radius: var(--r-md);
+.scene-view-list {
+  /* 入口页（讲解列表 / 半成品大纲卡）保持居中紧凑宽度 */
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ── 顶条（设计稿 §5）：讲解列表 + 大纲标题 + 第 N/M 页 ───── */
+.scene-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.scene-head h2 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1;
+  text-align: center;
+  /* 桌面横排时防止标题挤按钮 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scene-head > .ghost {
+  flex-shrink: 0;
+}
+#scene-progress {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+
+.scene-generating-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
   padding: var(--sp-2) var(--sp-3);
   font-size: 13px;
-  margin-bottom: var(--sp-3);
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
 }
 
-/* 场景卡片 */
-.scene-card {
+/* ── 主体（白板主舞台 + 侧栏） ───────────────────────────── */
+.scene-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0; /* 防止 grid item 内溢 */
+}
+
+.scene-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.scene-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* ── 本页内容卡 ───────────────────────────────────────── */
+.scene-content {
   background: var(--c-bg-card);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
-  padding: var(--sp-5);
-  min-height: 280px;
+  padding: var(--sp-4) var(--sp-5);
 }
-.scene-card p { margin: 0 0 var(--sp-4); }
-.scene-card .formula-display {
+.scene-content h3 {
+  margin: 0 0 var(--sp-3);
+  font-size: 17px;
+}
+.scene-content p { margin: 0 0 var(--sp-3); }
+.scene-content .formula-display {
   text-align: center;
-  margin: var(--sp-4) 0;
+  margin: var(--sp-3) 0;
   overflow-x: auto;
 }
-.scene-card .formula-error {
+.scene-content .formula-error {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   background: var(--c-bg-subtle);
@@ -99,7 +163,7 @@ body {
 }
 
 /* 图片: 懒加载 + 失败占位 (1-E-3) */
-.scene-image { margin: var(--sp-4) 0; }
+.scene-image { margin: var(--sp-3) 0; }
 .scene-image img {
   max-width: 100%;
   border-radius: var(--r-md);
@@ -122,18 +186,180 @@ body {
 }
 .scene-image .img-placeholder .icon { font-size: 28px; }
 
-/* ─── 白板讲解区 (Phase 3, 3-B) ─── */
-.wb-controls {
+/* ── 统一控制条（设计稿 §5，UI-R-2 拍板） ──────────────── */
+.scene-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--c-border);
+}
+.scene-controls-play {
   display: flex;
   gap: var(--sp-2);
-  margin: var(--sp-4) 0 var(--sp-3);
 }
-/* 外层容器带边框; 视口撑满宽度并锁定 16:9 (虚拟画布比例) */
+
+/* ── 字幕栏 ───────────────────────────────────────────── */
+.scene-subtitle-desktop {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--c-text-muted);
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: 56px;
+  /* ≥1024 显示；<1024 CSS 隐藏 */
+  display: none;
+}
+.scene-subtitle-mobile {
+  /* <1024 显示；≥1024 CSS 隐藏 */
+  display: block;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--c-text-muted);
+  text-align: center;
+  padding: var(--sp-2) 0;
+  min-height: 1.5em;
+}
+
+/* ── 大纲抽屉 toggle（仅 768-1023 显示） ────────────────── */
+.scene-outline-toggle {
+  display: none; /* 默认隐藏，768-1023 显示 */
+  align-self: flex-start;
+  background: var(--c-bg-card);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  border-radius: var(--r-md);
+}
+.scene-outline-toggle:hover { background: var(--c-bg-subtle); }
+
+/* 大纲面板抽屉容器：≥1024 常驻；<768 不显示；768-1023 受 open 控制 */
+.scene-outline-drawer {
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  /* ≥1024 常驻显示；768-1023 默认折叠；<768 不显示 */
+  display: none;
+}
+.scene-outline-drawer.open {
+  /* 768-1023 展开态 */
+  display: block;
+}
+
+/* ── 大纲面板（OutlinePanel.tsx 渲染） ─────────────────── */
+.outline-panel { padding: var(--sp-3); }
+.outline-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.outline-panel-head strong {
+  font-size: 14px;
+}
+.outline-panel-count {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.outline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.outline-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: transparent;
+  color: var(--c-text);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.outline-row:hover:not(.active):not(.disabled) {
+  background: var(--c-bg-subtle);
+}
+.outline-row.active {
+  background: #eff6ff;
+  color: var(--c-primary);
+  font-weight: 600;
+  border-color: var(--c-primary);
+}
+.outline-row.disabled {
+  color: var(--c-text-muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.outline-row-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--c-bg-subtle);
+  font-size: 12px;
+  font-weight: 600;
+}
+.outline-row.active .outline-row-num {
+  background: var(--c-primary);
+  color: #fff;
+}
+.outline-row-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outline-row-soon {
+  font-size: 11px;
+  color: var(--c-text-muted);
+  background: #eef2f7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* ── 退化态 ───────────────────────────────────────────── */
+/* degraded 提示条 (1-E-4) */
+.degraded-banner {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+}
+
+/* ── 白板讲解区 (Phase 3, 3-B) ──────────────────────────── */
+/* 外层容器带边框; 视口撑满宽度并锁定 16:9 (虚拟画布比例)
+   UI-R-2: 取消 .wrap { max-width: 720px } 限制，宽度由父容器决定 */
+.wb-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
 .wb-container {
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   background: var(--c-bg-subtle);
   overflow: hidden;
+  width: 100%;
 }
 .wb-viewport {
   position: relative;
@@ -165,34 +391,71 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-/* 语音字幕 (3-C-3): 讲解词随动作推进同步展示 */
-.wb-subtitle {
-  margin-top: var(--sp-3);
-  text-align: center;
-  color: var(--c-text-muted);
-  font-size: 14px;
-  min-height: 1.5em;
+
+/* ── 三形态适配（设计稿 §5 + §2） ──────────────────────── */
+
+/* 768-1023：单栏 + 大纲抽屉（默认折叠） */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .scene-outline-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* 大纲抽屉默认折叠：open class 由 ScenePage 控制 */
+  .scene-outline-drawer:not(.open) {
+    display: none;
+  }
+  .scene-subtitle-desktop {
+    display: block;
+  }
+  .scene-subtitle-mobile {
+    display: none;
+  }
+  .scene-head h2 {
+    font-size: 16px;
+  }
 }
 
-/* 翻页 */
-.scene-pager {
-  display: flex;
-  justify-content: space-between;
-  margin: var(--sp-4) 0 var(--sp-5);
+/* ≥1024：双栏（白板主舞台 + 字幕/大纲双栏右侧） */
+@media (min-width: 1024px) {
+  .scene-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+    gap: var(--sp-4);
+  }
+  .scene-side {
+    position: sticky;
+    top: 80px;
+    /* 跟随滚动但不超过顶条高度 */
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+  }
+  .scene-outline-drawer {
+    display: block; /* ≥1024 大纲常驻显示 */
+  }
+  /* ≥1024 大纲抽屉 toggle 隐藏（双栏常驻，不需 toggle） */
+  .scene-outline-toggle {
+    display: none !important;
+  }
+  /* ≥1024 双栏右侧显示桌面字幕 */
+  .scene-subtitle-desktop {
+    display: block;
+  }
+  /* ≥1024 移动字幕隐藏（避免重复） */
+  .scene-subtitle-mobile {
+    display: none;
+  }
+  .scene-head h2 {
+    font-size: 18px;
+  }
 }
-.btn {
-  padding: 10px 20px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--c-border);
-  background: var(--c-bg-card);
-  color: var(--c-text);
-  font-size: 14px;
-  cursor: pointer;
+
+/* 打印：隐藏控制条/抽屉/侧栏，只保留讲解主体 */
+@media print {
+  .scene-controls,
+  .scene-side,
+  .scene-outline-toggle,
+  .scene-generating-hint {
+    display: none !important;
+  }
 }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary {
-  background: var(--c-primary);
-  border-color: var(--c-primary);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
