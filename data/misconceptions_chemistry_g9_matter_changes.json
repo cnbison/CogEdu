@@ -1,0 +1,142 @@
+{
+  "metadata": {
+    "subject": "chemistry",
+    "topic": "chemistry.matter.change",
+    "version": "v0.1-draft",
+    "provenance": {
+      "author": "AI 起草（Claude，2026-09-16）",
+      "review_status": "draft_pending_teacher_review"
+    },
+    "note": "M1-M8 为库内编号（误概念库按库独立命名空间，同 math/python 库的 M 编号不冲突）；入库时映射到 cogedu/cta/content/ 的 MisconceptionEntry（bloom_layer 字符串映射到 BloomLevel 枚举）。"
+  },
+  "entries": [
+    {
+      "misc_id": "M1",
+      "name": "发光放热=化学变化",
+      "description": "学生把'发光、放热'等伴随现象当成化学变化的判据，认为有发光放热的变化一定是化学变化。典型反例：灯泡通电发光发热是物理变化（电能转化为光能和热能，无新物质）。本质问题是未把'有无新物质生成'确立为唯一判据。",
+      "trigger_patterns": [
+        "灯泡会发光发热，那不就是化学变化吗？",
+        "有光有热就说明发生了化学反应吧？",
+        "发光放热不就是燃烧的特征吗？",
+        "发热了肯定变成了新东西"
+      ],
+      "detection_keywords": ["发光", "放热", "发热", "光和热", "化学变化"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "new_substance_criterion_first",
+      "bloom_layer": "UNDERSTAND",
+      "category": "变化判别"
+    },
+    {
+      "misc_id": "M2",
+      "name": "爆炸=化学变化",
+      "description": "学生认为'爆炸'本身就意味着化学变化，未区分爆炸的机理。气球、轮胎、篮球等因压强过大而破裂的爆炸只是形变释放，无新物质生成，属于物理变化；只有火药、粉尘等因剧烈燃烧产生大量气体和热的爆炸才是化学变化。",
+      "trigger_patterns": [
+        "爆炸肯定生成新物质了，不然怎么会炸开？",
+        "气球爆炸不也是化学变化吗？",
+        "轮胎爆炸那么剧烈，应该是化学变化",
+        "凡是爆炸都是化学变化吧"
+      ],
+      "detection_keywords": ["爆炸", "炸开", "剧烈", "轮胎", "气球"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "explosion_mechanism_contrast",
+      "bloom_layer": "UNDERSTAND",
+      "category": "变化判别"
+    },
+    {
+      "misc_id": "M3",
+      "name": "性质与变化混淆",
+      "description": "学生分不清'性质'（物质具备的性能，'能/会/易/可以'等表述）与'变化'（正在发生的过程）。如把'氧气能支持燃烧'（化学性质）当成化学变化。判据是语言标志：性能描述是性质，过程描述是变化。",
+      "trigger_patterns": [
+        "氧气能支持燃烧，这不就是化学变化吗？",
+        "'铁会生锈'说的是生锈这件事，是化学变化",
+        "能燃烧就是化学变化啊",
+        "'酒精易挥发'是挥发这个变化"
+      ],
+      "detection_keywords": ["性质", "变化", "能", "会", "易"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "property_vs_change_word_marker",
+      "bloom_layer": "APPLY",
+      "category": "性质与变化"
+    },
+    {
+      "misc_id": "M4",
+      "name": "现象描述说出生成物名称",
+      "description": "学生描述实验现象时直接写出结论性内容（生成物的名称、氧化等结论），如'生成红褐色的氧化铁''生成二氧化碳和水'。规范是：现象只能写感官直接感知的事实（颜色、状态、气味、光、热、沉淀、气体），名称与结论必须与现象分开表述。",
+      "trigger_patterns": [
+        "现象是生成红褐色的氧化铁",
+        "蜡烛燃烧生成二氧化碳和水（作为现象描述）",
+        "看到铁被氧化了",
+        "现象：石蜡完全燃烧"
+      ],
+      "detection_keywords": ["生成", "氧化铁", "二氧化碳", "完全燃烧", "被氧化"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "phenomenon_without_product_name",
+      "bloom_layer": "APPLY",
+      "category": "实验观察"
+    },
+    {
+      "misc_id": "M5",
+      "name": "三态变化=化学变化",
+      "description": "学生认为状态改变（融化、凝固、蒸发、升华）生成了'新的东西'，把冰融化成水、干冰升华等三态变化误判为化学变化。纠偏点：物质种类（成分）没有改变，只是状态/外观改变，属于物理变化。",
+      "trigger_patterns": [
+        "冰化成水，水就变成了另一种东西",
+        "冰和水摸起来完全不一样，应该是新物质",
+        "水蒸发了变成气体，气体和水是不同物质吧",
+        "干冰变成气体，生成新物质了"
+      ],
+      "detection_keywords": ["融化", "冰", "蒸发", "升华", "状态", "新物质"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "state_change_not_new_substance",
+      "bloom_layer": "UNDERSTAND",
+      "category": "变化判别"
+    },
+    {
+      "misc_id": "M6",
+      "name": "颜色改变=化学变化",
+      "description": "学生把'颜色改变'当成化学变化的标志。实际上颜色改变既可能是化学变化（胆矾受热由蓝变白），也可能是物理变化（墨水扩散颜色变浅、活性炭吸附褪色）。颜色只是伴随现象，判据仍是有无新物质生成。",
+      "trigger_patterns": [
+        "颜色都变了，肯定是化学变化",
+        "变白了说明生成新物质了吧",
+        "蓝色变成了白色，物质肯定不一样了",
+        "褪色就是发生了化学反应"
+      ],
+      "detection_keywords": ["颜色", "变白", "变色", "褪色", "变浅"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "color_change_evidence_check",
+      "bloom_layer": "UNDERSTAND",
+      "category": "变化判别"
+    },
+    {
+      "misc_id": "M7",
+      "name": "缓慢氧化不是氧化反应",
+      "description": "学生认为只有燃烧才算'氧化'，把呼吸作用、食物腐败、铁生锈等缓慢氧化排除在氧化反应之外，或认为缓慢氧化与燃烧是两类无关的变化。纠偏点：两者都是氧化反应，区别只在反应剧烈程度（是否发光、是否不易察觉）。",
+      "trigger_patterns": [
+        "呼吸又没有着火，怎么算氧化？",
+        "铁生锈那么慢，应该不是氧化反应",
+        "缓慢氧化和燃烧是完全不同的两类变化",
+        "没有发光放热的就不是氧化"
+      ],
+      "detection_keywords": ["缓慢氧化", "呼吸", "生锈", "氧化", "燃烧"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "slow_oxidation_same_family",
+      "bloom_layer": "APPLY",
+      "category": "氧化反应"
+    },
+    {
+      "misc_id": "M8",
+      "name": "可燃性误归为物理性质",
+      "description": "学生对'是否需要通过化学变化表现'这一物理/化学性质判据掌握不牢，把可燃性、助燃性等化学性质误归为物理性质（直觉上'能烧'不用变化就看出来）。纠偏点：不点燃就永远无法验证可燃性，它必须通过化学变化（燃烧）表现，属于化学性质。",
+      "trigger_patterns": [
+        "可燃性不用燃烧也能看出来吧，是物理性质",
+        "木柴能烧是它本来就有的，应该是物理性质",
+        "氧气能助燃不需要发生化学变化，物理性质",
+        "能燃烧和能溶解差不多，都是物理性质"
+      ],
+      "detection_keywords": ["可燃", "助燃", "物理性质", "化学性质", "判据"],
+      "skill_id": "chemistry.matter.change",
+      "correction_strategy": "property_requires_chemical_change",
+      "bloom_layer": "APPLY",
+      "category": "性质与变化"
+    }
+  ]
+}

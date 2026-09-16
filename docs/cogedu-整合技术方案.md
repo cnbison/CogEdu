@@ -1048,6 +1048,7 @@ P0-1a 三学科试点内容准备                        UI-R 桌面优先重设
 
 - [ ] **学科口径落库**：试点知识点定为数学「一元一次方程」（七年级）、物理「密度」（八年级）、化学「物质的变化与性质」（九年级）；`DEFAULT_CAPABILITIES_LIST` 的 Python 5 条标记为内部测试 fixture（`domain="internal_test"`，不与生产 Capability 混用），三学科生产 Capability 按学科新建（不复用单一学科模板改字段）
 - [ ] **内容三件套**（每知识点 15-25 题）：真题 + 逐题 `partial_credit_rubric`（LLM judge 4 档判分依赖）+ 误概念标注——教师工时按三件套估算，不是只算填题
+  - **进行中（2026-09-16）**：AI 起草版已完成（数学/物理/化学各 20 题全量标注 + 误概念库，`verified=false` 待教师复核，清单与接线 TODO 见 `docs/p0-1a-试点内容说明.md`）——起草≠复核，教师复核通过（verified→true）此项才算完成；真题为 AI 原创命题（对齐人教版课标），若维护者要求教辅真题仍需教师介入
 - [ ] **Capability/Goal 注册**（= 原 17.2 节，格式照旧：`Capability(name, description, domain=...)` + `bloom_level` 逐条标注；知识点拆解需与熟悉课纲的教师一起做）
 - [ ] **管道贯通**：内部（维护者/开发）在现状 UI 上跑通完整链路——答题 → LLM judge → belief 更新 → 讲解大纲/场景生成 → 白板 + TTS 播放 → 行为回写。这是"管道通不通"的确认，不等 UI-R。
 

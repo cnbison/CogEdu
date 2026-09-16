@@ -1,0 +1,179 @@
+{
+  "metadata": {
+    "subject": "physics",
+    "topic": "physics.matter.density",
+    "version": "v0.1-draft",
+    "provenance": {
+      "author": "AI 起草（Claude，2026-09-16）",
+      "review_status": "draft_pending_teacher_review"
+    },
+    "note": "M1-M8 为库内编号（误概念库按库独立命名空间，同 math/python 库的 M 编号不冲突）；入库时映射到 cogedu/cta/content/ 的 MisconceptionEntry"
+  },
+  "entries": [
+    {
+      "misc_id": "M1",
+      "name": "密度随质量增大而增大",
+      "description": "认为'质量越大，密度越大'，未理解密度是用比值定义的物质特性——同种物质的 m 与 V 成正比增大，比值 ρ 不变。",
+      "trigger_patterns": [
+        "这杯水更多，所以密度更大",
+        "质量变大，密度当然变大",
+        "倒掉一半水，密度变成一半"
+      ],
+      "detection_keywords": [
+        "密度",
+        "变大",
+        "质量",
+        "越大",
+        "一半"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "ratio_definition_invariance",
+      "bloom_layer": "UNDERSTAND",
+      "category": "密度概念"
+    },
+    {
+      "misc_id": "M2",
+      "name": "体积越大密度越小",
+      "description": "认为'体积越大，密度越小'。该结论只在质量相同时成立；密度是物质特性，与物体体积大小无关。是 M1 的对偶误概念。",
+      "trigger_patterns": [
+        "体积大的物体密度小",
+        "这块木料比铁块大，所以密度小",
+        "越大的东西密度越小"
+      ],
+      "detection_keywords": [
+        "体积大",
+        "密度小",
+        "越大",
+        "越小"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "controlled_comparison_mass_fixed",
+      "bloom_layer": "UNDERSTAND",
+      "category": "密度概念"
+    },
+    {
+      "misc_id": "M3",
+      "name": "混淆质量与密度（'铁比棉花重'）",
+      "description": "把日常语汇中的'重'直接当作密度，认为'铁比棉花重'就说明铁的密度大，忽略了'相同体积'的前提；也未区分质量（物质多少）与密度（单位体积的质量）。",
+      "trigger_patterns": [
+        "铁肯定比棉花重啊，所以铁密度大",
+        "重的东西密度大",
+        "密度大的物体质量一定大"
+      ],
+      "detection_keywords": [
+        "重",
+        "密度大",
+        "铁",
+        "棉花",
+        "质量大"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "mass_vs_density_distinction",
+      "bloom_layer": "UNDERSTAND",
+      "category": "密度概念"
+    },
+    {
+      "misc_id": "M4",
+      "name": "密度单位换算漏 ×1000（1 g/cm³ = 1 kg/m³）",
+      "description": "认为 1 g/cm³ = 1 kg/m³，未掌握两单位间相差 1000 倍（1 g/cm³ = 1000 kg/m³），g/cm³ 数值上等于 10³ 乘 kg/m³ 下的数值。",
+      "trigger_patterns": [
+        "1 g/cm³ 就是 1 kg/m³ 吧",
+        "水的密度是 1 kg/m³",
+        "0.9 g/cm³ 换算过去还是 0.9"
+      ],
+      "detection_keywords": [
+        "g/cm³",
+        "kg/m³",
+        "换算",
+        "1000"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "unit_chain_conversion",
+      "bloom_layer": "APPLY",
+      "category": "单位换算"
+    },
+    {
+      "misc_id": "M5",
+      "name": "同种物质状态改变密度不变",
+      "description": "认为水结成冰只是状态变了、密度不变。实际上水结冰体积膨胀，密度从 1.0 g/cm³ 变为约 0.9 g/cm³；物质状态（固/液/气）改变时密度通常会改变。",
+      "trigger_patterns": [
+        "水结成冰，密度还是 1.0 吧",
+        "冰和水是同种物质，密度一样",
+        "状态变了但密度不会变"
+      ],
+      "detection_keywords": [
+        "结冰",
+        "状态",
+        "密度不变",
+        "冰",
+        "水"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "state_change_density_table",
+      "bloom_layer": "UNDERSTAND",
+      "category": "密度与状态"
+    },
+    {
+      "misc_id": "M6",
+      "name": "量筒读数俯视/仰视偏差方向记反",
+      "description": "把量筒俯视/仰视读数的偏差方向记反。正确规律：俯视时视线向下倾斜，读数值大于实际值；仰视时读数值小于实际值（简记'俯大仰小'）。",
+      "trigger_patterns": [
+        "仰视读数会偏大吧",
+        "俯视看到的液面低，所以读数偏小",
+        "俯视仰视都一样"
+      ],
+      "detection_keywords": [
+        "俯视",
+        "仰视",
+        "读数",
+        "偏大",
+        "偏小"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "sight_line_geometry",
+      "bloom_layer": "APPLY",
+      "category": "实验技能"
+    },
+    {
+      "misc_id": "M7",
+      "name": "测密度步骤顺序无影响",
+      "description": "认为先测体积还是先测质量对结果没有影响。实际上若先在量筒中测体积再取出测质量，物体沾水使质量测量值偏大，密度测量值偏大。",
+      "trigger_patterns": [
+        "先测体积还是先测质量都一样吧",
+        "顺序不影响结果",
+        "沾点水擦一下就没关系了"
+      ],
+      "detection_keywords": [
+        "先测",
+        "顺序",
+        "沾水",
+        "取出"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "error_source_analysis",
+      "bloom_layer": "ANALYZE",
+      "category": "实验技能"
+    },
+    {
+      "misc_id": "M8",
+      "name": "密度是鉴别物质的唯一可靠依据",
+      "description": "认为只要测出密度就能唯一确定物质种类。实际上不同物质的密度可能相同（冰和蜡都约 0.9 g/cm³，煤油和酒精都约 0.8 g/cm³），密度只能辅助鉴别，需结合颜色、气味、硬度等综合判断。",
+      "trigger_patterns": [
+        "测出密度就能知道是什么物质",
+        "密度一样就是同种物质",
+        "只要密度对得上就确定是它"
+      ],
+      "detection_keywords": [
+        "鉴别",
+        "密度",
+        "确定",
+        "物质",
+        "唯一"
+      ],
+      "skill_id": "physics.matter.density",
+      "correction_strategy": "multi_property_identification",
+      "bloom_layer": "EVALUATE",
+      "category": "密度应用"
+    }
+  ]
+}

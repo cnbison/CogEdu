@@ -1,0 +1,823 @@
+{
+  "metadata": {
+    "subject": "physics",
+    "grade_levels": [
+      8
+    ],
+    "version": "v0.1-draft",
+    "description": "P0-1a 试点：八年级物理·质量与密度（人教版八上第六章）Q 矩阵——AI 起草，待教师复核",
+    "curriculum": "人教版八年级上册 第六章 质量与密度（密度部分）",
+    "provenance": {
+      "author": "AI 起草（Claude，2026-09-16）",
+      "review_status": "draft_pending_teacher_review",
+      "note": "原创命题，严格对齐人教版课标与考试难度梯度；verified=false 表示待教师审核，审核后改 true"
+    },
+    "instructions": "字段语义同 data/q_matrix.json 模板 + a_specialized[5D]（运行时消费，见 data/python_basics_q_matrix.json）。运行时消费字段：problem_id/bloom_goal_id/topic/skill_name/problem_text/correct_answer/bloom_layer_observed/a_specialized/mirt_params/misconceptions/intervention_types/partial_credit_rubric。",
+    "tc_library": [],
+    "misconception_library": [
+      "M1",
+      "M2",
+      "M3",
+      "M4",
+      "M5",
+      "M6",
+      "M7",
+      "M8"
+    ]
+  },
+  "problems": [
+    {
+      "problem_id": "PHYS8-DE-Q01",
+      "bloom_goal_id": "physics.matter.density-L1",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "关于密度，下列说法中正确的是（　）\nA. 密度大的物体，质量一定大\nB. 密度是物质本身的一种特性，与物体的质量、体积无关\nC. 一杯水倒掉一半，剩下半杯水的密度变为原来的一半\nD. 一大块铁的密度比一小块铁的密度大",
+      "correct_answer": "B。密度是物质本身的一种特性，同种物质（状态、温度不变时）密度是一定的，与质量、体积大小无关；A 没有控制体积（质量还与体积有关）；C、D 中质量或体积变化时，比值 ρ=m/V 不变。",
+      "attributes": [
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.3,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.25
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M1",
+        "M3"
+      ],
+      "clt_level": 2,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或选择与密度概念无关的答案",
+        "0.3": "选 A（意识到质量与密度有关，但忽略了体积条件，混淆质量与密度）",
+        "0.6": "选 C 或 D（知道密度由 m/V 决定，但未理解比值不变，认为 m 或 V 变化会改变密度）",
+        "1.0": "选 B，并能说明密度是物质特性、与质量体积无关"
+      },
+      "teacher_notes": "选项 C、D 直接探测 M1（密度随 m/V 变），A 探测 M3（混淆质量与密度）。变式：把 C 改为'温度升高密度略变'引出状态讨论。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q02",
+      "bloom_goal_id": "physics.matter.density-L1",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一瓶矿泉水净含量 550 mL，小明喝掉一半后，剩下的半瓶矿泉水（　）\nA. 质量减半，密度减半\nB. 质量减半，密度不变\nC. 质量不变，密度减半\nD. 质量和密度都不变",
+      "correct_answer": "B。喝掉一半后质量减为原来的一半，但剩余部分仍是水，密度不变（约 1.0 g/cm³）。",
+      "attributes": [
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.3,
+        0.3,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.25
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M1",
+        "M2"
+      ],
+      "clt_level": 2,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或完全未区分质量与密度",
+        "0.3": "选 A 或 C（认为密度随质量或体积变化而变化）",
+        "0.6": "选 D（知道密度不变，但忽略了喝掉一半后质量减半）",
+        "1.0": "选 B，能说明质量减半而密度是物质特性不变"
+      },
+      "teacher_notes": "经典 M1/M2 双陷阱题。变式：改为'氧气瓶用去一半氧气'（气体充满容器，体积不变、质量减半、密度减半），气体与固体对比更有区分度。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q03",
+      "bloom_goal_id": "physics.matter.density-L1",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "完成下列质量单位换算：\n（1）2.5 t = ______ kg\n（2）360 g = ______ kg\n（3）150 mg = ______ g",
+      "correct_answer": "（1）2.5 t = 2500 kg（1 t = 1000 kg）；（2）360 g = 0.36 kg（1000 g = 1 kg）；（3）150 mg = 0.15 g（1000 mg = 1 g）。",
+      "attributes": [
+        "mass_unit_conv"
+      ],
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.2,
+        0.9,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.2,
+        "discrimination": 1.1,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 1,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或全部错误",
+        "0.3": "答对 1 个换算（千进位部分掌握）",
+        "0.6": "答对 2 个换算，其余因进位记错（如 g 与 kg 方向搞反）",
+        "1.0": "三个换算全部正确：2500、0.36、0.15"
+      },
+      "teacher_notes": "纯程序性换算，为密度计算铺路。g 与 kg 方向搞反是最常见错点。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q04",
+      "bloom_goal_id": "physics.matter.density-L1",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "ρ水 = 1.0×10³ kg/m³，它的物理意义是（　）\nA. 1 kg 水的体积是 10³ m³\nB. 1 m³ 水的质量是 1.0×10³ kg\nC. 1 m³ 水的质量是 1.0×10³ kg/m³\nD. 水的质量一定是 1.0×10³ kg",
+      "correct_answer": "B。密度表示单位体积某种物质的质量：1 m³ 的水质量为 1.0×10³ kg（即 1 t）。C 单位错误，A、D 混淆了质量、体积与密度的对应关系。",
+      "attributes": [
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L1",
+      "a_specialized": [
+        0.9,
+        0.2,
+        0.3,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.3,
+        "discrimination": 1.2,
+        "guessing": 0.25
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 2,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或不理解密度的物理意义",
+        "0.3": "选 D（只记住数值，未理解'单位体积'的含义）",
+        "0.6": "选 A 或 C（知道与单位体积有关，但单位或对应关系写错）",
+        "1.0": "选 B，能说出密度表示'单位体积物质的质量'"
+      },
+      "teacher_notes": "考'单位体积'量词的理解。D 选项暴露只背数值不懂含义的学生。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q05",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一块金属块的质量为 54 g，体积为 20 cm³。\n（1）求该金属块的密度；\n（2）查表：铝的密度为 2.7 g/cm³，铜的密度为 8.9 g/cm³。该金属块可能是什么物质？",
+      "correct_answer": "（1）ρ = m/V = 54 g ÷ 20 cm³ = 2.7 g/cm³（即 2.7×10³ kg/m³）。（2）与铝的密度 2.7 g/cm³ 相同，该金属块可能是铝。",
+      "attributes": [
+        "density_formula",
+        "density_judge_material"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.4,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 2,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或公式、代入全错",
+        "0.3": "写出 ρ=m/V 但未代入数据或代入错误",
+        "0.6": "算出 2.7 g/cm³ 但未答第（2）问或判断物质错误",
+        "1.0": "算出 ρ=2.7 g/cm³ 并正确判断为铝，含单位"
+      },
+      "teacher_notes": "ρ=m/V 直接计算 + 查表鉴别两连问，数字干净（2.7）。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q06",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一块冰的质量为 180 g，冰的密度为 0.9 g/cm³。这块冰的体积是多少 cm³？合多少 L？",
+      "correct_answer": "V = m/ρ = 180 g ÷ 0.9 g/cm³ = 200 cm³ = 0.2 L。",
+      "attributes": [
+        "density_formula"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.4,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.45,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 2,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或公式变形错误（如写成 V=ρm）",
+        "0.3": "知道 V=m/ρ 但代入计算错误",
+        "0.6": "算出 200 cm³ 但未换算成 L 或单位缺失",
+        "1.0": "200 cm³ 且 0.2 L，过程完整带单位"
+      },
+      "teacher_notes": "考 m=ρV 的逆用 V=m/ρ；cm³→L 换算（1000 cm³=1 L）顺带复习。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q07",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "完成下列密度单位换算：\n（1）0.9 g/cm³ = ______ kg/m³\n（2）1.0×10³ kg/m³ = ______ g/cm³\n（3）某物质密度为 0.8×10³ kg/m³ = ______ g/cm³",
+      "correct_answer": "（1）0.9 g/cm³ = 900 kg/m³（乘 10³）；（2）1.0×10³ kg/m³ = 1.0 g/cm³（除以 10³）；（3）0.8 g/cm³。g/cm³ 与 kg/m³ 之间相差 1000 倍。",
+      "attributes": [
+        "density_unit_conv"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.9,
+        0.2,
+        0.4,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M4"
+      ],
+      "clt_level": 2,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为 g/cm³ 与 kg/m³ 数值相同（如第（1）问填 0.9）",
+        "0.3": "仅 1 个正确（换算方向记反，如第（1）问填 0.0009）",
+        "0.6": "两个正确，一个因漏乘或除错 1000 出错",
+        "1.0": "全部正确：900、1.0、0.8"
+      },
+      "teacher_notes": "M4 专用探测题：认为 1 g/cm³ = 1 kg/m³ 的学生会把（1）填 0.9。学生答案是 0.9/900/0.0009 可精确诊断。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q08",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一杯水完全结成冰后（不考虑升华等损耗），发生变化和不发生变化的物理量分别是（　）\nA. 质量变小，密度不变\nB. 质量不变，密度变小\nC. 质量不变，密度不变\nD. 质量变大，密度变小",
+      "correct_answer": "B。结冰过程物质多少不变，质量不变；冰的密度约 0.9 g/cm³，小于水的 1.0 g/cm³，故密度变小（体积相应变大）。",
+      "attributes": [
+        "density_state_change",
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.8,
+        0.2,
+        0.3,
+        0.5,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.3,
+        "guessing": 0.25
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M5"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为质量和密度都不变（不知道冰与水密度不同）",
+        "0.3": "选 A 或 D（认为质量发生变化——质量守恒概念未建立）",
+        "0.6": "选 C（知道质量不变，但误认为同种物质状态改变密度不变）",
+        "1.0": "选 B，能说明质量不变、冰密度小于水"
+      },
+      "teacher_notes": "M5 主探测题。C 选项是 M5 的标准表现。变式：追问'体积如何变化'衔接 Q15。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q09",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "用调平后的托盘天平测一小块矿石的质量：矿石放左盘，右盘放入 50 g、20 g、5 g 砝码各一个，移动游码使天平平衡，游码左侧边缘对齐的刻度为 3.2 g。这块矿石的质量是多少？",
+      "correct_answer": "m = 50 g + 20 g + 5 g + 3.2 g = 78.2 g（物体质量 = 砝码总质量 + 游码读数，游码按左侧边缘读数）。",
+      "attributes": [
+        "density_measure"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.3,
+        0.8,
+        0.4,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.4,
+        "discrimination": 1.1,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 2,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或不会读天平",
+        "0.3": "只把砝码相加得 75 g（漏读游码）",
+        "0.6": "游码读数位置弄错（如按右侧边缘读），结果接近但不等于 78.2 g",
+        "1.0": "m = 78.2 g，并说明'砝码 + 游码左侧边缘读数'"
+      },
+      "teacher_notes": "天平读数是测密度实验的前置技能。'左物右码'与游码左缘读数是两个常见考查点。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q10",
+      "bloom_goal_id": "physics.matter.density-L2",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "同种物质制成的 A、B 两个实心圆柱体，分别测得多组质量 m 与对应体积 V，在 m-V 图像中各得到一条过原点的直线。已知当 V = 20 cm³ 时，A 的质量为 40 g，B 的质量为 20 g。比较 A、B 密度的大小关系，并求出 ρA、ρB。",
+      "correct_answer": "同体积时 A 的质量大（40 g > 20 g），故 ρA > ρB。ρA = 40 g ÷ 20 cm³ = 2 g/cm³，ρB = 20 g ÷ 20 cm³ = 1 g/cm³。m-V 图像中过原点直线的斜率表示密度，直线越陡（斜率越大）密度越大。",
+      "attributes": [
+        "density_graph",
+        "density_formula"
+      ],
+      "bloom_layer_observed": "L2",
+      "a_specialized": [
+        0.4,
+        0.5,
+        0.6,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.5,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 3,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为无法比较",
+        "0.3": "知道 ρA>ρB 但理由不成立（如'直线在上方就是密度大'未结合同体积条件）",
+        "0.6": "比较关系正确，但两个密度只算出一个或未计算",
+        "1.0": "ρA=2 g/cm³、ρB=1 g/cm³，比较正确，能说明斜率或同体积比质量"
+      },
+      "teacher_notes": "图像题文字化（无图可读）：给出同体积点的质量，避免依赖图形。也可配图使用。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q11",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一个容积为 5 L 的塑料桶，最多能装多少 kg 的煤油？（ρ煤油 = 0.8 g/cm³）装满水时能装多少 kg？（ρ水 = 1.0 g/cm³）",
+      "correct_answer": "V = 5 L = 5 dm³ = 5000 cm³。装煤油：m = ρV = 0.8 g/cm³ × 5000 cm³ = 4000 g = 4 kg。装水：m = 1.0 g/cm³ × 5000 cm³ = 5000 g = 5 kg。",
+      "attributes": [
+        "density_formula",
+        "density_unit_conv"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.2,
+        0.8,
+        0.4,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.55,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 3,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或不会用 m=ρV",
+        "0.3": "写出 m=ρV 但体积单位换算错误（如把 5 L 当成 5 cm³ 直接乘）",
+        "0.6": "算出煤油 4 kg，但装水的质量未算或算错",
+        "1.0": "煤油 4 kg、水 5 kg，单位换算与过程完整"
+      },
+      "teacher_notes": "L→cm³ 换算（×1000）+ m=ρV；两问对比让学生体会同容积装不同液体质量不同。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q12",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "用量筒量取水的体积时，某同学仰视凹液面最低处读数，读数为 50 mL。则量筒中水的实际体积（　）\nA. 大于 50 mL\nB. 等于 50 mL\nC. 小于 50 mL\nD. 无法判断",
+      "correct_answer": "A。仰视时视线从下向上穿过液面，读到的刻度位置偏低，读数值小于实际值；读数为 50 mL 说明实际体积大于 50 mL。正确读数应平视，视线与凹液面最低处相平（简记'俯大仰小'——俯视读数偏大，仰视读数偏小）。",
+      "attributes": [
+        "density_measure"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.3,
+        0.7,
+        0.4,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.6,
+        "discrimination": 1.3,
+        "guessing": 0.25
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M6"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或不知道俯视/仰视对读数有影响",
+        "0.3": "选 C（偏差方向记反：以为仰视读数偏大）",
+        "0.6": "选 B（知道要平视，但未理解仰视读数与实际值的关系）",
+        "1.0": "选 A，能说明仰视读数偏小、实际体积大于读数"
+      },
+      "teacher_notes": "M6 专用探测题：方向记反的学生选 C。建议配图或用教具演示 sight line 几何。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q13",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "小明测一块合金的密度：先把合金块放入量筒，水面由 30 mL 升到 50 mL；再把合金块从水中取出，随手擦了一下就放到天平上测得质量为 53.6 g（取出时合金块上还沾着约 1.6 g 的水）。求：\n（1）小明测得的密度是多少？\n（2）合金密度的真实值是多少？（真实质量为 52 g）\n（3）测量值偏大还是偏小？原因是什么？",
+      "correct_answer": "（1）V = 50 mL − 30 mL = 20 cm³，ρ测 = 53.6 g ÷ 20 cm³ = 2.68 g/cm³。（2）ρ真 = 52 g ÷ 20 cm³ = 2.6 g/cm³。（3）测量值偏大。先测体积再测质量，合金块从水中取出时沾水，使质量测量值偏大；体积测量准确，由 ρ=m/V 知密度测量值偏大。",
+      "attributes": [
+        "density_measure",
+        "density_error_analysis"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.4,
+        0.9,
+        0.4,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.65,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M7"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "FEEDBACK"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或完全不会实验误差分析",
+        "0.3": "只算出（1）的 2.68 g/cm³，（2）（3）未做或不会",
+        "0.6": "三问数值都对，但（3）的原因说不清（如只写'有误差'）",
+        "1.0": "2.68、2.6 g/cm³，且明确'先测体积后测质量→沾水→质量偏大→密度偏大'"
+      },
+      "teacher_notes": "M7 主探测题：给出完整数据链让学生算出两个密度再比较，比纯说理更可判分。正确顺序应是先测质量再测体积。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q14",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一枚纪念章质量为 44.5 g，体积为 5 cm³。密度表：铜 8.9 g/cm³，铁 7.9 g/cm³，银 10.5 g/cm³。这枚纪念章可能由什么金属制成？请通过计算说明。",
+      "correct_answer": "ρ = m/V = 44.5 g ÷ 5 cm³ = 8.9 g/cm³，与铜的密度相同，这枚纪念章可能由铜制成（若是空心或合金则需进一步检验）。",
+      "attributes": [
+        "density_judge_material",
+        "density_formula"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.3,
+        0.8,
+        0.5,
+        0.2,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.55,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 2,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或不会查表比较",
+        "0.3": "写出 ρ=m/V 但计算错误",
+        "0.6": "算出 8.9 g/cm³ 但未与密度表比较或判断错误",
+        "1.0": "算出 8.9 g/cm³ 并判断可能是铜，过程完整"
+      },
+      "teacher_notes": "'可能'一词为 Q19（密度相同可能是不同物质）埋伏笔，教师可借此衔接。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q15",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一块体积为 100 cm³ 的冰完全熔化成水。已知 ρ冰 = 0.9 g/cm³，ρ水 = 1.0 g/cm³。求：\n（1）冰的质量；\n（2）熔化成水后的体积；\n（3）体积如何变化？变化了多少？",
+      "correct_answer": "（1）m = ρ冰V = 0.9 g/cm³ × 100 cm³ = 90 g。（2）熔化后质量不变，仍为 90 g，V水 = m/ρ水 = 90 g ÷ 1.0 g/cm³ = 90 cm³。（3）体积从 100 cm³ 变为 90 cm³，缩小了 10 cm³（水结冰体积膨胀，冰化水体积收缩）。",
+      "attributes": [
+        "density_formula",
+        "density_state_change"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.5,
+        0.7,
+        0.4,
+        0.4,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.6,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M5"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为质量发生变化（如'冰化水质量变少'）",
+        "0.3": "只算出（1）的 90 g，（2）未做或认为体积不变",
+        "0.6": "算出 90 g 和 90 cm³，但（3）变化量未答或说不清原因",
+        "1.0": "90 g、90 cm³、体积缩小 10 cm³，说明质量不变、密度变大了"
+      },
+      "teacher_notes": "Q08 的计算版：'质量不变'是桥梁（m 不变，ρ 变则 V 变）。M5 学生会答体积仍 100 cm³。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q16",
+      "bloom_goal_id": "physics.matter.density-L3",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "俗话说'铁比棉花重'。小华说：'这句话说明铁的密度比棉花大。'小强说：'不对，这句话说的是质量，一捆棉花可以比一根铁钉重得多。'你怎样看待两位同学的说法？请用密度的知识说明'铁比棉花重'这句话应该怎样表述才严格。",
+      "correct_answer": "两位同学的说法各有道理。日常说的'铁比棉花重'指的是相同体积时铁的质量比棉花大，也就是铁的密度比棉花大——小华把它理解为密度大是对的，但他忽略了'相同体积'这个前提；小强指出质量还与体积多少有关也是对的，一捆棉花的质量可以远大于一根铁钉。严格的表述是：铁的密度比棉花大，即相同体积的铁和棉花相比，铁的质量大。",
+      "attributes": [
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L3",
+      "a_specialized": [
+        0.5,
+        0.2,
+        0.7,
+        0.5,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.55,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M3"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "EXPLANATORY"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或完全同意小华（认为铁什么情况下都比棉花重）",
+        "0.3": "只说'铁密度大'，未分析'相同体积'这一前提",
+        "0.6": "能指出需要'相同体积'前提，但没有肯定小强关于质量与体积有关的合理之处",
+        "1.0": "同时评价两位说法：'重'指相同体积时铁质量大，即铁密度大；质量还与体积多少有关"
+      },
+      "teacher_notes": "M3 主探测题（辨析式开放题）。judge 需容忍表述差异，抓两个采分点：前提'相同体积'+ 质量与密度区分。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q17",
+      "bloom_goal_id": "physics.matter.density-L4",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "一个铁球质量为 316 g，体积为 60 cm³。已知 ρ铁 = 7.9 g/cm³。这个铁球是空心的还是实心的？若是空心的，空心部分的体积是多少？",
+      "correct_answer": "假设铁球是实心的，则材料体积 V实 = m/ρ铁 = 316 g ÷ 7.9 g/cm³ = 40 cm³。因为 V实 = 40 cm³ < V球 = 60 cm³，所以铁球是空心的。空心部分体积 V空 = V球 − V实 = 60 cm³ − 40 cm³ = 20 cm³。",
+      "attributes": [
+        "density_hollow",
+        "density_formula"
+      ],
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.7,
+        0.8,
+        0.3,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.75,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 4,
+      "intervention_types": [
+        "PRACTICE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或直接用 ρ球=316/60 判断后不会继续",
+        "0.3": "会算 ρ球 = 5.27 g/cm³ 并与 7.9 比较判断是空心，但求不出空心体积",
+        "0.6": "判断空心正确（比密度或比体积），但 V空 计算出错",
+        "1.0": "判断空心且 V空 = 60 − 316/7.9 = 20 cm³，方法（比密度/比体积/比质量任一）完整"
+      },
+      "teacher_notes": "L4 经典空心问题，三法可解（比密度/比体积/比质量），rubric 对方法宽容、对 V空=20 cm³ 严格。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q18",
+      "bloom_goal_id": "physics.matter.density-L4",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "两个小组测盐水密度。\n甲组：先测空烧杯质量 m₁；将盐水倒入烧杯测得总质量 m₂；再把烧杯中的盐水全部倒入量筒，测得体积 V。用 ρ = (m₂−m₁)/V 计算。\n乙组：先测烧杯和盐水的总质量 m₁；将烧杯中的一部分盐水倒入量筒，测得体积 V；再测烧杯和剩余盐水的总质量 m₂。用 ρ = (m₁−m₂)/V 计算。\n哪一组方案测出的密度误差更小？请分析另一组测出的密度偏大还是偏小，并说明原因。",
+      "correct_answer": "乙组误差更小。甲组把盐水从烧杯倒入量筒时，烧杯内壁会残留少量盐水，使倒入量筒的体积 V 比烧杯中那部分盐水的实际体积偏小，而质量差 (m₂−m₁) 是烧杯中全部盐水的质量——质量不变、体积偏小，由 ρ=m/V 知测得密度偏大。乙组倒入量筒的那部分盐水，质量恰好是 m₁−m₂，与体积 V 一一对应，残留不影响结果。",
+      "attributes": [
+        "density_measure",
+        "density_error_analysis"
+      ],
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.3,
+        0.4,
+        0.9,
+        0.4,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.8,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [],
+      "clt_level": 4,
+      "intervention_types": [
+        "METACOGNITIVE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为两个方案没有区别",
+        "0.3": "知道乙组更准但说不出原因",
+        "0.6": "能指出甲组'烧杯残留盐水'，但没说清残留使 V 偏小、进而密度偏大的推理链",
+        "1.0": "判断乙组更小，并完整说出：甲组残留→V 偏小→m 不变→ρ 偏大；乙组质量与体积一一对应"
+      },
+      "teacher_notes": "方案评价是八上密度实验的压轴考法。与 Q13 呼应：Q13 是'顺序错'，Q18 是'容器残留'，两类误差源分开测。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q19",
+      "bloom_goal_id": "physics.matter.density-L4",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "查密度表发现：冰的密度约为 0.9 g/cm³，蜡的密度也约为 0.9 g/cm³；煤油和酒精的密度都约为 0.8 g/cm³。小刚说：'只要测出一种未知液体的密度，对照密度表就一定能确定它是什么物质。'小刚的说法对吗？请结合表中数据说明理由，并补充说明鉴别物质还可以怎样做。",
+      "correct_answer": "不对。不同物质的密度可能相同（如冰和蜡都约 0.9 g/cm³，煤油和酒精都约 0.8 g/cm³），所以测出密度只能缩小范围、辅助鉴别，不能唯一确定物质。还应结合颜色、气味、硬度、是否透明、能否燃烧等其他特性综合判断。",
+      "attributes": [
+        "density_judge_material",
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.5,
+        0.2,
+        0.8,
+        0.5,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.7,
+        "discrimination": 1.2,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M8"
+      ],
+      "clt_level": 3,
+      "intervention_types": [
+        "EXPLANATORY",
+        "METACOGNITIVE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或认为小刚说法正确",
+        "0.3": "知道说法不对，但举不出密度表中'同密度不同物质'的例子",
+        "0.6": "能举出冰和蜡/煤油和酒精密度相同的例子，但未说明如何补充鉴别",
+        "1.0": "指出密度相同可能是不同物质、密度只能辅助鉴别，并给出其他鉴别特性"
+      },
+      "teacher_notes": "M8 主探测题。与 Q14 的'可能'呼应形成证据链。student_notes：相关弱判断'密度是唯一可靠依据'也在此题暴露。",
+      "verified": false
+    },
+    {
+      "problem_id": "PHYS8-DE-Q20",
+      "bloom_goal_id": "physics.matter.density-L4",
+      "topic": "physics.matter.density",
+      "skill_name": "质量与密度",
+      "problem_text": "小宇观察到：一块木料比一个铁块的体积大，而木料的密度比铁小。于是他总结：'物体体积越大，密度越小。'请评价小宇的结论：他的结论在什么条件下才成立？他犯了什么推理错误？再举一个反例说明'体积大不代表密度小'。",
+      "correct_answer": "小宇的结论不成立。'体积越大密度越小'只在质量相同时才成立（m 相同，V 大则 ρ=m/V 小）；小宇比较的木料和铁块质量并不相同，前提不同不能推出该结论——他犯的错误是没有控制变量（比较密度应控制质量相同，或直接用 ρ=m/V 计算再比较）。反例：一大块木头体积很大，密度仍是约 0.6 g/cm³，比水小；一小粒铁屑体积很小，密度仍然是 7.9 g/cm³。密度是物质的特性，不随物体体积大小改变。",
+      "attributes": [
+        "density_concept"
+      ],
+      "bloom_layer_observed": "L4",
+      "a_specialized": [
+        0.4,
+        0.2,
+        0.9,
+        0.5,
+        0.1
+      ],
+      "mirt_params": {
+        "difficulty": 0.85,
+        "discrimination": 1.3,
+        "guessing": 0.05
+      },
+      "threshold_concepts": [],
+      "misconceptions": [
+        "M2"
+      ],
+      "clt_level": 4,
+      "intervention_types": [
+        "METACOGNITIVE"
+      ],
+      "partial_credit_rubric": {
+        "0.0": "未作答或同意小宇的结论",
+        "0.3": "认为结论不对，但说不出'质量相同'这一前提条件",
+        "0.6": "能指出'只有质量相同时才成立'，但举不出反例或没提控制变量",
+        "1.0": "指出前提是质量相同、错误是未控制变量，并举出体积不同密度不变的反例"
+      },
+      "teacher_notes": "M2 主探测题（评价式）。采分点三段：前提条件 / 控制变量错误 / 反例。judge 需按三点分别给分。",
+      "verified": false
+    }
+  ]
+}
