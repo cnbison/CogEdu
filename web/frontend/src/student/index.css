@@ -74,21 +74,6 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ── 学生端顶栏 ─────────────────────────────────────────── */
-.student-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-
-.student-topbar .sid {
-  color: var(--muted);
-  font-size: 13px;
-}
-
 /* ── 首页三卡 (信息架构三问) ─────────────────────────────── */
 .home-cards {
   display: grid;
@@ -689,45 +674,315 @@ textarea.plain {
   cursor: pointer;
 }
 
-/* ── 底部导航 (全尺寸显示, v0.96.1 修复桌面端无导航入口) ───── */
-.bottom-nav {
-  display: flex;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--card);
-  border-top: 1px solid var(--border);
-  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
-  z-index: 10;
+/* ── UI-R-1: SidebarShell 工作台 ────────────────────────────────── */
+/* 三形态（设计稿 docs/ui-r-0-信息架构设计稿.md §2）：
+     wide    (≥1024px) — 220px 展开侧栏 + 文字 label
+     narrow  (768-1023) — 64px  图标栏（无文字，靠 title/aria-label）
+     drawer  (<768px)   — 侧栏隐藏 + 顶条汉堡按钮唤出抽屉
+   顶条跨三形态常驻（hamburger 仅 drawer 出现）。
+   ─────────────────────────────────────────────────────────────── */
+
+.sidebar-shell {
+  display: grid;
+  min-height: 100vh;
+  /* 默认 drawer：单列 */
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
 }
 
-.bottom-nav a {
-  flex: 1;
+.sidebar-shell.wide {
+  grid-template-columns: 220px 1fr;
+}
+
+.sidebar-shell.narrow {
+  grid-template-columns: 64px 1fr;
+}
+
+.sidebar-shell > .shell-topbar {
+  grid-column: 1 / -1;
+}
+
+.sidebar-shell.drawer > .shell-content {
+  grid-column: 1;
+}
+
+.sidebar-shell.wide > .shell-content,
+.sidebar-shell.narrow > .shell-content {
+  grid-column: 2;
+}
+
+.sidebar-shell.drawer > .shell-sidebar {
+  display: none;
+}
+
+/* ── 顶条 ─────────────────────────────────────────────── */
+.shell-topbar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 4px 0;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
-.bottom-nav a.active {
+.shell-menu-btn {
+  background: transparent;
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-menu-btn:hover {
+  background: #f0f6ff;
+}
+
+.shell-brand {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.shell-topbar-title {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.shell-topbar-spacer {
+  flex: 1;
+}
+
+.shell-username {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shell-logout {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.shell-logout:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: transparent;
+}
+
+/* ── 侧栏 ─────────────────────────────────────────────── */
+.shell-sidebar {
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+  overflow-y: auto;
+  position: sticky;
+  top: 56px; /* 顶条高度（约） */
+  align-self: start;
+  height: calc(100vh - 56px);
+}
+
+.sidebar-shell.narrow > .shell-sidebar {
+  padding: 16px 0;
+}
+
+.sidebar-group {
+  margin-bottom: 18px;
+}
+
+.sidebar-group:last-child {
+  margin-bottom: 0;
+}
+
+.sidebar-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 16px;
+  margin-bottom: 6px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+
+.sidebar-shell.narrow .sidebar-item {
+  justify-content: center;
+  padding: 12px 0;
+  border-left-width: 2px;
+}
+
+.sidebar-item:hover:not(.disabled) {
+  background: #f8fafc;
+}
+
+.sidebar-item.active {
+  background: #eff6ff;
+  color: var(--accent);
+  font-weight: 600;
+  border-left-color: var(--accent);
+}
+
+.sidebar-item.disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sidebar-label {
+  flex: 1;
+}
+
+.sidebar-shell.narrow .sidebar-label {
+  display: none;
+}
+
+/* ── 抽屉（drawer 形态专用） ───────────────────────────── */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 50;
+  display: flex;
+}
+
+.drawer-panel {
+  width: min(280px, 80vw);
+  background: var(--card);
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
+  animation: drawer-slide-in 0.2s ease-out;
+}
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-close {
+  background: transparent;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drawer-close:hover {
+  background: #f0f6ff;
+  color: var(--text);
+}
+
+.drawer-nav {
+  padding: 12px 0;
+}
+
+.drawer-group {
+  margin-bottom: 8px;
+}
+
+.drawer-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 20px 4px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.drawer-item:hover:not(.disabled) {
+  background: #f8fafc;
+}
+
+.drawer-item.active {
+  background: #eff6ff;
   color: var(--accent);
   font-weight: 600;
 }
 
-/* ── 响应式 ─────────────────────────────────────────────── */
-@media (max-width: 720px) {
-  .content {
+.drawer-item.disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.drawer-label {
+  flex: 1;
+}
+
+.drawer-soon {
+  font-size: 11px;
+  color: var(--muted);
+  background: #eef2f7;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* ── 内容区 ───────────────────────────────────────────── */
+.shell-content {
+  padding: 24px;
+  min-width: 0; /* 防止 grid item 内溢 */
+}
+
+/* ── 响应式（768 / 1024 三形态） ──────────────────────── */
+@media (max-width: 767px) {
+  .shell-content {
     padding: 14px;
-    padding-bottom: 64px; /* 给底部 Tab 留空间 */
   }
-  /* v0.98.2-P0: 删除 .topbar display:none —— 该规则会泄漏到教师/家长端,
-     导致移动端顶部品牌栏整个消失。改为在移动端压缩 topbar。 */
+  /* home 三卡单列（设计稿 §7 "今天"卡片：<768 竖排） */
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
   .topbar {
     padding: 10px 14px;
     gap: 8px;
@@ -737,15 +992,6 @@ textarea.plain {
   }
   .topbar .topbar-sub {
     font-size: 11px;
-  }
-  .student-topbar {
-    padding: 10px 14px;
-  }
-  .bottom-nav {
-    display: flex;
-  }
-  .home-cards {
-    grid-template-columns: 1fr;
   }
   th,
   td {
@@ -757,25 +1003,33 @@ textarea.plain {
   }
 }
 
-@media (min-width: 721px) {
-  .content {
-    padding: 20px;
-    padding-bottom: 72px; /* 给底部 Tab 留空间 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .shell-content {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .shell-content {
+    padding: 28px 32px;
   }
 }
 
 /* ── v0.99.4 (F-01): 学习报告打印支持 ─────────────────────────
-   打印 / 存 PDF 时隐藏应用 chrome (顶栏 / 底部导航 / 控制按钮),
+   打印 / 存 PDF 时隐藏应用 chrome (侧栏 / 顶条 / 控制按钮),
    报告卡片全宽呈现 */
 @media print {
-  .student-topbar,
-  .bottom-nav,
+  .sidebar-shell > .shell-topbar,
+  .sidebar-shell > .shell-sidebar,
+  .drawer-overlay,
   .print-hide {
     display: none !important;
   }
-  .content {
+  .sidebar-shell {
+    display: block;
+  }
+  .shell-content {
     padding: 0;
-    padding-bottom: 0;
   }
   .report-page {
     max-width: none !important;

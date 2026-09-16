@@ -6,6 +6,29 @@
 
 ## [Unreleased]
 
+### 2026-09-16 — UI-R-1 SidebarShell 工作台壳层完成（待人工验收）
+
+学生端骨架一次换：底部 5-Tab 退役，左侧栏三形态接管。设计稿见 `docs/ui-r-0-信息架构设计稿.md` §11 UI-R-1，硬边界（Phase 3 vanilla 三模块零改动 / 路由表不变 / 纯前端无后端改动 / dist 不入库）全部守住。
+
+**新增文件**：
+
+- `web/frontend/src/student/components/navTree.ts` — 单一导航源。学习 / 工具 / 报告 / 账户 四组，8 个现有路由全部升一级导航（修复 Scene/Report/GuardianLinks 栏外不可达）；工具组含 4 个 Phase 4-6 槽位（诊断 / 资源 / 探索 / 练习，`enabled: false` 占位不渲染可点链接）——上线时改常量即可点亮侧栏与抽屉，不需改组件代码。
+- `web/frontend/src/student/components/SidebarShell.tsx` — 工作台容器。`useMediaQuery` 派生三形态：`wide (≥1024px)` 220px 展开侧栏 + 文字 label；`narrow (768-1023px)` 64px 图标栏（title/aria-label 替代文字）；`drawer (<768px)` 侧栏隐藏，顶条汉堡按钮唤出抽屉。顶条跨三形态常驻：hamburger（仅 drawer）+ brand + 当前页 title（最长前缀匹配的 NavItem label）+ username + 退出按钮（设计稿 §3 顶条形态落地）。
+- `web/frontend/src/student/components/DrawerNav.tsx` — 移动抽屉。复用 navTree，同一棵导航树；Esc 关闭 / 遮罩关闭 / 链接点击自动关闭；打开时 body 锁滚动。Phase 4-6 槽位渲染为 `<span aria-disabled>` 不进 router。
+
+**修改文件**：
+
+- `web/frontend/src/student/App.tsx` — 删 `<header className="student-topbar">` 与 `<nav className="bottom-nav">`；Routes 整段用 `<SidebarShell username={username}>` 包；路由表（8 项 + 复看参数路由）零改动。
+- `web/frontend/src/student/index.css` — 删旧 `.student-topbar` / `.bottom-nav` / `@media (max-width: 720px)` / `@media (min-width: 721px)`；新增 sidebar shell 三形态 grid 布局 + drawer 样式 + 新断点 768 / 1024；`.shell-content` 用响应式 padding 不带 max-width，让各页自管宽度。
+- `web/frontend/src/components/ui/icons.ts` — 单点扩 `Menu`（汉堡按钮），既有边界不动。
+- `tests/test_frontend_react_wiring.py` — 新增 `TestSidebarShellWiring` 8 例：单源 / 8 路由全列 / 4 槽位 disabled / 旧 .bottom-nav & .student-topbar 已退役 / SidebarShell 包住 Routes / 断点 768/1024 非 720/721 / shell-content 不带 max-width / Phase 3 vanilla 挂载继续生效。
+
+**未在本步范围（明确边界）**：教师端 / 家长端 Shell（设计稿 §9 D4 拍板：Phase 4 评估）；scene.css `.wrap { max-width: 720px }`（白板破版心留 UI-R-2）；答题页双栏（UI-R-3）；其他页面宽幅适配（UI-R-4）；Phase 4-6 槽位点亮。
+
+**测试**：全量 **1963 用例通过**（pytest + 1 skip；前一次 1955 → +8 新契约锁）；前端 vitest 55 例；node:test 25 例（playback 14 + whiteboard 11，Phase 3 vanilla 时序锁原样全绿）；构建产物三入口正常生成（dist 不入库）。
+
+**下一步**：维护者在 iPad 横屏（≥1024）+ iPad 竖屏（768-1023）+ 手机（<768）三形态过一遍骨架；之后启动 UI-R-2 讲解场景页桌面布局（白板破 720 版心）。
+
 ### 2026-09-16 — UI-R-0 五项决策全部拍板（设计稿锁定，待启动 UI-R-1 施工）
 
 **决策记录**（维护者逐项确认，见 `docs/ui-r-0-信息架构设计稿.md` §9）：

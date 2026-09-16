@@ -18,6 +18,7 @@ export {
   Info,
   Lightbulb,
   MapPin,
+  Menu,
   MessageSquare,
   PartyPopper,
   PawPrint,

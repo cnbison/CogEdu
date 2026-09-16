@@ -1057,7 +1057,7 @@ P0-1a 三学科试点内容准备                        UI-R 桌面优先重设
 **依据**：学生设备以横屏平板/电脑为主；底栏 5 Tab 已到人机工学上限（Scene/Report/GuardianLinks 三路由已在栏外，只能从 Home 深入）；Phase 3 白板虚拟画布 1000×562.5（16:9 横屏设计）被压在 720px 竖排版心，桌面上一半屏幕浪费；Phase 4-6 新功能（误概念视图/素材库/GeoGebra 探索/概念图/检索练习）无处安放。参考形态：DeepTutor `web/components/sidebar/SidebarShell.tsx` 工作台（只读参考，自包含实现，不做运行时引用）。
 
 - [x] **UI-R-0 信息架构设计稿** ✅（2026-09-16 拍板）：页面树 / 导航模型 / 讲解页布局（白板主舞台 + 字幕/大纲双栏辅栏），五项决策全部锁定——D1 学习/工具/报告三组 / D2 字幕+大纲双栏 / D3 抽屉降级 / D4 教师家长端本轮不动 / D5 命名「讲解」；设计稿见 `docs/ui-r-0-信息架构设计稿.md`
-- [ ] **UI-R-1 SidebarShell 工作台**：左侧栏导航替代底栏（容量天然支持 Phase 4-6 扩展），宽内容区
+- [x] **UI-R-1 SidebarShell 工作台** ✅（2026-09-16 施工完成，待人工验收）：左侧栏三形态（≥1024 展开 220px / 768-1023 收窄 64px 图标栏 / <768 抽屉）替代旧底部 5-Tab；单一导航源 `web/frontend/src/student/components/navTree.ts`（侧栏 + 抽屉共用，8 路由全列 + Phase 4-6 槽位 disabled）；顶条跨三形态常驻（hamburger 仅 drawer + brand + username + 退出）；CSS 断点 768 / 1024（旧 720/721 已清除）；scene.css 的 `.wrap { max-width: 720px }` 不在本步范围（白板破版心留 UI-R-2）。契约锁：新增 `TestSidebarShellWiring` 8 例（旧 .bottom-nav / .student-topbar 退役 / 单源 / 三形态断点 / shell-content 不带 max-width / Phase 3 vanilla 模块挂载继续生效）；全量 1963 用例通过（pytest + 0 回归）。
 - [ ] **UI-R-2 讲解场景页桌面布局**：白板 16:9 全幅主舞台，字幕/大纲/播放控件为辅栏（桌面双栏）；答题页可走题目主区 + 历史侧栏
 - [ ] **UI-R-3 移动降级**：<768px 侧栏收为抽屉导航，保持可用——降级形态，不做双端并重优化
 - [ ] **UI-R-4 Phase 3 vanilla 模块不动**：`whiteboard/playback/formula.js` 三模块及其 node:test 26 例时序锁原样保留，React 宿主换壳（延续 9-D 挂载式整合模式）
