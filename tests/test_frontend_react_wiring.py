@@ -461,3 +461,125 @@ class TestScenePageDesktopWiring:
         assert "scene-subtitle-desktop" in page
         # 大纲面板通过 OutlinePanel 渲染（<768 由 CSS 隐藏 .scene-outline-drawer）
         assert "OutlinePanel" in page
+
+
+class TestAnswerPageDualColumnWiring:
+    """UI-R-3：答题页双栏（题目60% + 作答侧栏40%）接线契约.
+
+    锁语义（设计稿 docs/ui-r-0-信息架构设计稿.md §6）：
+      - .answer-page { max-width: 720px } 已删除（题目区破窄版心）
+      - .answer-body 双栏 grid（≥1024）；<1024 单栏堆叠
+      - 题目区（.answer-main）含题干/角标/通俗化/系统决策
+      - 作答侧栏（.answer-side）含 CodeEditor + 自评 + 提示/提交 + 已答计数
+      - 已答计数（answeredCount）组件内 state，提交成功 +1
+      - 反馈框跨双栏（.feedback-box 在 .answer-body 之外）
+    """
+
+    def test_answer_page_no_720_constraint(self):
+        """.answer-page 必须去掉 max-width: 720px（题目区破窄版心）.
+
+        仅扫描 .answer-page 块规则体内的属性——不连带 .answer-page .prob 子选择
+        (后者字号控制, 不在本步范围内, 设计稿 §6 拍板).
+        """
+        import re
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        # 仅匹配 .answer-page { ... } 顶层块（不含子选择）
+        m = re.search(r"\.answer-page\s*\{([^}]*)\}", css_no_comments)
+        assert m, ".answer-page 顶层规则块不存在"
+        block = m.group(1).strip()
+        # 顶层块允许为空白（双栏由 .answer-body 主导），
+        # 但绝不能保留 max-width: 720px 强约束
+        assert "max-width: 720px" not in block, (
+            f".answer-page 仍保留 max-width: 720px（题目区被压根源）：{block}"
+        )
+
+    def test_answer_body_dual_column_grid_at_1024(self):
+        """.answer-body ≥1024 必须双栏 grid（题目区60% + 作答侧栏40%）."""
+        import re
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        # 顶层 .answer-body 块
+        body_block = re.search(r"\.answer-body\s*\{([^}]*)\}", css_no_comments)
+        assert body_block, ".answer-body 顶层规则块不存在"
+        body_text = body_block.group(1)
+        # 双栏 grid
+        assert "display: grid" in body_text, ".answer-body 缺 display: grid"
+        assert "grid-template-columns" in body_text, (
+            ".answer-body 缺 grid-template-columns（双栏定义）"
+        )
+        # ≥1024 媒体查询：侧栏粘性跟随（粘性 = 桌面体验双栏核心）
+        m1024 = re.search(
+            r"@media\s*\(\s*min-width:\s*1024px\s*\)\s*\{(.*?)^\}",
+            css_no_comments,
+            re.DOTALL | re.MULTILINE,
+        )
+        assert m1024, "缺 @media (min-width: 1024px) 块"
+        assert "position: sticky" in m1024.group(1), (
+            "≥1024 缺 position: sticky（设计稿 §6 答题侧栏粘性跟随）"
+        )
+
+    def test_answer_body_single_column_under_1024(self):
+        """.answer-body 在 <1024 必须折叠为单栏（display: block）."""
+        import re
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        m = re.search(
+            r"@media\s*\(\s*max-width:\s*1023px\s*\)\s*\{(.*?)^\}",
+            css_no_comments,
+            re.DOTALL | re.MULTILINE,
+        )
+        assert m, "缺 @media (max-width: 1023px) 块（单栏折叠）"
+        block = m.group(1)
+        # 必须将 .answer-body 折叠为单栏
+        assert ".answer-body" in block, "<1024 媒体查询未覆盖 .answer-body"
+        assert "display: block" in block, "<1024 .answer-body 必须 display: block（单栏）"
+
+    def test_answer_page_jsx_uses_dual_zones(self):
+        """AnswerPage.tsx 必须渲染两个区：.answer-main + .answer-side.
+
+        题目区（.answer-main）：answer-meta + prob + one-liner + LCA details
+        作答侧栏（.answer-side）：CodeEditor + self-conf-row + btns + hint-box + 已答计数
+        """
+        page = (SRC_DIR / "student" / "pages" / "AnswerPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        # 双栏容器
+        assert 'className="answer-body"' in page, "缺 .answer-body 双栏容器"
+        # 题目区与作答侧栏两个 card
+        assert 'className="card answer-main"' in page, "缺 .answer-main 题目区 card"
+        assert 'className="card answer-side"' in page, "缺 .answer-side 作答侧栏 card"
+        # 题目区元素（answer-meta + prob + one-liner + LCA details）
+        assert "answer-meta" in page
+        assert "className=\"prob\"" in page
+        assert "one-liner" in page
+        assert "lca_decision" in page
+        # 作答侧栏元素（CodeEditor + self-conf-row + btns + hint-box）
+        assert "CodeEditor" in page
+        assert "self-conf-row" in page
+        assert "hint-box" in page
+        # 已答计数 UI 标记（设计稿 §6 答题侧栏底部"本场已答 N 题"）
+        assert "answeredCount" in page, "缺已答计数 state（设计稿 §6 答题侧栏底部）"
+        assert "answer-counter" in page, "缺已答计数 UI 类（answer-counter）"
+        assert "本场已答" in page, "缺已答计数文案"
+        # 反馈框必须在双栏之外（.answer-page 根下、.answer-body 之外）
+        # 验证方法：feedback-box 的出现位置必须在 answer-body 闭合之后
+        body_close = page.find("</div>\n\n      {/* UI-R-3: feedback-box")
+        if body_close < 0:
+            # 兼容无注释的写法
+            body_close = page.find("</div>", page.find("</div>", page.find("className=\"card answer-side\"")))
+        assert body_close > 0, "feedback-box 未跨双栏（必须在 .answer-body 之外）"
+
+    def test_answered_count_increments_on_submit(self):
+        """answeredCount 必须在 onSubmit 成功路径 +1（不是题目切换 +1）."""
+        page = (SRC_DIR / "student" / "pages" / "AnswerPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        # 提交成功 +1
+        assert "setAnsweredCount((n) => n + 1)" in page, (
+            "answeredCount 提交成功路径未 +1（设计稿 §6）"
+        )
+        # 必须包含判定（仅在 judged + persisted 成功时 +1，避免错误计数）
+        assert "jd.judged" in page and "persisted" in page, (
+            "answeredCount 应仅在 judged+persisted 成功时 +1"
+        )

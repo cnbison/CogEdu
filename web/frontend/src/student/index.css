@@ -553,10 +553,37 @@ button.chip:disabled {
   color: var(--text);
 }
 
-/* ── 答题页 (做题时收敛) ─────────────────────────────────── */
+/* ── 答题页 (做题时收敛, UI-R-3: 双栏 题目60% + 作答侧栏 40%) ── */
 .answer-page {
-  max-width: 720px;
-  margin: 0 auto;
+  /* UI-R-3: 去掉 max-width: 720px, 让双栏 grid 占满 SidebarShell 内容区.
+     桌面 (≥1024) 用 .answer-body 双栏; 768-1023 与 <768 媒体查询折叠为单栏. */
+}
+
+.answer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* UI-R-3: 768-1023 与 <768 都折叠为单栏, 沿用纵向阅读路径 (与移动端体验一致) */
+@media (max-width: 1023px) {
+  .answer-body {
+    display: block;
+  }
+  .answer-side {
+    margin-top: 16px;
+  }
+}
+
+/* UI-R-3: 桌面侧栏粘性跟随, 阅读题干时输入控件在视野内 */
+@media (min-width: 1024px) {
+  .answer-side {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+  }
 }
 
 .answer-page .prob {

@@ -6,6 +6,38 @@
 
 ## [Unreleased]
 
+### 2026-09-16 — UI-R-3 答题页双栏：题目60% + 作答侧栏40%（待人工验收）
+
+设计稿见 `docs/ui-r-0-信息架构设计稿.md` §6（答题页双栏）+ §11 UI-R-3。核心：题目区破 720 窄版心，按"题目 60% + 作答侧栏 40%"双栏并排（≥1024）；<1024 折叠为单栏上下排，沿用纵向阅读路径（与移动端体验一致）。三形态适配：≥1024 双栏 + 作答侧栏粘性跟随 / 768-1023 单栏堆叠（侧栏带 `margin-top: 16px`）/ <768 单栏堆叠。
+
+**修改文件**：
+
+- `web/frontend/src/student/index.css` — 删 `.answer-page { max-width: 720px; margin: 0 auto; }`（题目区被压根源）；新增 `.answer-body` 顶层 grid 块（`display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 24px; align-items: start`）+ `@media (max-width: 1023px)` 单栏折叠（`display: block` + `.answer-side { margin-top: 16px }`）+ `@media (min-width: 1024px)` 桌面侧栏粘性跟随（`position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto`）；保留 `.answer-page .prob` 等现有子样式不动（题目字号 16px / 行高 1.7 不变）。
+- `web/frontend/src/student/pages/AnswerPage.tsx` — DOM 重构：`<div className="answer-page">` 根下拆 `.answer-body > (.answer-main.card + .answer-side.card) + .feedback-box`。**题目区（`.answer-main`）**：answer-meta（Bloom/topic/探针/热身 角标）+ prob（题干）+ one-liner（通俗化解读）+ LCA 干预决策只读折叠。**作答侧栏（`.answer-side`）**：CodeEditor（输入框）+ self-conf-row（4 档自评 chip）+ btns（提示 + 提交）+ hint-box（提示展开）+ 计数器 UI（`.answer-counter` 本场已答 N 题）。**反馈框跨双栏**：`.feedback-box` 提到 `.answer-body` 之外、`.answer-page` 根下，与设计稿 §6 主图"题目区+答题侧栏作为答题主体 + 反馈框作为下方全宽总结"一致。新增组件内 state `[answeredCount, setAnsweredCount]`（仅在 judged + persisted 成功路径 +1，AI 评判失败 / 持久化失败不计入；题目切换不 reset，跨题目累加）；使用 `useState` 而非新增 API（跨 session 持久化留独立任务）。
+- `tests/test_frontend_react_wiring.py` — 新增 `TestAnswerPageDualColumnWiring` 5 例：① .answer-page 顶层块无 max-width: 720px（剥离 CSS 注释后扫描，仅顶层块规则体避免误连 .answer-page .prob 子选择）；② .answer-body ≥1024 双栏 grid（grid-template-columns + position: sticky 粘性跟随）；③ <1024 .answer-body 单栏堆叠（display: block）；④ AnswerPage JSX 双区结构（.answer-body / .answer-main / .answer-side 双 card + 题目区元素 + 侧栏元素 + answeredCount state + answer-counter UI + feedback-box 跨双栏位置）；⑤ answeredCount 在 judged + persisted 成功路径 +1。
+
+**硬边界守住情况**：
+
+| 红线 | 状态 |
+|---|---|
+| Phase 3 vanilla 三模块零改动 | ✅ `web/student/{whiteboard,playback,formula}.js` 未触碰；node:test 25/25 原样全绿 |
+| 后端 | ✅ 0 行改动（仅组件 state 自维护计数器，不新增 API） |
+| 路由表 | ✅ 不涉及 |
+| dist 不入库 | ✅ 仅 source 改动 |
+| 已答计数语义 | ✅ 仅在提交成功 +1，AI 评判失败 / 持久化失败不计入（避免给用户错误反馈） |
+| 题目切换不重置计数 | ✅ useEffect 内仅 reset 答题态（answer/result/hint 等），answeredCount 跨题目累加 |
+
+**不在本步范围（明确边界）**：
+
+- ❌ 其他页面宽幅适配（设计稿 §11 UI-R-4 任务）
+- ❌ 教师端 / 家长端双栏适配（§9 D4：本轮不动）
+- ❌ 已答计数跨 session 持久化（需后端配合，留独立任务）
+- ❌ 作答侧栏内"策略提示（warmup/adaptive 标签可视化）"（设计稿 §6 已列出，本步用 answer-meta 角标实现可视化，更精细的可视化留后续任务）
+
+**测试**：全量 **1977 用例通过**（pytest + 1 skip；前次 1972 → +5 新契约锁）；vitest 55/55；node:test 25/25；构建产物三入口正常生成（dist 不入库）。
+
+**下一步**：维护者在 ≥1024 桌面 + 768-1023 中屏 + <768 手机三形态过一遍答题流程（题目区 + 作答侧栏布局 / 提交成功计数 +1 / 反馈框跨双栏 / 系统决策折叠 / 角标可视化）；如发现真缺陷按验收期模式补 CHANGELOG 条目 + 加契约锁；之后启动 UI-R-4 其他页面宽幅适配（今天/我在哪/成长/报告）。
+
 ### 2026-09-16 — UI-R-2 讲解场景页桌面布局重构（待人工验收）
 
 设计稿见 `docs/ui-r-0-信息架构设计稿.md` §5（讲解场景页桌面布局）+ §11 UI-R-2。核心：白板破 720 版心，按 16:9 等比缩放至填满可用宽度（1366×768 笔记本上 ≈1150×646，比现状放大约 60%）。三形态适配：≥1024 双栏（白板主舞台 + 字幕/大纲右侧）/ 768-1023 单栏 + 大纲抽屉 / <768 退化形态保留。

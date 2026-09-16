@@ -53,6 +53,9 @@ export default function AnswerPage({ studentId }: { studentId: string }) {
   const [reflectionSent, setReflectionSent] = useState(false);
   // v0.97.2: 提交前自评 (null = 未选, 强制无默认)
   const [selfConf, setSelfConf] = useState<number | null>(null);
+  // UI-R-3: 答题侧栏"已答 N 题"计数器 (组件内 state, 提交成功 +1).
+  // 本步不接后端, 留作答题 session 计数器; 跨 session 持久化由独立任务承接.
+  const [answeredCount, setAnsweredCount] = useState(0);
 
   const goalBaseline = useRef<string | null>(null);
   const idleTimer = useRef<number | null>(null);
@@ -93,6 +96,8 @@ export default function AnswerPage({ studentId }: { studentId: string }) {
     setReflection("");
     setReflectionSent(false);
     setSelfConf(null);
+    // UI-R-3: answeredCount 不在题目切换时 reset — 计数器跨题目累加,
+    // 直到 onSubmit 成功才 +1 (见 onSubmit 内 setAnsweredCount).
     lastInput.current = Date.now();
     questionLoadedAt.current = Date.now();  // v0.99.0 (F-09)
   }, [q?.problem_id, studentId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -167,6 +172,11 @@ export default function AnswerPage({ studentId }: { studentId: string }) {
         score: jd.score ?? (jd.correct ? 1 : 0),
         reasoning: jd.reasoning ?? "",
       });
+      // UI-R-3: 答题侧栏"已答 N 题"计数 +1. 仅在 judged + persisted 路径 +1,
+      // AI 评判失败/持久化失败不计入 (避免给用户错误反馈).
+      if (jd.judged && (res as { persisted?: boolean }).persisted !== false) {
+        setAnsweredCount((n) => n + 1);
+      }
       // F-07: 刷新通俗化备注 (report query 只在挂载时 fetch, 不刷会冻结在进页快照)
       void report.refetch();
       if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
@@ -209,80 +219,94 @@ export default function AnswerPage({ studentId }: { studentId: string }) {
 
   return (
     <div className="answer-page">
-      <div className="card">
-        <div className="answer-meta">
-          <span className="badge">{q!.bloom_layer}</span>
-          <span className="badge">{q!.topic}</span>
-          {q!.is_probe && <span className="badge" style={{ background: "#fdeee6", color: "#dc2626" }}>探针题</span>}
-          {q!.is_warmup && <span className="badge cold">热身</span>}
-        </div>
-        <div className="prob">{q!.problem_text}</div>
-        {report.data && (
-          <div className="one-liner">
-            <Icon icon={Lightbulb} size={16} /> {report.data.interpretation.overall}
+      {/* UI-R-3: 题目区(主, ~60%) + 作答侧栏(~40%) 双栏; <1024 折叠为单栏.
+          题目区放题干/角标/通俗化/系统决策 (上下文型); 侧栏放输入控件/自评/按钮/已答计数. */}
+      <div className="answer-body">
+        {/* 题目区 (主): 上下文 + 系统决策 */}
+        <div className="card answer-main">
+          <div className="answer-meta">
+            <span className="badge">{q!.bloom_layer}</span>
+            <span className="badge">{q!.topic}</span>
+            {q!.is_probe && <span className="badge" style={{ background: "#fdeee6", color: "#dc2626" }}>探针题</span>}
+            {q!.is_warmup && <span className="badge cold">热身</span>}
           </div>
-        )}
-        <CodeEditor value={answer} onChange={onAnswerChange} />
-        {/* v0.97.2: 提交前自评 (pre-outcome, 看到判分结果前选择才有校准意义) */}
-        <div className="self-conf-row" style={{ margin: "10px 0" }}>
-          <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-            提交前先猜一猜：这道题你觉得自己能做对吗？
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {SELF_CONFIDENCE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                className={`chip${selfConf === opt.value ? " selected" : ""}`}
-                onClick={() => setSelfConf(opt.value)}
-                disabled={!!result}
-              >
-                {selfConf === opt.value ? <><Icon icon={Check} size={14} /> </> : null}{opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="btns" style={{ display: "flex", gap: 10 }}>
-          <button className="amber" onClick={onHint} disabled={hintUsed}>
-            {hintUsed ? (
-              <>
-                已请求提示 <Icon icon={Check} size={14} />
-              </>
-            ) : (
-              <>
-                <Icon icon={Lightbulb} size={16} /> 提示
-              </>
-            )}
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={judging || !answer.trim() || selfConf === null || !!result}
-            title={selfConf === null ? "先选一个把握程度" : undefined}
-          >
-            {result ? "已提交 ✓" : selfConf === null ? "先选把握程度 → 提交" : judging ? "AI 评判中…" : "提交答案"}
-          </button>
-        </div>
-        {hint && (
-          <div className="hint-box">
-            <div className="hint-title"><Icon icon={Lightbulb} size={16} /> 提示</div>
-            <div className="hint-text">{hint}</div>
-          </div>
-        )}
-        {/* v0.99.2 (F-13): LCA 干预决策只读展示（试点观测用; 后端 passthrough 元数据,
-            不影响选题。折叠默认收起, 不打断答题流） */}
-        {q!.lca_decision && (
-          <details className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-            <summary style={{ cursor: "pointer" }}>系统决策（LCA）</summary>
-            <div style={{ marginTop: 6, lineHeight: 1.8 }}>
-              干预类型：{LCA_INTERVENTION_LABELS[q!.lca_decision.intervention_type] ?? q!.lca_decision.intervention_type}
-              <br />
-              目标层级：{q!.lca_decision.bloom_target} · 呈现级别：{LCA_CLT_LABELS[q!.lca_decision.clt_level] ?? q!.lca_decision.clt_level}
-              <br />
-              预期增益：{q!.lca_decision.expected_gain} · 预期风险：{q!.lca_decision.expected_risk}
+          <div className="prob">{q!.problem_text}</div>
+          {report.data && (
+            <div className="one-liner">
+              <Icon icon={Lightbulb} size={16} /> {report.data.interpretation.overall}
             </div>
-          </details>
-        )}
+          )}
+          {/* v0.99.2 (F-13): LCA 干预决策只读展示（试点观测用; 后端 passthrough 元数据,
+              不影响选题。折叠默认收起, 不打断答题流。题目区上下文关联更强） */}
+          {q!.lca_decision && (
+            <details className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+              <summary style={{ cursor: "pointer" }}>系统决策（LCA）</summary>
+              <div style={{ marginTop: 6, lineHeight: 1.8 }}>
+                干预类型：{LCA_INTERVENTION_LABELS[q!.lca_decision.intervention_type] ?? q!.lca_decision.intervention_type}
+                <br />
+                目标层级：{q!.lca_decision.bloom_target} · 呈现级别：{LCA_CLT_LABELS[q!.lca_decision.clt_level] ?? q!.lca_decision.clt_level}
+                <br />
+                预期增益：{q!.lca_decision.expected_gain} · 预期风险：{q!.lca_decision.expected_risk}
+              </div>
+            </details>
+          )}
+        </div>
+
+        {/* 作答侧栏: 输入 + 自评 + 提示/提交 + 已答计数 (粘性跟随) */}
+        <div className="card answer-side">
+          <CodeEditor value={answer} onChange={onAnswerChange} />
+          {/* v0.97.2: 提交前自评 (pre-outcome, 看到判分结果前选择才有校准意义) */}
+          <div className="self-conf-row" style={{ margin: "10px 0" }}>
+            <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+              提交前先猜一猜：这道题你觉得自己能做对吗？
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {SELF_CONFIDENCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  className={`chip${selfConf === opt.value ? " selected" : ""}`}
+                  onClick={() => setSelfConf(opt.value)}
+                  disabled={!!result}
+                >
+                  {selfConf === opt.value ? <><Icon icon={Check} size={14} /> </> : null}{opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="btns" style={{ display: "flex", gap: 10 }}>
+            <button className="amber" onClick={onHint} disabled={hintUsed}>
+              {hintUsed ? (
+                <>
+                  已请求提示 <Icon icon={Check} size={14} />
+                </>
+              ) : (
+                <>
+                  <Icon icon={Lightbulb} size={16} /> 提示
+                </>
+              )}
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={judging || !answer.trim() || selfConf === null || !!result}
+              title={selfConf === null ? "先选一个把握程度" : undefined}
+            >
+              {result ? "已提交 ✓" : selfConf === null ? "先选把握程度 → 提交" : judging ? "AI 评判中…" : "提交答案"}
+            </button>
+          </div>
+          {hint && (
+            <div className="hint-box">
+              <div className="hint-title"><Icon icon={Lightbulb} size={16} /> 提示</div>
+              <div className="hint-text">{hint}</div>
+            </div>
+          )}
+          {/* UI-R-3: 本场已答计数 (设计稿 §6 答题侧栏底部) */}
+          <div className="answer-counter muted" style={{ marginTop: 12, fontSize: 13 }}>
+            本场已答 <strong>{answeredCount}</strong> 题
+          </div>
+        </div>
       </div>
 
+      {/* UI-R-3: feedback-box 跨双栏 (作为答题主体下方全宽总结, 与设计稿 §6 主图一致) */}
       {result && (
         <div className="feedback-box">
           <div className="verdict" style={{ color: result.correct ? "var(--ok)" : "var(--danger)" }}>
