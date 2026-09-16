@@ -109,55 +109,59 @@ export default function GrowthPage({ studentId }: { studentId: string }) {
         </p>
       </section>
 
-      <section className="card">
-        <h2><Icon icon={Clock} size={20} /> 轨迹快照</h2>
-        <div className="traj-list">
-          {st.trajectory.length === 0 && <div className="muted">暂无轨迹</div>}
-          {[...st.trajectory].reverse().map((t, i) => (
-            <div className="traj-row" key={i}>
-              <span className="traj-ts">{fmtTs(t.timestamp)}</span>
-              {DIM_ORDER.map((d, di) => (
-                <span className="traj-dim" key={d}>
-                  {d}
-                  {t.theta_5d[di]?.toFixed(2) ?? "—"}
-                </span>
-              ))}
-              <span className="traj-bloom">{bloomLabel(t.bloom_dominant)}</span>
+      {/* UI-R-4: 桌面 ≥1024 双栏——5D 折线图 全宽 + (轨迹快照 + 答题历史) 并排.
+          <1024 折叠为单栏. */}
+      <div className="growth-grid">
+        <section className="card">
+          <h2><Icon icon={Clock} size={20} /> 轨迹快照</h2>
+          <div className="traj-list">
+            {st.trajectory.length === 0 && <div className="muted">暂无轨迹</div>}
+            {[...st.trajectory].reverse().map((t, i) => (
+              <div className="traj-row" key={i}>
+                <span className="traj-ts">{fmtTs(t.timestamp)}</span>
+                {DIM_ORDER.map((d, di) => (
+                  <span className="traj-dim" key={d}>
+                    {d}
+                    {t.theta_5d[di]?.toFixed(2) ?? "—"}
+                  </span>
+                ))}
+                <span className="traj-bloom">{bloomLabel(t.bloom_dominant)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2><Icon icon={BookOpen} size={20} /> 答题历史</h2>
+          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            共 {hist.total} 题 · 正确率 {(hist.correct_rate * 100).toFixed(0)}%
+          </div>
+          {hist.items.length === 0 && <div className="muted">还没有答题记录</div>}
+          {hist.items.map((h, i) => (
+            <div key={h.problem_id + i}>
+              <button
+                className={`hist-row ${h.correct ? "correct" : "wrong"}`}
+                onClick={() => setOpenDetail(openDetail === i ? null : i)}
+              >
+                <span className="hist-mark">{h.correct ? <Icon icon={Check} size={16} /> : <Icon icon={X} size={16} />}</span>
+                <span className="hist-pid">{h.problem_id}</span>
+                <span className="hist-bloom">{bloomLabel(h.bloom_level)}</span>
+                <span className="hist-ts">{fmtTs(h.timestamp)}</span>
+              </button>
+              {openDetail === i && (
+                <div className="hist-detail">
+                  <div className="label">你的答案：</div>
+                  <div className="val">{h.user_answer || "(空)"}</div>
+                  <div className="label" style={{ marginTop: 6 }}>
+                    正确答案：
+                  </div>
+                  <div className="val">{h.correct_answer || "(未存)"}</div>
+                </div>
+              )}
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="card">
-        <h2><Icon icon={BookOpen} size={20} /> 答题历史</h2>
-        <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-          共 {hist.total} 题 · 正确率 {(hist.correct_rate * 100).toFixed(0)}%
-        </div>
-        {hist.items.length === 0 && <div className="muted">还没有答题记录</div>}
-        {hist.items.map((h, i) => (
-          <div key={h.problem_id + i}>
-            <button
-              className={`hist-row ${h.correct ? "correct" : "wrong"}`}
-              onClick={() => setOpenDetail(openDetail === i ? null : i)}
-            >
-              <span className="hist-mark">{h.correct ? <Icon icon={Check} size={16} /> : <Icon icon={X} size={16} />}</span>
-              <span className="hist-pid">{h.problem_id}</span>
-              <span className="hist-bloom">{bloomLabel(h.bloom_level)}</span>
-              <span className="hist-ts">{fmtTs(h.timestamp)}</span>
-            </button>
-            {openDetail === i && (
-              <div className="hist-detail">
-                <div className="label">你的答案：</div>
-                <div className="val">{h.user_answer || "(空)"}</div>
-                <div className="label" style={{ marginTop: 6 }}>
-                  正确答案：
-                </div>
-                <div className="val">{h.correct_answer || "(未存)"}</div>
-              </div>
-            )}
-          </div>
-        ))}
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

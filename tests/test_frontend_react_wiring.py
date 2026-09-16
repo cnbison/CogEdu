@@ -583,3 +583,128 @@ class TestAnswerPageDualColumnWiring:
         assert "jd.judged" in page and "persisted" in page, (
             "answeredCount 应仅在 judged+persisted 成功时 +1"
         )
+
+
+class TestFourPagesDesktopLayoutWiring:
+    """UI-R-4：今天/我在哪/成长/报告 四页面桌面宽幅适配接线契约.
+
+    锁语义（设计稿 docs/ui-r-0-信息架构设计稿.md §11 UI-R-4）：
+      - ReportPage 无 max-width: 720 内联锁（720 内联 style + max-width CSS 都已删）
+      - WherePage (5D + Bloom) / (TC + LearningDNA) 并排（≥1024）
+      - GrowthPage (轨迹 + 答题历史) 并排（≥1024）；5D 折线图全宽
+      - HomePage .home-layout 容器接入（3 卡 auto-fit + MotivationPanel 下方）
+      - 三页面 <1024 折叠为单栏
+    """
+
+    def test_report_page_no_720_inline_or_css_constraint(self):
+        """ReportPage 必须删 max-width: 720 锁（JSX 内联 + CSS 顶层）.
+        打印走 @media print { max-width: none !important }，与本约束无冲突.
+        """
+        import re
+        page = (SRC_DIR / "student" / "pages" / "ReportPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        # JSX 内联 style 不允许 max-width: 720
+        assert "max-width: 720" not in page, (
+            "ReportPage.tsx 仍含 max-width: 720 内联锁"
+        )
+        assert "maxWidth: 720" not in page, (
+            "ReportPage.tsx 仍含 maxWidth: 720 内联锁"
+        )
+        # CSS 顶层（@media 之外） .report-page 块不应有 max-width 约束.
+        # 注: @media print { .report-page { max-width: none !important } } 是
+        # 打印全宽覆盖规则, 不在本约束范围 (也不应被误删).
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        # 删除所有 @media { ... } 块（嵌套敏感：只删顶层）
+        css_no_media = re.sub(r"@media[^{]*\{(?:[^{}]*\{[^}]*\})*[^{}]*\}", "", css_no_comments)
+        m = re.search(r"\.report-page\s*\{([^}]*)\}", css_no_media)
+        if m:
+            block = m.group(1)
+            assert "max-width" not in block, (
+                f".report-page 顶层块（@media 之外）仍含 max-width 约束：{block}"
+            )
+
+    def test_home_page_uses_home_layout_wrapper(self):
+        """HomePage 必须包 .home-layout 容器 (UI-R-4 桌面 layout 标记)."""
+        page = (SRC_DIR / "student" / "pages" / "HomePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert 'className="home-layout"' in page, (
+            "HomePage 缺 .home-layout 容器（UI-R-4 桌面 layout 标记）"
+        )
+
+    def test_where_page_uses_where_grid_wrapper(self):
+        """WherePage 必须把 4 个 section 包入 .where-grid 双栏容器."""
+        page = (SRC_DIR / "student" / "pages" / "WherePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert 'className="where-grid"' in page, (
+            "WherePage 缺 .where-grid 容器（UI-R-4 桌面双栏布局）"
+        )
+        # 4 个 section 必须都在 .where-grid 内（hero 留在外）
+        assert page.count('<section className="card">') == 4, (
+            "WherePage 应有 4 个 section card（5D/Bloom/TC/LearningDNA 进 .where-grid）"
+        )
+        # .where-grid 内 section 数 = 4
+        grid_start = page.find('className="where-grid"')
+        assert grid_start > 0
+        rest = page[grid_start:]
+        assert rest.count("<section className=\"card\">") == 4, (
+            "WherePage .where-grid 内必须含全部 4 个 section card"
+        )
+
+    def test_growth_page_uses_growth_grid_wrapper(self):
+        """GrowthPage 必须把 (轨迹 + 答题历史) 包入 .growth-grid 双栏容器."""
+        page = (SRC_DIR / "student" / "pages" / "GrowthPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        assert 'className="growth-grid"' in page, (
+            "GrowthPage 缺 .growth-grid 容器（UI-R-4 桌面双栏布局）"
+        )
+        # .growth-grid 内必须含 2 个 section (轨迹 + 答题历史)
+        grid_start = page.find('className="growth-grid"')
+        assert grid_start > 0
+        rest = page[grid_start:]
+        assert rest.count("<section className=\"card\">") == 2, (
+            "GrowthPage .growth-grid 内必须有 2 个 section card（轨迹快照 + 答题历史）"
+        )
+
+    def test_desktop_layouts_have_dual_column_grid(self):
+        """≥1024 .where-grid / .growth-grid 必须 grid-template-columns 双栏."""
+        import re
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        for cls in ("where-grid", "growth-grid"):
+            m = re.search(rf"\.{cls}\s*\{{([^}}]*)\}}", css_no_comments)
+            assert m, f".{cls} 顶层规则块不存在"
+            block = m.group(1)
+            assert "display: grid" in block, f".{cls} 缺 display: grid"
+            assert "grid-template-columns" in block, (
+                f".{cls} 缺 grid-template-columns（双栏定义）"
+            )
+
+    def test_dual_columns_fold_to_single_under_1024(self):
+        """<1024 .where-grid / .growth-grid 必须 display: block 单栏折叠."""
+        import re
+        css = (SRC_DIR / "student" / "index.css").read_text(encoding="utf-8")
+        css_no_comments = re.sub(r"/\*[\s\S]*?\*/", "", css)
+        # 找到所有 @media (max-width: 1023px) 块（可能多个，分别给 answer-body / where-grid / growth-grid 用）
+        media_blocks = re.findall(
+            r"@media\s*\(\s*max-width:\s*1023px\s*\)\s*\{(.*?)^\}",
+            css_no_comments,
+            re.DOTALL | re.MULTILINE,
+        )
+        assert media_blocks, "缺 @media (max-width: 1023px) 块（单栏折叠）"
+        # 至少有一个媒体块同时覆盖 .where-grid + .growth-grid + display: block
+        folded_block = next(
+            (
+                b
+                for b in media_blocks
+                if ".where-grid" in b and ".growth-grid" in b and "display: block" in b
+            ),
+            None,
+        )
+        assert folded_block is not None, (
+            "缺 @media (max-width: 1023px) 同时覆盖 .where-grid + .growth-grid + display: block"
+        )

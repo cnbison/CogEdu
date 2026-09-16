@@ -1042,6 +1042,65 @@ textarea.plain {
   }
 }
 
+/* ── UI-R-4 四页面桌面宽幅布局 (今天/我在哪/成长/报告) ────────── */
+/* 768-1023 与 <768 折叠为单列 (与移动端体验一致); ≥1024 双栏/双行
+   利用桌面宽幅, 避免信息在 720 版心堆叠. 报告页 720 内联锁由
+   ReportPage.tsx 删除 (打印 @media print 仍覆盖 max-width: none). */
+
+/* 今天 (HomePage): 3 卡 auto-fit grid + MotivationPanel 在桌面双行布局 */
+.home-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 我在哪 (WherePage): 顶部 hero 全宽 + (5D + Bloom) 双栏 + (TC + LearningDNA) 双栏 */
+.where-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.where-grid > section {
+  margin: 0;
+}
+
+/* 成长 (GrowthPage): 5D 折线图全宽 + (轨迹快照 + 答题历史) 双栏 */
+.growth-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.growth-grid > section {
+  margin: 0;
+}
+
+/* <1024 全部折叠为单栏 (设计稿 §7 三形态之一) */
+@media (max-width: 1023px) {
+  .where-grid,
+  .growth-grid {
+    display: block;
+  }
+  .where-grid > section + section,
+  .growth-grid > section + section {
+    margin-top: 16px;
+  }
+}
+
+/* 报告 (ReportPage): 删除 720 锁, 表格按内容自适应; 表格列内文本超长换行 */
+.report-page table {
+  table-layout: auto;
+  width: 100%;
+}
+@media (max-width: 1023px) {
+  .report-page table {
+    /* 表格过长时允许横向滚动, 避免窄屏内容溢出 */
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 /* ── v0.99.4 (F-01): 学习报告打印支持 ─────────────────────────
    打印 / 存 PDF 时隐藏应用 chrome (侧栏 / 顶条 / 控制按钮),
    报告卡片全宽呈现 */

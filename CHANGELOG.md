@@ -6,6 +6,42 @@
 
 ## [Unreleased]
 
+### 2026-09-16 — UI-R-4 四页面宽幅适配：今天/我在哪/成长/报告 桌面布局（待人工验收）
+
+设计稿见 `docs/ui-r-0-信息架构设计稿.md` §11 UI-R-4。核心：四页面在桌面（≥1024）利用宽幅，避免 720px 版心造成的信息单列堆叠；<1024 折叠为单栏，与移动端体验一致。
+
+**修改文件**：
+
+- `web/frontend/src/student/index.css` — 新增三套桌面布局：① `.home-layout` flex column 容器（承接 HomePage 3 卡 auto-fit grid + MotivationPanel 下方堆叠；3 卡 grid 本身已自适应）；② `.where-grid` 双栏 grid（grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)）+ `.where-grid > section { margin: 0 }`；③ `.growth-grid` 同结构双栏。新增 `@media (max-width: 1023px)` 单栏折叠（`.where-grid / .growth-grid { display: block }` + 相邻 section `margin-top: 16px`）。新增 `.report-page table { table-layout: auto; width: 100% }`（报告页表格按内容自适应，<1024 走 `overflow-x: auto` 横向滚动兜底，避免窄屏内容溢出）。**注意**：打印走 `@media print { .report-page { max-width: none !important } }` 覆盖规则不动——删内联 720 style 不破坏打印路径。
+- `web/frontend/src/student/pages/HomePage.tsx` — 根 `<div>` → `<div className="home-layout">`（UI-R-4 桌面 layout 标记）。3 卡 `.home-cards` auto-fit grid 与 MotivationPanel 下方 card 顺序不变（<1024 单列，≥1024 仍单列但 3 卡占满横向宽幅 + MotivationPanel 独占底行全宽）。
+- `web/frontend/src/student/pages/WherePage.tsx` — DOM 重构：hero section 仍全宽；其后 4 个 section（5D / Bloom / TC / LearningDNA）整体包入 `<div className="where-grid">` 双栏容器。**桌面（≥1024）布局**：(5D + Bloom) 左 / 右并排，(TC + LearningDNA) 左 / 右并排；hero 全宽。
+- `web/frontend/src/student/pages/GrowthPage.tsx` — DOM 重构：5D 折线图 section 仍全宽；其后 2 个 section（轨迹快照 + 答题历史）整体包入 `<div className="growth-grid">` 双栏容器。**桌面（≥1024）布局**：5D 折线图独占顶行全宽（让宽屏画曲线更舒展），(轨迹快照 + 答题历史) 左 / 右并排。
+- `web/frontend/src/student/pages/ReportPage.tsx` — 删 JSX 内联 `style={{ maxWidth: 720, margin: "0 auto" }}`，根容器简化为 `<div className="report-page">`；表格列宽由 `.report-page table { table-layout: auto; width: 100% }` 自适应。打印走 `@media print { max-width: none !important }` 不受删改影响。
+- `tests/test_frontend_react_wiring.py` — 新增 `TestFourPagesDesktopLayoutWiring` 6 例：① ReportPage 无 max-width: 720 内联 + CSS 顶层无 max-width 锁（剥离注释 + 删除 @media 块后扫描，避开 @media print 覆盖规则）；② HomePage 包 .home-layout 容器；③ WherePage 包 .where-grid + 4 section 都在 grid 内；④ GrowthPage 包 .growth-grid + 2 section 都在 grid 内；⑤ ≥1024 .where-grid / .growth-grid 双栏 grid（display: grid + grid-template-columns）；⑥ <1024 媒体查询同时覆盖 .where-grid + .growth-grid + display: block 单栏折叠。
+
+**硬边界守住情况**：
+
+| 红线 | 状态 |
+|---|---|
+| Phase 3 vanilla 三模块零改动 | ✅ `web/student/{whiteboard,playback,formula}.js` 未触碰；node:test 25/25 原样全绿 |
+| 后端 | ✅ 0 行改动（仅 CSS + JSX 结构）|
+| 路由表 | ✅ 不涉及 |
+| dist 不入库 | ✅ 仅 source 改动 |
+| 打印路径 | ✅ ReportPage 删内联 720 style 不破坏 `@media print` 全宽覆盖 |
+| 移动端体验 | ✅ <1024 全部折叠为单栏，与现状路径一致 |
+
+**不在本步范围（明确边界）**：
+
+- ❌ 教师端 / 家长端宽幅适配（§9 D4：本轮不动）
+- ❌ 工具组 4 槽位（Phase 4-6 启用时再做）
+- ❌ 家长授权页 / 设置页宽幅适配（未列入 UI-R-4）
+- ❌ 答题页 / 讲解场景页（已分别 UI-R-2 / UI-R-3 落地）
+- ❌ 设计稿 §7 顶部条 / 抽屉等已有布局的微调
+
+**测试**：全量 **1983 用例通过**（pytest + 1 skip；前次 1977 → +6 新契约锁）；vitest 55/55；node:test 25/25；构建产物三入口正常生成（dist 不入库）。
+
+**下一步**：维护者在 ≥1024 桌面 + 768-1023 中屏 + <768 手机三形态过四页面（今天三卡 + MotivationPanel / 我在哪 (5D+Bloom)+(TC+LearningDNA) 双栏 / 成长 5D 折线图全宽 + (轨迹+历史) 双栏 / 报告 720 锁删除后表格列宽自适应 + 打印仍全宽）；如发现真缺陷按验收期模式补 CHANGELOG 条目 + 加契约锁；之后启动 UI-R-5 契约锁补齐 + 全量回归。
+
 ### 2026-09-16 — UI-R-3 答题页双栏：题目60% + 作答侧栏40%（待人工验收）
 
 设计稿见 `docs/ui-r-0-信息架构设计稿.md` §6（答题页双栏）+ §11 UI-R-3。核心：题目区破 720 窄版心，按"题目 60% + 作答侧栏 40%"双栏并排（≥1024）；<1024 折叠为单栏上下排，沿用纵向阅读路径（与移动端体验一致）。三形态适配：≥1024 双栏 + 作答侧栏粘性跟随 / 768-1023 单栏堆叠（侧栏带 `margin-top: 16px`）/ <768 单栏堆叠。

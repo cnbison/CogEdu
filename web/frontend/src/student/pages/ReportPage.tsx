@@ -37,7 +37,7 @@ export default function ReportPage({ studentId }: { studentId: string }) {
   const interpAvailable = !("error" in interp);
 
   return (
-    <div className="report-page" style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div className="report-page">
       {/* 打印控制行 (打印时隐藏) */}
       <div className="print-hide" style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <button className="amber" onClick={() => window.print()}>

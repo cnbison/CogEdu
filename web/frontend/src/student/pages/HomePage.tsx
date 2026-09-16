@@ -29,7 +29,10 @@ export default function HomePage({ studentId }: { studentId: string }) {
   const nextSteps = interp.next_steps;
 
   return (
-    <div>
+    // UI-R-4: 桌面 layout 容器. .home-cards 已 auto-fit grid 自适应;
+    // MotivationPanel 在 <1024 单列堆叠, ≥1024 与 3 卡同列 (3 卡 grid 横向占满,
+    // MotivationPanel 跟在下方独占全宽). 简单 column 容器即可承接.
+    <div className="home-layout">
       <div className="home-cards">
         {/* 卡 1: 我在哪 */}
         <section className="home-card">
