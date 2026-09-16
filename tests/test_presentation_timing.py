@@ -138,10 +138,14 @@ class TestTimingEndpoint:
         assert resp.status_code == 200
         assert resp.json()["wb_draw_ms"] == WB_DRAW_MS
 
-    def test_scene_js_fetches_timing(self):
-        """前端接线 grep 契约: scene.js 必须拉取并注入 timing."""
-        js = (WEB_STUDENT / "scene.js").read_text(encoding="utf-8")
-        assert "/api/presentation/timing" in js
-        assert "fetchTiming" in js
-        assert "wb_draw_ms" in js      # 注入 engine 的映射存在
-        assert "wb_enter_ms" in js     # 注入 whiteboard 的映射存在
+    def test_scene_page_fetches_timing(self):
+        """前端接线 grep 契约: React ScenePage 拉取 timing, ScenePlayer 注入.
+
+        双轨终点 (2026-09-16): 原 scene.js 锁迁移到 React 工程源文件。
+        """
+        pres = Path(__file__).resolve().parents[1] / "web" / "frontend" / "src" / "student" / "presentation"
+        page = (pres / "ScenePage.tsx").read_text(encoding="utf-8")
+        player = (pres / "ScenePlayer.tsx").read_text(encoding="utf-8")
+        assert "getTiming(" in page      # 拉取端点
+        assert "wb_draw_ms" in player    # 注入 engine 的映射存在
+

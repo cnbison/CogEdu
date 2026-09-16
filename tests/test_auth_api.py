@@ -252,66 +252,20 @@ class TestFrontendWiring:
         assert resp.status_code == 200
         assert "Authorization" in resp.text
 
-    def test_all_pages_include_auth_js(self):
-        """各端页面都引入 auth.js (页面守卫的前提)."""
+    def test_login_page_includes_auth_js(self):
+        """login 页引入 auth.js (登录表单的依赖; 双轨终点后 legacy 端页
+        已删除, React 端的会话接线由 shared/auth.ts 锁承接)."""
         from pathlib import Path
 
-        web_dir = Path(__file__).resolve().parent.parent / "web"
-        for rel in (
-            "student/index.html",
-            "student/scene.html",
-            "teacher/index.html",
-            "parent/index.html",
-        ):
-            html = (web_dir / rel).read_text(encoding="utf-8")
-            assert 'src="/auth.js' in html, f"{rel} 未引入 /auth.js"
-
-    def test_scene_event_writes_carry_identity(self):
-        """scene.js 行为回写带 Authorization (匿名可写越权面的接线锁定)."""
-        from pathlib import Path
-
-        scene_js = (
-            Path(__file__).resolve().parent.parent / "web" / "student" / "scene.js"
+        login = (
+            Path(__file__).resolve().parent.parent / "web" / "login.html"
         ).read_text(encoding="utf-8")
-        assert "Authorization" in scene_js
+        assert 'src="/auth.js' in login
 
-    def test_scene_api_helper_uses_authfetch(self):
-        """scene 页 api 助手走 authFetch (2026-09-14 补).
 
-        outline/scenes/timing 是页面内主要请求路径, 此前裸 fetch 不带
-        凭证——真实鉴权下"点击讲解"必 401 (测试 auth_bypass 掩盖),
-        维护者页面观感验收时暴露.
-        """
-        from pathlib import Path
 
-        scene_js = (
-            Path(__file__).resolve().parent.parent / "web" / "student" / "scene.js"
-        ).read_text(encoding="utf-8")
-        assert "CogEduAuth.authFetch(url, opts)" in scene_js
 
-    def test_app_js_uses_authfetch(self):
-        """学生端 api 封装走 authFetch (401 统一跳登录)."""
-        from pathlib import Path
 
-        app_js = (
-            Path(__file__).resolve().parent.parent / "web" / "student" / "app.js"
-        ).read_text(encoding="utf-8")
-        assert "authFetch" in app_js
-
-    def test_app_js_sid_resolves_to_bound_identity(self):
-        """app.js 的 sid 解析: 登录账号绑定优先, 硬编码兜底已删 (2026-09-14).
-
-        2-0-4 只修了 scene.js, index 页 app.js 漏了同款问题——登录态下
-        仍可能拿 localStorage 旧值/硬编码 'python_student_001' 请求他人
-        数据 → 服务端 403 → "登录后数据加载失败" (维护者实测暴露).
-        """
-        from pathlib import Path
-
-        app_js = (
-            Path(__file__).resolve().parent.parent / "web" / "student" / "app.js"
-        ).read_text(encoding="utf-8")
-        assert "learning_student_id" in app_js
-        assert "sid = 'python_student_001'" not in app_js
 
     def test_frontend_api_base_no_hardcoded_host(self):
         """前端 API base 不得写死主机名 (2026-09-14).
@@ -338,44 +292,19 @@ class TestFrontendWiring:
 
 
 class TestPhase2DFrontend:
-    """2-D (14.6): 家长端真实页 + 学生端授权确认页 — 路由与接线契约."""
+    """2-D (14.6) 授权页接线 — 双轨终点后由 React 侧承接.
+
+    legacy parent/index.html 与 student/guardian-links.html 已删除;
+    家长端 roster/links/report 接线锁在 tests/test_frontend_react_wiring.py
+    (TestEndpointWiring.test_parent_endpoint_paths), 学生端确认页路由锁
+    在同文件 test_student_routes_present。
+    """
 
     def test_parent_page_served(self, client):
-        """/parent/ 路由 200（9-A 起 dist 优先返回 React 壳）+ legacy 兜底页接线完整.
-
-        双轨过渡（方案文档 §10.1.5）：React dist 存在时路由由 dist 接管，
-        legacy 页（web/parent/index.html）降为兜底但须保持接线完整，
-        直至 9-E 家长端切换完成后移除。
-        """
+        """/parent/ 路由 200 且返回 React 壳 (dist 优先)."""
         resp = client.get("/parent/index.html")
         assert resp.status_code == 200
-        assert "<div id=\"root\">" in resp.text  # React 壳（dist 优先）
-        # legacy 兜底页三大块: 仪表盘(roster/overview) + 授权管理 + 报告下载
-        # (页面 JS 经 authFetch('/api' + path) 拼接, 断言 path 字面量)
-        from pathlib import Path
-
-        legacy = (
-            Path(__file__).resolve().parent.parent
-            / "web" / "parent" / "index.html"
-        ).read_text(encoding="utf-8")
-        assert "'/parent/students'" in legacy
-        assert "'/guardian/links'" in legacy
-        assert "/report?period=' + period" in legacy
-
-    def test_student_guardian_links_page_served(self, client):
-        resp = client.get("/student/guardian-links.html")
-        assert resp.status_code == 200
-        assert "'/student/guardian-links'" in resp.text
-        assert '"/confirm"' in resp.text and '"/reject"' in resp.text
-
-    def test_student_index_has_links_page_entry(self):
-        from pathlib import Path
-
-        html = (
-            Path(__file__).resolve().parent.parent
-            / "web" / "student" / "index.html"
-        ).read_text(encoding="utf-8")
-        assert "/student/guardian-links.html" in html
+        assert "<div id=\"root\">" in resp.text
 
 
 # ─── 角色-路由矩阵 (2-0-3) ───────────────────────────────────────────────────

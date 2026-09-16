@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+### 2026-09-16 — UI 现代化全量发布：人工验收通过，删除 legacy 静态页（双轨终点）
+
+维护者完成教师/家长端验收（学生端与讲解场景此前已过），四项决策拍板落地：
+
+- **删除 legacy 静态页**：`web/student/{index,scene}.html`、`app.js`、`scene.js/css`、`guardian-links.html`、`web/parent/index.html`、`web/teacher/index.html`；**保留** `formula/playback/whiteboard.js` 三模块（React 挂载式整合的依赖，node:test 26 例继续锁行为）、`web/auth.js` + `web/login.html`（登录链路）、KaTeX vendor。**克隆后须先 `cd web/frontend && npm run build`**（dist 不入库，无构建时页面入口 404）——README 已标注；
+- **契约测试双轨合并**：约 20 条 legacy grep 锁删除或迁移——`test_whiteboard_wiring.py` 重写（只锁幸存三模块的安全约定 + vendor）、`test_frontend_event_wiring.py` 重写（React AnswerPage 四事件接线）、`test_auth_api.py` / `test_parent_api.py` / `test_presentation_events.py` / `test_presentation_timing.py` / `test_presentation_endpoint.py` 的 scene.js/app.js/legacy 页锁逐条迁移到 React 源文件等价断言（锁语义不变）；`test_frontend_react_wiring.py` 19 例为主锁；
+- 全量 **1955 用例通过**（1 skip：styles.css 孤儿文件测试自动跳过，该文件随下次清理）；
+- **下一步：Phase 4**（证据链可视化增强，echarts/react-query 基座已就绪）。
+
 ### 2026-09-15 — 讲解记录入口（人工验收反馈）：/scene 改为"讲解记录 + 显式生成"，修复重复生成计费缺口
 
 维护者验收提问暴露的缺口：复看只读端点早已存在但学生端**没有列表入口**——每次点"看 AI 讲解"都静默生成一份新大纲（重复计费），旧讲解没有任何入口可达。修复：

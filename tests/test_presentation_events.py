@@ -198,15 +198,3 @@ class TestSceneEventEndpoint:
     def test_endpoint_registered_in_openapi(self, client):
         assert "/api/presentation/event" in client.get("/openapi.json").json()["paths"]
 
-
-class TestSceneJsWiring:
-    """前端接线 grep 契约 (对齐 test_frontend_event_wiring.py 模式)."""
-
-    def test_scene_js_tracks_events(self):
-        from pathlib import Path
-
-        js = (Path(__file__).resolve().parents[1] / "web/student/scene.js").read_text()
-        assert "trackSceneEvent('scene_viewed'" in js
-        assert "trackSceneEvent('scene_completed'" in js
-        assert "/api/presentation/event" in js
-        assert "console.warn(" in js  # best-effort 不静默

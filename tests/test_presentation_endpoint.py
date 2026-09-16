@@ -277,16 +277,21 @@ class TestScenesEndpoint:
 
 
 class TestScenePageStatic:
-    def test_scene_html_served(self, client):
-        """/student/scene.html 经宽路由可访问 (12.2 补 teacher 页遗漏的同类防线)."""
-        resp = client.get("/student/scene.html")
-        assert resp.status_code == 200
-        assert "scene.js" in resp.text
+    """React 挂载式整合依赖的 vanilla 模块必须可经 /student/{path} 服务.
 
-    def test_scene_assets_served(self, client):
-        for path in ("/student/scene.js", "/student/scene.css"):
+    双轨终点 (2026-09-16): legacy scene.html/scene.js/scene.css 已删除,
+    formula/playback/whiteboard.js 保留 (web/frontend/student.html 引用)。
+    """
+
+    def test_vanilla_modules_served(self, client):
+        for path in ("/student/formula.js", "/student/playback.js",
+                     "/student/whiteboard.js"):
             resp = client.get(path)
             assert resp.status_code == 200, path
+
+    def test_legacy_scene_page_gone(self, client):
+        """/student/scene.html 已删除 (React 场景页 = /student/ 路由 /scene)."""
+        assert client.get("/student/scene.html").status_code == 404
 
 
 # ─── 大纲列表端点 (UI 现代化 9-G 补: 讲解记录入口) ───────────────────────────

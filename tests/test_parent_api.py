@@ -286,21 +286,14 @@ class TestEngagementOnDemand:
 
 class TestParentFrontendRoutes:
     def test_parent_route_serves_placeholder_pre_build(self, client):
-        """/parent/ 可访问（9-A 起 dist 优先返回 React 壳）+ legacy 兜底页保持完整.
+        """/parent/ 可访问且返回 React 壳 (dist 优先; 双轨终点后无 legacy 兜底).
 
         12.4-5: 静态托管已迁 FastAPI (web/api/routers/static_pages.py)。
-        2-D (14.6): legacy 家长端 (roster/授权管理/报告下载) 接线锁定——
-        双轨过渡期间 legacy 页作为 dist 缺失时的兜底，内容不得缺失；
-        9-E 切换完成后随 legacy 页一并移除。
+        2-D (14.6) 家长端接线锁由 tests/test_frontend_react_wiring.py 承接。
         """
         resp = client.get("/parent/")
         assert resp.status_code == 200
-        assert "<div id=\"root\">".encode() in resp.content  # React 壳（dist 优先）
-        legacy = (
-            Path(__file__).resolve().parent.parent
-            / "web" / "parent" / "index.html"
-        ).read_text(encoding="utf-8")
-        assert "授权管理" in legacy
+        assert "<div id=\"root\">".encode() in resp.content
 
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────

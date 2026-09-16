@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**UI 现代化施工完成，待人工验收**（2026-09-15）：React 18 + Vite + TS 前端（`web/frontend/`，移植自 ECOS v0.99.5 前端，只读复制自包含维护）三端落地——教师端（roster/学生详情证据链/POMDP 诊断，7 端点 1:1）、学生端（答题/成长/报告 + **讲解场景 React 化**：挂载式整合保留 Phase 3 vanilla 白板/播放模块与其 node:test 行为测试，渐进渲染——生成期间边生成边出页）、家长端（概览四卡 + 授权管理 + Word 报告下载 + 学生端确认页）。认证走 CogEdu 自建体系（Bearer + 服务端会话，sid 取登录身份）；构建产物由 FastAPI dist 优先托管（legacy 静态页兜底），`cd web/frontend && npm run build` 后即生效。契约测试双轨锁定（legacy + React 接线各一套，语义一致）。
+**UI 现代化全量发布**（2026-09-16，人工验收通过）：React 18 + Vite + TS 前端（`web/frontend/`，移植自 ECOS v0.99.5 前端，只读复制自包含维护）三端落地——教师端（roster/学生详情证据链/POMDP 诊断，7 端点 1:1）、学生端（答题/成长/报告 + **讲解场景 React 化**：挂载式整合保留 Phase 3 vanilla 白板/播放模块与其 node:test 行为测试，渐进渲染——生成期间边生成边出页、音频逐场景回填）、家长端（概览四卡 + 授权管理 + Word 报告下载 + 学生端确认页）。认证走 CogEdu 自建体系（Bearer + 服务端会话，sid 取登录身份）；构建产物由 FastAPI dist 优先托管，**legacy 静态页已删除（双轨终点）**——克隆后须先 `cd web/frontend && npm run build` 再启动。验收期发现并修复 9 个真缺陷（学生样式表漏引 / 复看路由参数断链 / katex.min.js 漏引 / 家长端漏 Router 白屏 / 并发会话误判 401 等），均有契约锁。
 
-**Phase 3 已全量发布**（2026-09-14）：**白板与语音**——讲解场景从"翻页阅读"升级为"白板讲解播放"：LLM 生成的动作序列（文字标注 / 图形 / 线段 / LaTeX 公式 / 语音讲解词）由播放引擎（三态状态机 + 代数令牌，支持暂停/重播本页）驱动白板渲染（虚拟画布 1000×562.5 等比缩放，DOM + SVG，KaTeX 本地 vendor 渲染公式）；语音经 MiniMax TTS 后台异步补齐，无音频时静音降级、字幕同步推进；已生成讲解支持只读复看。三项人工验收（动作序列 / 真实 TTS 听音 / 页面观感）完成。Phase 2（账号体系 / 家长端 / Word 报告导出）与 Phase 0/1 基础见 [CHANGELOG.md](CHANGELOG.md)。全量 **1964 个测试用例通过**（含 26 个 node:test JS 行为测试 + 前端 vitest 49 例）。下一步：UI 人工验收后 Phase 4（证据链可视化增强）。
+**Phase 3 已全量发布**（2026-09-14）：**白板与语音**——讲解场景从"翻页阅读"升级为"白板讲解播放"：LLM 生成的动作序列（文字标注 / 图形 / 线段 / LaTeX 公式 / 语音讲解词）由播放引擎（三态状态机 + 代数令牌，支持暂停/重播本页）驱动白板渲染（虚拟画布 1000×562.5 等比缩放，DOM + SVG，KaTeX 本地 vendor 渲染公式）；语音经 MiniMax TTS 后台异步补齐，无音频时静音降级、字幕同步推进；已生成讲解支持只读复看。三项人工验收（动作序列 / 真实 TTS 听音 / 页面观感）完成。Phase 2（账号体系 / 家长端 / Word 报告导出）与 Phase 0/1 基础见 [CHANGELOG.md](CHANGELOG.md)。全量 **1955 个测试用例通过**（含 26 个 node:test JS 行为测试；前端另有 vitest 50 例）。下一步：Phase 4（证据链可视化增强，echarts/react-query 基座已就绪）。
 
 ### 开发环境（克隆后一次性）
 
@@ -24,7 +24,7 @@ python -m web.api.app    # FastAPI 后端, 端口 5173 (前端 API base 沿用)
 
 ### 讲解场景（Phase 1 + Phase 3 白板语音）
 
-登录学生端后点"讲解"标签（或直接访问 `/student/scene.html?sid=<学生ID>`）：系统按当前认知状态选干预 → LLM 生成大纲 → 逐步生成讲解场景（含白板动作序列），翻页阅读 + 白板讲解播放（播放/暂停/重播，KaTeX 公式渲染，语音字幕同步）；翻页/看完行为回写内核，影响后续干预选择。场景生成需要 LLM API key（MiniMax 主/Moonshot 备，同 ECOS 约定）；语音合成需要 `COGEDU_TTS_API_KEY`（未配置时字幕静音推进，不影响使用）。
+登录学生端后点"看 AI 讲解"（React 路由 `/#/scene`）：讲解记录页可复看已生成的讲解（不触发生成），或点"生成新讲解" → 系统按当前认知状态选干预 → LLM 生成大纲 → 逐场景渐进生成（边生成边出页，含白板动作序列），翻页阅读 + 白板讲解播放（播放/暂停/重播，KaTeX 公式渲染，语音逐场景回填字幕同步）；翻页/看完行为回写内核，影响后续干预选择。场景生成需要 LLM API key（MiniMax 主/Moonshot 备，同 ECOS 约定）；语音合成需要 `COGEDU_TTS_API_KEY`（未配置时字幕静音推进，不影响使用）。**前端 UI 需先构建**：`cd web/frontend && npm run build`（React 三入口由 FastAPI dist 优先托管；无 dist 时页面入口 404）。
 
 ### 数据库切换（SQLite → PostgreSQL）
 
